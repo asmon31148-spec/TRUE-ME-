@@ -8,6 +8,8 @@ import '../../features/explainer/screens/explainer_player_screen.dart';
 import '../../features/flashcards/screens/deck_list_screen.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/notebook_detail_screen.dart';
+import '../../features/mindmap/screens/mindmap_screen.dart';
+import '../../features/notes/screens/note_editor_screen.dart';
 import '../../features/planner/screens/planner_screen.dart';
 import '../../features/quiz/screens/quiz_setup_screen.dart';
 import '../../features/upload/screens/upload_screen.dart';
@@ -35,6 +37,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/upload',
       builder: (context, state) => const UploadScreen(),
+    ),
+    GoRoute(
+      path: '/note-editor',
+      builder: (context, state) => const NoteEditorScreen(),
+    ),
+    GoRoute(
+      path: '/mindmap',
+      builder: (context, state) => const MindmapScreen(),
     ),
     GoRoute(
       path: '/notebook/:id',
