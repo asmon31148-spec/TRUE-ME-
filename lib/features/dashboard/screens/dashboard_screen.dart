@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/achievement_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_card.dart';
+import '../widgets/mastery_chart.dart';
+import '../widgets/streak_card.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final badges = AchievementService.getInitialBadges();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: GlassAppBar(
@@ -24,40 +29,12 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Streak Card
-            GlassCard(
-              borderRadius: 24,
-              padding: const EdgeInsets.all(20),
-              surfaceGradient: const LinearGradient(
-                colors: [Color(0x33F59E0B), Color(0x1A0F172A)],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.warning.withOpacity(0.2),
-                    ),
-                    child: const Icon(Icons.local_fire_department, color: AppColors.warning, size: 36),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('7 Day Streak!', style: AppTypography.displayMedium),
-                        const SizedBox(height: 4),
-                        Text(
-                          'You have studied 340 minutes this week. Keep up the momentum!',
-                          style: AppTypography.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Streak Card Component
+            const StreakCard(streakDays: 7),
+            const SizedBox(height: 24),
+
+            // Weekly Velocity Chart Component
+            const MasteryChart(),
             const SizedBox(height: 28),
 
             const Text('Subject Mastery Levels', style: AppTypography.headlineMedium),
@@ -70,30 +47,54 @@ class DashboardScreen extends StatelessWidget {
             _buildMasteryBar('Physics Dynamics', 0.62, AppColors.secondary, '62% (Needs Practice)'),
             const SizedBox(height: 28),
 
-            // Sage Decay Alerts
-            const Text("Sage's Decay Warnings", style: AppTypography.headlineMedium),
-            const SizedBox(height: 12),
-            GlassCard(
-              borderRadius: 20,
-              padding: const EdgeInsets.all(16),
-              surfaceColor: Colors.white.withOpacity(0.04),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Eigenvalues Mastery Decaying', style: AppTypography.titleLarge),
-                        Text(
-                          'Last reviewed 5 days ago. Reviewing 10 flashcards will restore mastery to 90%.',
-                          style: AppTypography.bodySmall,
-                        ),
-                      ],
+            // Achievement Badges
+            const Text('Achievement Milestones', style: AppTypography.headlineMedium),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 110,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: badges.length,
+                itemBuilder: (context, idx) {
+                  final b = badges[idx];
+                  return Container(
+                    width: 140,
+                    margin: const EdgeInsets.only(right: 12),
+                    child: GlassCard(
+                      padding: const EdgeInsets.all(12),
+                      borderRadius: 18,
+                      surfaceColor: b.isUnlocked
+                          ? AppColors.primary.withOpacity(0.2)
+                          : Colors.white.withOpacity(0.04),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(b.icon, style: const TextStyle(fontSize: 26)),
+                          const SizedBox(height: 6),
+                          Text(
+                            b.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            b.isUnlocked ? 'UNLOCKED' : 'LOCKED',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: b.isUnlocked ? AppColors.accentCyan : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 32),
