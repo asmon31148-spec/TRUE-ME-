@@ -1,9 +1,9 @@
 # Project State: True Me
 
 ## Current Status
-- **Current Phase**: Phase 4: Core Study Tools
-- **Status**: Completed Study Tools Engine
-- **Active Milestone**: Milestone 4
+- **Current Phase**: Phase 5: Voice Tutor & Explainer Video
+- **Status**: Completed Voice Loop & Animated Explainer Engine
+- **Active Milestone**: Milestone 5
 
 ## Completed Milestones
 - [x] Project architecture blueprint created ([trueme-master-plan.md](file:///c:/Users/PC/OneDrive/Desktop/project%202/trueme-master-plan.md))
@@ -13,14 +13,14 @@
 - [x] Phase 1 Foundation & Architecture completed and committed
 - [x] Phase 2 Mother AI Sage, multi-provider AI Router, and rate limiter completed and committed
 - [x] Phase 3 Content Ingestion Engine (PDF, OCR, Whisper, Web/YT, Drive vault, pgvector) completed and committed
-- [x] RAG Study Chat state provider with vector retrieval & citation management (`ChatNotifier` & `chatProvider`)
-- [x] Groq 8B Flashcard generator with Pollinations FLUX image generation (`FlashcardNotifier` & `flashcardProvider`)
-- [x] SM-2 spaced repetition auto-rescheduling engine on card ratings
-- [x] Adaptive Quiz generator and player state with difficulty adjustment (`QuizNotifier` & `quizProvider`)
-- [x] Rich Text Note Editor with Liquid Glass toolbar powered by `flutter_quill` (`NoteEditorScreen`)
-- [x] Interactive Concept Mind Map generator & visualizer with zoom/pan powered by `graphview` (`MindmapScreen`)
-- [x] Extended GoRouter navigation with `/note-editor` and `/mindmap`
+- [x] Phase 4 Core Study Tools (RAG Chat, Flashcards, Adaptive Quiz, Rich Notes, Mind Map) completed and committed
+- [x] Device Text-to-Speech service for zero-cost voice synthesis (`TtsService`)
+- [x] Device Speech-to-Text recognizer for hands-free study (`SttService`)
+- [x] 30-minute interactive Voice Tutor loop with barge-in interruption support (`VoiceTutorNotifier`)
+- [x] 10-minute Explainer Video structured script model (`ExplainerScriptModel` & `ExplainerSceneModel`)
+- [x] AI Video Script Generator powered by Groq LLaMA 8B (`ExplainerGenerator`)
+- [x] Pure Flutter Timeline Scene Animator powered by `flutter_animate` (`SceneAnimator`)
 
 ## Next Steps
-1. Push Phase 4 commit to GitHub.
-2. Proceed to Phase 5: Voice Tutor & Explainer Video (interactive on-device voice loop, Flutter animated explainer video engine).
+1. Push Phase 5 commit to GitHub.
+2. Proceed to Phase 6: Document Export & Progress Dashboard (PDF/PPTX/Word exporters, Study streak tracker, topic mastery curves).
