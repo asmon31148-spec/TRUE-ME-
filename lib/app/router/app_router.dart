@@ -10,6 +10,7 @@ import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/notebook_detail_screen.dart';
 import '../../features/planner/screens/planner_screen.dart';
 import '../../features/quiz/screens/quiz_setup_screen.dart';
+import '../../features/upload/screens/upload_screen.dart';
 import '../../features/voice_tutor/screens/voice_session_screen.dart';
 
 final appRouter = GoRouter(
@@ -30,6 +31,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/library',
       builder: (context, state) => const LibraryScreen(),
+    ),
+    GoRoute(
+      path: '/upload',
+      builder: (context, state) => const UploadScreen(),
     ),
     GoRoute(
       path: '/notebook/:id',

@@ -200,7 +200,7 @@ class LibraryScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.primary,
-        onPressed: () {},
+        onPressed: () => context.go('/upload'),
         icon: const Icon(Icons.upload_file, color: Colors.white),
         label: const Text('Import Note / PDF', style: TextStyle(color: Colors.white)),
       ),
