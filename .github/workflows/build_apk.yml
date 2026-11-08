@@ -26,6 +26,9 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Scaffold Official Android Project
+        run: flutter create . --platforms=android --org com.trueme.study --project-name trueme
+
       - name: Create .env for Build
         run: |
           cat << 'EOF' > .env
@@ -44,7 +47,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Android APK (Release)
-        run: flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
