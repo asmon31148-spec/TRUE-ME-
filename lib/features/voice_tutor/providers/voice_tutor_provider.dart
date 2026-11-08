@@ -98,7 +98,7 @@ Respond as Sage. Keep your spoken response concise, conversational, and direct (
 Focus on guiding the student conceptually without walls of text.
 ''';
 
-      final responseText = await _aiRouter.executeWithFallback(prompt: prompt);
+      final responseText = await _aiRouter.executeRealtimeChat(prompt: prompt);
 
       state = state.copyWith(
         status: VoiceTutorStatus.speaking,

@@ -86,7 +86,7 @@ Format your response strictly as JSON with this schema:
 ''';
 
     try {
-      final responseText = await _aiRouter.executeWithFallback(
+      final responseText = await _aiRouter.executeHeavyReasoning(
         prompt: userPrompt,
         systemPrompt: systemPrompt,
         jsonMode: true,

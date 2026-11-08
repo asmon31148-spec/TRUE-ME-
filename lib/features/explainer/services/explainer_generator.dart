@@ -34,7 +34,7 @@ Return ONLY valid JSON matching this schema:
 ''';
 
     try {
-      final jsonString = await _aiRouter.executeWithFallback(
+      final jsonString = await _aiRouter.executeHeavyReasoning(
         prompt: 'Topic: $topic\n\nStudy Notes:\n$notesContent',
         systemPrompt: systemPrompt,
         jsonMode: true,
