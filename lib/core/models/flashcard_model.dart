@@ -115,7 +115,7 @@ class FlashcardDeckModel {
       cards: rawCards
           .map((c) => FlashcardModel.fromMap(
                 Map<String, dynamic>.from(c as Map),
-                c['id'] as String? ?? UniqueKey().toString(),
+                c['id'] as String? ?? 'card_${DateTime.now().microsecondsSinceEpoch}',
               ))
           .toList(),
       createdAt: map['createdAt'] != null

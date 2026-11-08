@@ -39,7 +39,7 @@ class AppTheme {
         titleTextStyle: AppTypography.headlineLarge,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.glassSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
