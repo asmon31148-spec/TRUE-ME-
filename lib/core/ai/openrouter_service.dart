@@ -5,13 +5,17 @@ class OpenRouterService {
   final String _apiKey;
   final Dio _dio;
 
-  /// Verified 100% free models on OpenRouter
+  /// Verified 100% free & active models tested on OpenRouter
   static const List<String> freeModels = [
     'nvidia/nemotron-3.5-lightning:free',
     'liquid/lfm-3-1.7b:free',
     'liquid/lfm-2.5-2.6b:free',
     'cohere/north-mini-code:free',
-    'google/gemma-4-31b-it:free',
+    'nvidia/nemotron-3.5-super-vl:free',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'dots-studio/dots-3-note-preview:free',
+    'recursive/flint-v1.0:free',
   ];
 
   OpenRouterService({String? apiKey, Dio? dio})
