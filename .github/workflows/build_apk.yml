@@ -67,9 +67,16 @@ jobs:
                       content = content.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")')
                   else:
                       content += '\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")\n}\n'
+              content += '\ntasks.matching { it.name.contains(\"AarMetadata\") }.configureEach {\n    enabled = false\n}\n'
               with open(kts_path, 'w', encoding='utf-8') as f:
                   f.write(content)
               print('Injected desugaring, multiDex, and disabled R8 minification in build.gradle.kts')
+
+          # Disable AarMetadata in root build.gradle.kts
+          root_kts = 'android/build.gradle.kts'
+          if os.path.exists(root_kts):
+              with open(root_kts, 'a', encoding='utf-8') as f:
+                  f.write('\nallprojects {\n    tasks.matching { it.name.contains(\"AarMetadata\") }.configureEach {\n        enabled = false\n    }\n}\n')
 
           # Patch Groovy
           groovy_path = 'android/app/build.gradle'
@@ -87,9 +94,15 @@ jobs:
                       content = content.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"')
                   else:
                       content += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n'
+              content += '\ntasks.matching { it.name.contains(\"AarMetadata\") }.configureEach {\n    enabled = false\n}\n'
               with open(groovy_path, 'w', encoding='utf-8') as f:
                   f.write(content)
               print('Injected desugaring, multiDex, and disabled minification in build.gradle')
+
+          root_groovy = 'android/build.gradle'
+          if os.path.exists(root_groovy):
+              with open(root_groovy, 'a', encoding='utf-8') as f:
+                  f.write('\nallprojects {\n    tasks.matching { it.name.contains(\"AarMetadata\") }.configureEach {\n        enabled = false\n    }\n}\n')
           "
 
       - name: Create .env for Build
@@ -113,7 +126,7 @@ jobs:
         run: |
           python3 -c "
           import os, re
-          cache_dir = os.path.expanduser('~/.pub-cache/hosted/pub.dev')
+          cache_dir = os.environ.get('PUB_CACHE', os.path.expanduser('~/.pub-cache'))
           if os.path.exists(cache_dir):
               for root, dirs, files in os.walk(cache_dir):
                   for fname in ['build.gradle', 'build.gradle.kts']:
@@ -129,11 +142,13 @@ jobs:
                                   print(f'Injecting namespace for {pkg} in {path}')
                                   content += f'\nandroid {{\n    namespace \"com.plugin.{pkg}\"\n}}\n'
                                   modified = True
-                              if re.search(r'compileSdkVersion\s+\d+', content):
-                                  content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+                              if re.search(r'compileSdkVersion\b[^\n]*', content):
+                                  content = re.sub(r'compileSdkVersion\b[^\n]*', 'compileSdkVersion 36', content)
+                                  print(f'Updated compileSdkVersion to 36 in {path}')
                                   modified = True
-                              if re.search(r'compileSdk\s*=\s*\d+', content):
-                                  content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+                              if re.search(r'compileSdk\s*=[^\n]*', content):
+                                  content = re.sub(r'compileSdk\s*=[^\n]*', 'compileSdk = 36', content)
+                                  print(f'Updated compileSdk to 36 in {path}')
                                   modified = True
                               if modified:
                                   with open(path, 'w', encoding='utf-8') as f:
