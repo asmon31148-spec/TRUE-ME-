@@ -37,9 +37,51 @@ jobs:
           fi
           manifest="android/app/src/main/AndroidManifest.xml"
           if [ -f "$manifest" ]; then
-            sed -i 's/android:label="trueme"/android:label="True Me"/g' "$manifest"
-            sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|g' "$manifest"
-            echo "Configured True Me label and Android permissions in AndroidManifest.xml"
+            python3 -c "
+            with open('$manifest', 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            content = content.replace('android:label=\"trueme\"', 'android:label=\"True Me\"')
+
+            permissions = '''
+    <uses-permission android:name=\"android.permission.INTERNET\"/>
+    <uses-permission android:name=\"android.permission.RECORD_AUDIO\"/>
+    <uses-permission android:name=\"android.permission.CAMERA\"/>
+    <uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>
+    <uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\"/>
+    <uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>
+    <uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\"/>
+            '''
+            if 'REQUEST_INSTALL_PACKAGES' not in content:
+                content = content.replace('<application', permissions.strip() + '\n    <application')
+
+            if 'android:requestLegacyExternalStorage' not in content:
+                content = content.replace('<application', '<application\n        android:requestLegacyExternalStorage=\"true\"')
+
+            queries = '''
+    <queries>
+        <intent>
+            <action android:name=\"android.intent.action.VIEW\" />
+            <data android:mimeType=\"application/vnd.android.package-archive\" />
+        </intent>
+        <intent>
+            <action android:name=\"android.intent.action.INSTALL_PACKAGE\" />
+            <data android:mimeType=\"application/vnd.android.package-archive\" />
+        </intent>
+        <intent>
+            <action android:name=\"android.intent.action.VIEW\" />
+            <category android:name=\"android.intent.category.BROWSABLE\" />
+            <data android:scheme=\"https\" />
+        </intent>
+    </queries>
+            '''
+            if '<queries>' not in content:
+                content = content.replace('</manifest>', queries.strip() + '\n</manifest>')
+
+            with open('$manifest', 'w', encoding='utf-8') as f:
+                f.write(content)
+            print('Successfully configured AndroidManifest.xml with install permissions and queries')
+            "
           fi
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i 's/flutter\.versionCode/1/g' android/app/build.gradle.kts

@@ -36,6 +36,7 @@ dependencies:
   # In-App Update & Platform Info
   package_info_plus: ^8.0.2
   open_filex: ^4.5.0
+  url_launcher: ^6.3.0
 
   # Cloud Storage (User Drive)
   googleapis: ^13.2.0
