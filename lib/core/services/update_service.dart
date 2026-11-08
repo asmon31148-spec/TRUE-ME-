@@ -5,6 +5,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme/colors.dart';
 import '../../shared/widgets/glass_button.dart';
@@ -29,13 +30,26 @@ class UpdateService {
   static const String repoOwner = 'asmon31148-spec';
   static const String repoName = 'TRUE-ME-';
 
+  static bool _hasDismissedThisSession = false;
+  static String? _dismissedVersion;
+
   final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 20),
     receiveTimeout: const Duration(seconds: 60),
   ));
 
+  /// Marks a specific version as dismissed so it doesn't pop up again repeatedly.
+  static Future<void> markUpdateDismissed(String version) async {
+    _hasDismissedThisSession = true;
+    _dismissedVersion = version;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_dismissed_update_version', version);
+    } catch (_) {}
+  }
+
   /// Checks GitHub Releases API for a newer APK release.
-  Future<AppUpdateInfo?> checkForUpdate() async {
+  Future<AppUpdateInfo?> checkForUpdate({bool force = false}) async {
     try {
       final response = await _dio.get(
         'https://api.github.com/repos/$repoOwner/$repoName/releases/latest',
@@ -45,7 +59,7 @@ class UpdateService {
       if (response.statusCode != 200) return null;
 
       final data = response.data;
-      final tagName = (data['tag_name'] as String? ?? 'v1.0.0').replaceAll('v', '');
+      final tagName = (data['tag_name'] as String? ?? 'v1.0.0').replaceAll('v', '').trim();
       final body = data['body'] as String? ?? 'Bug fixes and performance improvements.';
 
       final assets = data['assets'] as List<dynamic>? ?? [];
@@ -69,6 +83,31 @@ class UpdateService {
         currentVersion = packageInfo.version;
       } catch (_) {}
 
+      // If not forced and user dismissed or already installed this version, suppress popup
+      if (!force) {
+        if (_hasDismissedThisSession && _dismissedVersion == tagName) {
+          return AppUpdateInfo(
+            latestVersion: tagName,
+            releaseNotes: body,
+            apkDownloadUrl: downloadUrl,
+            hasUpdate: false,
+          );
+        }
+
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final lastDismissed = prefs.getString('last_dismissed_update_version');
+          if (lastDismissed == tagName) {
+            return AppUpdateInfo(
+              latestVersion: tagName,
+              releaseNotes: body,
+              apkDownloadUrl: downloadUrl,
+              hasUpdate: false,
+            );
+          }
+        } catch (_) {}
+      }
+
       final hasUpdate = _isNewerVersion(currentVersion, tagName);
 
       return AppUpdateInfo(
@@ -84,18 +123,22 @@ class UpdateService {
 
   bool _isNewerVersion(String current, String latest) {
     try {
-      final currentParts = current.split('.').map(int.parse).toList();
-      final latestParts = latest.split('.').map(int.parse).toList();
+      final cleanCurrent = current.replaceAll(RegExp(r'[^0-9.]'), '');
+      final cleanLatest = latest.replaceAll(RegExp(r'[^0-9.]'), '');
 
-      for (int i = 0; i < latestParts.length; i++) {
+      final currentParts = cleanCurrent.split('.').where((s) => s.isNotEmpty).map(int.parse).toList();
+      final latestParts = cleanLatest.split('.').where((s) => s.isNotEmpty).map(int.parse).toList();
+
+      final maxLen = currentParts.length > latestParts.length ? currentParts.length : latestParts.length;
+      for (int i = 0; i < maxLen; i++) {
         final cur = i < currentParts.length ? currentParts[i] : 0;
-        final lat = latestParts[i];
+        final lat = i < latestParts.length ? latestParts[i] : 0;
         if (lat > cur) return true;
         if (lat < cur) return false;
       }
       return false;
     } catch (_) {
-      return current != latest;
+      return false;
     }
   }
 
@@ -222,6 +265,7 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
     });
 
     try {
+      UpdateService.markUpdateDismissed(widget.info.latestVersion);
       final file = await UpdateService().downloadApk(
         downloadUrl: widget.info.apkDownloadUrl,
         onProgress: (p, label) {
@@ -380,7 +424,10 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.of(widget.dialogCtx).pop(),
+                      onPressed: () {
+                        UpdateService.markUpdateDismissed(widget.info.latestVersion);
+                        Navigator.of(widget.dialogCtx).pop();
+                      },
                       child: const Text('Later', style: TextStyle(color: Colors.white60)),
                     ),
                   ),
@@ -437,7 +484,10 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                   ),
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.of(widget.dialogCtx).pop(),
+                      onPressed: () {
+                        UpdateService.markUpdateDismissed(widget.info.latestVersion);
+                        Navigator.of(widget.dialogCtx).pop();
+                      },
                       child: const Text('Close', style: TextStyle(color: Colors.white54, fontSize: 12)),
                     ),
                   ),

@@ -365,8 +365,8 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                         UpdateService.showUpdateDialog(context: context, info: info);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('🎉 True Me is up to date! (v1.0.23)'),
+                          SnackBar(
+                            content: Text('🎉 True Me is up to date! (v${info?.latestVersion ?? 'latest'})'),
                             backgroundColor: AppColors.success,
                           ),
                         );
