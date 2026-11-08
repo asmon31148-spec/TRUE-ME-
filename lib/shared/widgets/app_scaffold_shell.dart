@@ -11,10 +11,20 @@ class AppScaffoldShell extends StatelessWidget {
 
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/chat') || location.startsWith('/voice-tutor')) return 1;
-    if (location.startsWith('/flashcards') || location.startsWith('/quiz')) return 2;
-    if (location.startsWith('/dashboard') || location.startsWith('/planner')) return 3;
+    if (location == '/chat') return 1;
+    if (location == '/flashcards') return 2;
+    if (location == '/dashboard') return 3;
     return 0; // Default: /library
+  }
+
+  bool _shouldShowBottomBar(BuildContext context) {
+    final location = GoRouterState.of(context).matchedLocation;
+    final isRootTab = location == '/library' ||
+        location == '/chat' ||
+        location == '/flashcards' ||
+        location == '/dashboard';
+    final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return isRootTab && !isKeyboardOpen;
   }
 
   void _onItemTapped(int index, BuildContext context) {
@@ -36,26 +46,29 @@ class AppScaffoldShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showBar = _shouldShowBottomBar(context);
     final selectedIdx = _calculateSelectedIndex(context);
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // Screen Content with bottom padding so floating nav bar never obscures content
+          // Screen Content: bottom padding applied only when floating bar is present
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 74),
+              padding: EdgeInsets.only(bottom: showBar ? 78 : 0),
               child: child,
             ),
           ),
 
           // Modern Floating Liquid Glass Bottom Navigation Bar
-          Positioned(
-            left: 18,
-            right: 18,
-            bottom: 14,
-            child: SafeArea(
+          if (showBar)
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 14,
+              child: SafeArea(
               top: false,
               child: Container(
                 height: 64,

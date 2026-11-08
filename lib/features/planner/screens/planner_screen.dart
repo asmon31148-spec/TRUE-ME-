@@ -73,6 +73,93 @@ class _PlannerScreenState extends State<PlannerScreen> {
     });
   }
 
+  void _showAddSessionDialog() {
+    final subjectCtrl = TextEditingController(text: 'Computer Science');
+    final topicCtrl = TextEditingController();
+    final durationCtrl = TextEditingController(text: '20');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text('Add Study Session', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: subjectCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Subject (e.g. Calculus)',
+                hintStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.06),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: topicCtrl,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Topic (e.g. Graph Algorithms)',
+                hintStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.06),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: durationCtrl,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Duration (Minutes)',
+                hintStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.06),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              final subject = subjectCtrl.text.trim();
+              final topic = topicCtrl.text.trim();
+              final duration = int.tryParse(durationCtrl.text.trim()) ?? 20;
+
+              if (topic.isNotEmpty) {
+                setState(() {
+                  _planSessions.add({
+                    'subject': subject.isNotEmpty ? subject : 'General',
+                    'topic': topic,
+                    'type': 'custom',
+                    'duration': duration,
+                    'completed': false,
+                    'priority': 'Custom Task',
+                  });
+                });
+                _persistStudyPlan();
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Add', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final completedCount = _planSessions.where((s) => s['completed'] == true).length;
@@ -216,7 +303,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
               isPrimary: true,
               width: double.infinity,
               child: const Text('Add Custom Session'),
-              onPressed: () {},
+              onPressed: _showAddSessionDialog,
             ),
           ],
         ),

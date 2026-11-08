@@ -86,7 +86,13 @@ class _MindmapScreenState extends State<MindmapScreen> {
         title: 'Concept Mind Map',
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/library');
+            }
+          },
         ),
         actions: [
           IconButton(

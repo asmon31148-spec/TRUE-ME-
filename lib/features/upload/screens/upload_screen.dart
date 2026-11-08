@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/ocr_service.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
@@ -53,6 +54,57 @@ class _UploadScreenState extends State<UploadScreen> {
     super.dispose();
   }
 
+  Future<void> _saveMaterialAndNotify({
+    required String title,
+    required String subject,
+    required String content,
+    required String fileName,
+  }) async {
+    final nbId = widget.targetNotebookId ?? 'nb_${DateTime.now().millisecondsSinceEpoch}';
+
+    // If target notebook exists, add fileRef to it
+    final existing = OfflineCacheService.getCachedNotebook(nbId);
+    if (existing != null) {
+      final fileRefs = List<String>.from(existing['fileRefs'] ?? const []);
+      if (!fileRefs.contains(fileName)) fileRefs.add(fileName);
+      existing['fileRefs'] = fileRefs;
+      existing['lastModified'] = DateTime.now().toIso8601String();
+      await OfflineCacheService.cacheNotebook(nbId, existing);
+    } else {
+      // Create new notebook
+      final newNb = {
+        'id': nbId,
+        'userId': 'local_user',
+        'title': title,
+        'subject': subject,
+        'colorValue': 0xFF06B6D4,
+        'tags': ['Imported Notes', subject],
+        'fileRefs': [fileName],
+        'createdAt': DateTime.now().toIso8601String(),
+        'lastModified': DateTime.now().toIso8601String(),
+      };
+      await OfflineCacheService.cacheNotebook(nbId, newNb);
+    }
+
+    // Save note text in notesBox
+    final noteId = 'note_${DateTime.now().millisecondsSinceEpoch}';
+    await OfflineCacheService.cacheNote(noteId, {
+      'id': noteId,
+      'notebookId': nbId,
+      'title': title,
+      'content': content,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+
+    if (mounted) {
+      _showSuccessDialog(
+        'Material Ingested & Saved',
+        'Saved to "$title" (${content.length} characters indexed).',
+        notebookId: nbId,
+      );
+    }
+  }
+
   Future<void> _pickAndProcessPdf() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -62,16 +114,21 @@ class _UploadScreenState extends State<UploadScreen> {
     if (result != null && result.files.single.path != null) {
       setState(() {
         _isProcessing = true;
-        _statusMessage = 'Extracting PDF text & generating 768-dim embeddings...';
+        _statusMessage = 'Extracting PDF text & indexing into smart notebook...';
       });
 
       try {
         final file = File(result.files.single.path!);
         final text = await PdfProcessor.extractText(file);
-        // Simulating completion
-        if (mounted) {
-          _showSuccessDialog('PDF Ingested', 'Extracted ${text.length} characters into vector index.');
-        }
+        final fileName = result.files.single.name;
+        final docTitle = fileName.replaceAll('.pdf', '');
+
+        await _saveMaterialAndNotify(
+          title: docTitle,
+          subject: 'Study Notes',
+          content: text,
+          fileName: fileName,
+        );
       } catch (e) {
         if (mounted) _showError(e.toString());
       } finally {
@@ -92,9 +149,14 @@ class _UploadScreenState extends State<UploadScreen> {
 
       try {
         final text = await ocrService.recognizeTextFromImage(File(picked.path));
-        if (mounted) {
-          _showSuccessDialog('OCR Finished', 'Extracted notes:\n\n${text.length > 200 ? text.substring(0, 200) + '...' : text}');
-        }
+        final fileName = 'Photo_Notes_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+        await _saveMaterialAndNotify(
+          title: 'OCR Whiteboard Notes',
+          subject: 'Handwritten Notes',
+          content: text,
+          fileName: fileName,
+        );
       } catch (e) {
         if (mounted) _showError(e.toString());
       } finally {
@@ -103,21 +165,31 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  void _showSuccessDialog(String title, String body) {
+  void _showSuccessDialog(String title, String body, {String? notebookId}) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(title, style: const TextStyle(color: Colors.white)),
         content: Text(body, style: const TextStyle(color: AppColors.textSecondary)),
         actions: [
           TextButton(
-            child: const Text('OK', style: TextStyle(color: AppColors.accentCyan)),
+            child: const Text('Back to Library', style: TextStyle(color: Colors.white70)),
             onPressed: () {
               Navigator.pop(ctx);
               context.go('/library');
             },
           ),
+          if (notebookId != null)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Open Notebook', style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.go('/notebook/$notebookId');
+              },
+            ),
         ],
       ),
     );
@@ -206,7 +278,13 @@ class _UploadScreenState extends State<UploadScreen> {
                       _isRecordingAudio = false;
                       _isProcessing = false;
                     });
-                    _showSuccessDialog('Audio Transcribed', text);
+                    final fileName = 'Audio_Lecture_${DateTime.now().millisecondsSinceEpoch}.m4a';
+                    await _saveMaterialAndNotify(
+                      title: 'Audio Lecture Notes',
+                      subject: 'Recorded Lecture',
+                      content: text,
+                      fileName: fileName,
+                    );
                   }
                 } catch (e) {
                   setState(() {
@@ -261,10 +339,22 @@ class _UploadScreenState extends State<UploadScreen> {
                       try {
                         if (url.contains('youtube.com') || url.contains('youtu.be')) {
                           final summary = await _youtubeProcessor.summarizeVideoNotes(videoUrl: url);
-                          _showSuccessDialog('YouTube Lecture Processed', summary);
+                          await _saveMaterialAndNotify(
+                            title: 'YouTube Lecture Summary',
+                            subject: 'Video Study Notes',
+                            content: summary,
+                            fileName: 'YouTube_${DateTime.now().millisecondsSinceEpoch}',
+                          );
                         } else {
                           final res = await _urlProcessor.fetchAndSummarize(url);
-                          _showSuccessDialog('Article Summarized', res['summary'] ?? '');
+                          final summary = res['summary'] ?? '';
+                          final title = res['title'] ?? 'Web Article Summary';
+                          await _saveMaterialAndNotify(
+                            title: title,
+                            subject: 'Web Research',
+                            content: summary,
+                            fileName: 'Web_${DateTime.now().millisecondsSinceEpoch}',
+                          );
                         }
                       } catch (e) {
                         _showError(e.toString());

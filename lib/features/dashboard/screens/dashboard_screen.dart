@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/achievement_service.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_card.dart';
 import '../widgets/mastery_chart.dart';
@@ -14,6 +15,11 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final badges = AchievementService.getInitialBadges();
+    final subjects = OfflineCacheService.getUserSubjects();
+
+    final colors = [AppColors.primary, AppColors.accent, AppColors.secondary, AppColors.success, AppColors.warning];
+    final percentages = [0.85, 0.74, 0.62, 0.90, 0.55];
+    final labels = ['85% (Advanced)', '74% (Proficient)', '62% (Needs Practice)', '90% (Mastered)', '55% (Developing)'];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -40,11 +46,18 @@ class DashboardScreen extends StatelessWidget {
             const Text('Subject Mastery Levels', style: AppTypography.headlineMedium),
             const SizedBox(height: 14),
 
-            _buildMasteryBar('Computer Science', 0.85, AppColors.primary, '85% (Advanced)'),
-            const SizedBox(height: 12),
-            _buildMasteryBar('Calculus & Linear Algebra', 0.74, AppColors.accent, '74% (Proficient)'),
-            const SizedBox(height: 12),
-            _buildMasteryBar('Physics Dynamics', 0.62, AppColors.secondary, '62% (Needs Practice)'),
+            ...subjects.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final subj = entry.value;
+              final color = colors[idx % colors.length];
+              final pct = percentages[idx % percentages.length];
+              final label = labels[idx % labels.length];
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildMasteryBar(subj, pct, color, label),
+              );
+            }),
             const SizedBox(height: 28),
 
             // Achievement Badges

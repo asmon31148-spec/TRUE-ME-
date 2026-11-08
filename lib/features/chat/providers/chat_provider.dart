@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/services/offline_cache_service.dart';
 
 class ChatMessage {
   final String id;
@@ -61,7 +62,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 id: 'welcome_1',
                 isUser: false,
                 text:
-                    "Hello Alex! I am Sage. Your documents are indexed and ready. Ask me any question to get answers grounded directly in your notes and lectures.",
+                    "Hello ${OfflineCacheService.getUserName()}! I am Sage, your AI study coach. Ask me anything about your lecture notes, equations, or exam topics!",
                 timestamp: DateTime.now(),
               ),
             ],
@@ -72,6 +73,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required String question,
     required String userId,
     String? notebookId,
+    String? studentName,
   }) async {
     final cleanQuestion = question.trim();
     if (cleanQuestion.isEmpty) return;
@@ -116,10 +118,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // 2. Query AI Router (Groq 70B -> Gemini Flash -> OpenRouter)
       String answer;
       try {
+        final name = studentName ?? OfflineCacheService.getUserName();
         answer = await _aiRouter.chatWithNotes(
           question: cleanQuestion,
           retrievedChunks: retrievedExcerpts,
-          studentName: 'Alex',
+          studentName: name,
         );
       } catch (aiError) {
         answer =

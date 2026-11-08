@@ -132,6 +132,78 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
+  // NOTEBOOK CACHING
+  // ---------------------------------------------------------------------------
+  static Future<void> cacheNotebook(String notebookId, Map<String, dynamic> notebookMap) async {
+    final box = Hive.box(notebooksBox);
+    await box.put(notebookId, notebookMap);
+  }
+
+  static Map<String, dynamic>? getCachedNotebook(String notebookId) {
+    final box = Hive.box(notebooksBox);
+    final data = box.get(notebookId);
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return null;
+  }
+
+  static Future<void> deleteNotebook(String notebookId) async {
+    final box = Hive.box(notebooksBox);
+    await box.delete(notebookId);
+  }
+
+  static List<Map<String, dynamic>> getAllCachedNotebooks() {
+    final box = Hive.box(notebooksBox);
+    final list = box.values
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+
+    if (list.isEmpty) {
+      // Seed initial high-yield default notebooks
+      final defaults = [
+        {
+          'id': 'nb_1',
+          'userId': 'default_user',
+          'title': 'Operating Systems & Concurrency',
+          'subject': 'Computer Science',
+          'colorValue': 0xFF6366F1,
+          'tags': ['Deadlocks', 'Semaphores', 'Virtual Memory'],
+          'fileRefs': ['Chapter 3 — Process Synchronization & Mutexes.pdf', 'Lecture 7 — Deadlock Prevention.m4a'],
+          'createdAt': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(),
+          'lastModified': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+        },
+        {
+          'id': 'nb_2',
+          'userId': 'default_user',
+          'title': 'Multivariable Calculus & Linear Algebra',
+          'subject': 'Mathematics',
+          'colorValue': 0xFF06B6D4,
+          'tags': ['Eigenvalues', 'Stokes Theorem', 'Vector Fields'],
+          'fileRefs': ['Unit 4 — Double Integrals & Green Theorem.pdf'],
+          'createdAt': DateTime.now().subtract(const Duration(days: 8)).toIso8601String(),
+          'lastModified': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+        },
+        {
+          'id': 'nb_3',
+          'userId': 'default_user',
+          'title': 'Quantum Mechanics & Wave Theory',
+          'subject': 'Physics',
+          'colorValue': 0xFFEC4899,
+          'tags': ['Schrödinger Eq', 'Hamiltonian', 'State Vectors'],
+          'fileRefs': ['Quantum Harmonic Oscillator Notes.pdf'],
+          'createdAt': DateTime.now().subtract(const Duration(days: 12)).toIso8601String(),
+          'lastModified': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
+        },
+      ];
+      for (final n in defaults) {
+        box.put(n['id'], n);
+      }
+      return defaults;
+    }
+    return list;
+  }
+
+  // ---------------------------------------------------------------------------
   // DAILY STUDY PLAN CACHING
   // ---------------------------------------------------------------------------
   static Future<void> cacheStudyPlan(String date, Map<String, dynamic> planMap) async {

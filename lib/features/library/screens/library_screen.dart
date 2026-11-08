@@ -18,11 +18,13 @@ class LibraryScreen extends StatefulWidget {
 class _LibraryScreenState extends State<LibraryScreen> {
   String _studentName = 'Student';
   List<String> _userSubjects = ['Computer Science', 'Calculus', 'Physics'];
+  List<Map<String, dynamic>> _notebooks = [];
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadNotebooks();
     // Check for in-app updates automatically in background
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -41,6 +43,161 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _studentName = name;
       if (subs.isNotEmpty) _userSubjects = subs;
     });
+  }
+
+  void _loadNotebooks() {
+    final list = OfflineCacheService.getAllCachedNotebooks();
+    setState(() {
+      _notebooks = list;
+    });
+  }
+
+  void _showCreateNotebookDialog() {
+    final titleController = TextEditingController();
+    final subjectController = TextEditingController(text: _userSubjects.isNotEmpty ? _userSubjects.first : 'Computer Science');
+    final tagController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text('Create Smart Notebook', style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Notebook Title (e.g. Distributed Systems)',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.06),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: subjectController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Subject (e.g. CS, Mathematics)',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.06),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tagController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Tags (comma-separated)',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.06),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              final title = titleController.text.trim();
+              final subject = subjectController.text.trim();
+              if (title.isEmpty) return;
+
+              final tags = tagController.text
+                  .split(',')
+                  .map((t) => t.trim())
+                  .where((t) => t.isNotEmpty)
+                  .toList();
+
+              final newNotebook = {
+                'id': 'nb_${DateTime.now().millisecondsSinceEpoch}',
+                'userId': 'local_user',
+                'title': title,
+                'subject': subject.isNotEmpty ? subject : 'General',
+                'colorValue': 0xFF06B6D4,
+                'tags': tags.isNotEmpty ? tags : ['Study Notes'],
+                'fileRefs': <String>[],
+                'createdAt': DateTime.now().toIso8601String(),
+                'lastModified': DateTime.now().toIso8601String(),
+              };
+
+              await OfflineCacheService.cacheNotebook(newNotebook['id'] as String, newNotebook);
+              if (mounted) {
+                Navigator.pop(ctx);
+                _loadNotebooks();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Created notebook "$title"'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Create', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNotificationsDialog() {
+    final examDate = OfflineCacheService.getTargetExamDate();
+    final daysRemaining = examDate.difference(DateTime.now()).inDays;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: AppColors.accentCyan),
+            SizedBox(width: 10),
+            Text('Study Notifications', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.alarm, color: AppColors.warning),
+              title: const Text('Exam Countdown', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: Text('$daysRemaining days until your target exam date.', style: const TextStyle(color: Colors.white70)),
+            ),
+            const Divider(color: Colors.white12),
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.psychology, color: AppColors.accentCyan),
+              title: Text('Forgetting Curve Reminder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: Text('12 flashcards are due today for optimal retention.', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: AppColors.accentCyan)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -90,7 +247,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.white70),
-            onPressed: () {},
+            tooltip: 'Notifications',
+            onPressed: _showNotificationsDialog,
           ),
         ],
       ),
@@ -180,7 +338,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
             const SizedBox(height: 28),
 
-            // Quick Actions Strip
+            // Quick Actions Strip (Responsive with FittedBox to eliminate overflow)
             Row(
               children: [
                 _buildQuickAction(
@@ -216,42 +374,71 @@ class _LibraryScreenState extends State<LibraryScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Smart Notebooks', style: AppTypography.headlineMedium),
-                TextButton.icon(
-                  onPressed: () => context.go('/upload'),
-                  icon: const Icon(Icons.add, size: 18, color: AppColors.accentCyan),
-                  label: const Text('New', style: TextStyle(color: AppColors.accentCyan, fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => context.go('/upload'),
+                      icon: const Icon(Icons.file_upload_outlined, size: 16, color: AppColors.accentCyan),
+                      label: const Text('Import', style: TextStyle(color: AppColors.accentCyan, fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                    TextButton.icon(
+                      onPressed: _showCreateNotebookDialog,
+                      icon: const Icon(Icons.add, size: 18, color: AppColors.accentCyan),
+                      label: const Text('New', style: TextStyle(color: AppColors.accentCyan, fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // Notebook Cards
-            _buildNotebookCard(
-              context,
-              title: 'Operating Systems & Concurrency',
-              subject: 'Computer Science',
-              fileCount: 4,
-              color: AppColors.primary,
-              tags: ['Deadlocks', 'Semaphores', 'Virtual Memory'],
-            ),
-            const SizedBox(height: 14),
-            _buildNotebookCard(
-              context,
-              title: 'Multivariable Calculus & Linear Algebra',
-              subject: 'Mathematics',
-              fileCount: 3,
-              color: AppColors.accent,
-              tags: ['Eigenvalues', 'Stokes Theorem', 'Vector Fields'],
-            ),
-            const SizedBox(height: 14),
-            _buildNotebookCard(
-              context,
-              title: 'Quantum Mechanics & Wave Theory',
-              subject: 'Physics',
-              fileCount: 5,
-              color: AppColors.secondary,
-              tags: ['Schrödinger Eq', 'Hamiltonian', 'State Vectors'],
-            ),
+            // Dynamic Notebook Cards from Hive Cache
+            if (_notebooks.isEmpty) ...[
+              GlassCard(
+                padding: const EdgeInsets.all(24),
+                borderRadius: 20,
+                child: Center(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.auto_stories_outlined, size: 48, color: Colors.white54),
+                      const SizedBox(height: 12),
+                      const Text('No notebooks yet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      const Text('Tap "+ New" or "Import" to add study materials.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      const SizedBox(height: 14),
+                      GlassButton(
+                        isPrimary: true,
+                        child: const Text('Create First Notebook'),
+                        onPressed: _showCreateNotebookDialog,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ] else ...[
+              ..._notebooks.map((nb) {
+                final id = nb['id'] as String? ?? '1';
+                final title = nb['title'] as String? ?? 'Untitled';
+                final subject = nb['subject'] as String? ?? 'General';
+                final colorVal = (nb['colorValue'] as num?)?.toInt() ?? 0xFF6366F1;
+                final tags = List<String>.from(nb['tags'] ?? const []);
+                final files = List<String>.from(nb['fileRefs'] ?? const []);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _buildNotebookCard(
+                    context,
+                    notebookId: id,
+                    title: title,
+                    subject: subject,
+                    fileCount: files.isNotEmpty ? files.length : (tags.length + 1),
+                    color: Color(colorVal),
+                    tags: tags,
+                  ),
+                );
+              }),
+            ],
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -276,15 +463,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
             border: Border.all(color: Colors.white.withOpacity(0.1)),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, color: AppColors.accentCyan, size: 24),
               const SizedBox(height: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -296,6 +491,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Widget _buildNotebookCard(
     BuildContext context, {
+    required String notebookId,
     required String title,
     required String subject,
     required int fileCount,
@@ -305,7 +501,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return GlassCard(
       padding: const EdgeInsets.all(18),
       borderRadius: 22,
-      onTap: () => context.go('/notebook/1'),
+      onTap: () => context.go('/notebook/$notebookId'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -328,33 +524,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
+                  letterSpacing: 0.8,
                   color: color,
                 ),
               ),
               const Spacer(),
               Text(
                 '$fileCount files',
-                style: AppTypography.bodySmall,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(title, style: AppTypography.titleLarge),
           const SizedBox(height: 14),
           Wrap(
-            spacing: 6,
+            spacing: 8,
             runSpacing: 6,
-            children: tags.map((t) {
+            children: tags.map((tag) {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Text(
-                  t,
+                  tag,
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
               );

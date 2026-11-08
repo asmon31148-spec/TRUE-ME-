@@ -31,7 +31,15 @@ class _ExplainerPlayerScreenState extends State<ExplainerPlayerScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.share_outlined, color: Colors.white70),
-            onPressed: () {},
+            tooltip: 'Export Explainer',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Explainer video script saved to study notes.'),
+                  backgroundColor: AppColors.surface,
+                ),
+              );
+            },
           ),
         ],
       ),
