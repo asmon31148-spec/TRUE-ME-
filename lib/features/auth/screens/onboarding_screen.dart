@@ -107,8 +107,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       itemCount: _pages.length,
                       itemBuilder: (context, index) {
                         final item = _pages[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

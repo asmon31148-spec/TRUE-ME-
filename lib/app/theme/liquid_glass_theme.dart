@@ -5,9 +5,9 @@ import 'colors.dart';
 class LiquidGlassTheme {
   LiquidGlassTheme._();
 
-  static const double blurStandard = 18.0;
-  static const double blurDense = 28.0;
-  static const double blurSubtle = 10.0;
+  static const double blurStandard = 8.0;
+  static const double blurDense = 14.0;
+  static const double blurSubtle = 4.0;
 
   static const double radiusSmall = 12.0;
   static const double radiusMedium = 20.0;

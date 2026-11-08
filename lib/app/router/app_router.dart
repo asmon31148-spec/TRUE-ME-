@@ -14,10 +14,12 @@ import '../../features/planner/screens/planner_screen.dart';
 import '../../features/quiz/screens/quiz_setup_screen.dart';
 import '../../features/upload/screens/upload_screen.dart';
 import '../../features/voice_tutor/screens/voice_session_screen.dart';
+import '../../shared/widgets/app_scaffold_shell.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/onboarding',
   routes: [
+    // Standalone Fullscreen Flow
     GoRoute(
       path: '/onboarding',
       builder: (context, state) => const OnboardingScreen(),
@@ -31,47 +33,8 @@ final appRouter = GoRouter(
       builder: (context, state) => const SetupProfileScreen(),
     ),
     GoRoute(
-      path: '/library',
-      builder: (context, state) => const LibraryScreen(),
-    ),
-    GoRoute(
-      path: '/upload',
-      builder: (context, state) => const UploadScreen(),
-    ),
-    GoRoute(
       path: '/note-editor',
       builder: (context, state) => const NoteEditorScreen(),
-    ),
-    GoRoute(
-      path: '/mindmap',
-      builder: (context, state) => const MindmapScreen(),
-    ),
-    GoRoute(
-      path: '/notebook/:id',
-      builder: (context, state) {
-        final id = state.pathParameters['id'] ?? '1';
-        return NotebookDetailScreen(notebookId: id);
-      },
-    ),
-    GoRoute(
-      path: '/planner',
-      builder: (context, state) => const PlannerScreen(),
-    ),
-    GoRoute(
-      path: '/dashboard',
-      builder: (context, state) => const DashboardScreen(),
-    ),
-    GoRoute(
-      path: '/chat',
-      builder: (context, state) => const ChatScreen(),
-    ),
-    GoRoute(
-      path: '/flashcards',
-      builder: (context, state) => const DeckListScreen(),
-    ),
-    GoRoute(
-      path: '/quiz',
-      builder: (context, state) => const QuizSetupScreen(),
     ),
     GoRoute(
       path: '/voice-tutor',
@@ -80,6 +43,52 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/explainer',
       builder: (context, state) => const ExplainerPlayerScreen(),
+    ),
+
+    // Main App Navigation Shell (Persistent Floating Liquid Glass Bar)
+    ShellRoute(
+      builder: (context, state, child) => AppScaffoldShell(child: child),
+      routes: [
+        GoRoute(
+          path: '/library',
+          builder: (context, state) => const LibraryScreen(),
+        ),
+        GoRoute(
+          path: '/chat',
+          builder: (context, state) => const ChatScreen(),
+        ),
+        GoRoute(
+          path: '/flashcards',
+          builder: (context, state) => const DeckListScreen(),
+        ),
+        GoRoute(
+          path: '/dashboard',
+          builder: (context, state) => const DashboardScreen(),
+        ),
+        GoRoute(
+          path: '/planner',
+          builder: (context, state) => const PlannerScreen(),
+        ),
+        GoRoute(
+          path: '/quiz',
+          builder: (context, state) => const QuizSetupScreen(),
+        ),
+        GoRoute(
+          path: '/upload',
+          builder: (context, state) => const UploadScreen(),
+        ),
+        GoRoute(
+          path: '/mindmap',
+          builder: (context, state) => const MindmapScreen(),
+        ),
+        GoRoute(
+          path: '/notebook/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '1';
+            return NotebookDetailScreen(notebookId: id);
+          },
+        ),
+      ],
     ),
   ],
 );

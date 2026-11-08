@@ -101,19 +101,29 @@ class LibraryScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      GlassButton(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        isPrimary: true,
-                        child: const Text('Start Daily Plan (45m)'),
-                        onPressed: () => context.go('/planner'),
+                      Expanded(
+                        child: GlassButton(
+                          height: 40,
+                          isPrimary: true,
+                          child: const Text(
+                            'Daily Plan',
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onPressed: () => context.go('/planner'),
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      GlassButton(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: const Text('Voice Tutor'),
-                        onPressed: () => context.go('/voice-tutor'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GlassButton(
+                          height: 40,
+                          child: const Text(
+                            'Voice Tutor',
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onPressed: () => context.go('/voice-tutor'),
+                        ),
                       ),
                     ],
                   ),
@@ -140,7 +150,7 @@ class LibraryScreen extends StatelessWidget {
                 _buildQuickAction(
                   context,
                   icon: Icons.quiz_outlined,
-                  label: 'Adaptive Quiz',
+                  label: 'Quiz',
                   route: '/quiz',
                 ),
                 _buildQuickAction(
