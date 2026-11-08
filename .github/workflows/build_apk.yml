@@ -26,7 +26,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Scaffold Official Android Project
+      - name: Scaffold Official Android Project & Configure Desugaring
         run: |
           flutter create . --platforms=android --org com.trueme.study --project-name trueme
           if [ -f "android/app/build.gradle.kts" ]; then
@@ -37,6 +37,42 @@ jobs:
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "android.nonTransitiveRClass=false" >> android/gradle.properties
+
+          python3 -c "
+          import os
+
+          # Patch Kotlin DSL
+          kts_path = 'android/app/build.gradle.kts'
+          if os.path.exists(kts_path):
+              with open(kts_path, 'r') as f:
+                  content = f.read()
+              if 'isCoreLibraryDesugaringEnabled' not in content:
+                  content = content.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
+              if 'coreLibraryDesugaring(' not in content:
+                  if 'dependencies {' in content:
+                      content = content.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")')
+                  else:
+                      content += '\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")\n}\n'
+              with open(kts_path, 'w') as f:
+                  f.write(content)
+              print('Injected desugaring into build.gradle.kts')
+
+          # Patch Groovy
+          groovy_path = 'android/app/build.gradle'
+          if os.path.exists(groovy_path):
+              with open(groovy_path, 'r') as f:
+                  content = f.read()
+              if 'coreLibraryDesugaringEnabled' not in content:
+                  content = content.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true')
+              if 'coreLibraryDesugaring ' not in content:
+                  if 'dependencies {' in content:
+                      content = content.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"')
+                  else:
+                      content += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.1.4\"\n}\n'
+              with open(groovy_path, 'w') as f:
+                  f.write(content)
+              print('Injected desugaring into build.gradle')
+          "
 
       - name: Create .env for Build
         run: |
