@@ -2,12 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
 
-class LibraryScreen extends StatelessWidget {
+class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
+
+  @override
+  State<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends State<LibraryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Check for in-app updates automatically in background
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final updateInfo = await UpdateService().checkForUpdate();
+        if (updateInfo != null && updateInfo.hasUpdate && mounted) {
+          UpdateService.showUpdateDialog(context: context, info: updateInfo);
+        }
+      } catch (_) {}
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +45,32 @@ class LibraryScreen extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.white70),
-            onPressed: () {},
+            icon: const Icon(Icons.system_update_alt_rounded, color: AppColors.accentCyan),
+            tooltip: 'Check for Updates',
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Checking for latest True Me updates...'),
+                  duration: Duration(seconds: 1),
+                  backgroundColor: AppColors.surface,
+                ),
+              );
+              final info = await UpdateService().checkForUpdate();
+              if (!mounted) return;
+              if (info != null && info.hasUpdate) {
+                UpdateService.showUpdateDialog(context: context, info: info);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🎉 True Me is up to date!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+            icon: const Icon(Icons.notifications_none, color: Colors.white70),
             onPressed: () {},
           ),
         ],
@@ -57,46 +98,34 @@ class LibraryScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.primaryLight.withOpacity(0.4)),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primaryLight.withOpacity(0.3)),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.auto_awesome, color: AppColors.accentCyan, size: 14),
-                            SizedBox(width: 6),
-                            Text(
-                              "SAGE'S MORNING BRIEF",
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
-                                color: AppColors.accentCyan,
-                              ),
-                            ),
-                          ],
+                        child: const Text(
+                          'SAGE DAILY MISSION',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                            color: AppColors.accentCyan,
+                          ),
                         ),
                       ),
                       const Spacer(),
+                      const Icon(Icons.bolt, color: AppColors.warning, size: 18),
+                      const SizedBox(width: 4),
                       const Text(
-                        '45 days to Finals',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                        ),
+                        'Streak: 7 Days',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
+                  const Text('Operating Systems & Calculus Focus', style: AppTypography.headlineMedium),
+                  const SizedBox(height: 6),
                   const Text(
-                    '"Hey Alex! Calculus Eigenvalues decay is down 18%. Let\'s spend 20 mins reviewing flashcards today."',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
-                      color: AppColors.textPrimary,
-                    ),
+                    'Sage scheduled 2 review sessions today to prevent forgetting curve decay on deadlocks and eigenvalues.',
+                    style: AppTypography.bodySmall,
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -169,50 +198,43 @@ class LibraryScreen extends StatelessWidget {
               children: [
                 const Text('Smart Notebooks', style: AppTypography.headlineMedium),
                 TextButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.add, size: 18, color: AppColors.primaryLight),
-                  label: const Text('New', style: TextStyle(color: AppColors.primaryLight)),
+                  onPressed: () => context.go('/upload'),
+                  icon: const Icon(Icons.add, size: 18, color: AppColors.accentCyan),
+                  label: const Text('New', style: TextStyle(color: AppColors.accentCyan, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // Notebooks List
+            // Notebook Cards
             _buildNotebookCard(
               context,
               title: 'Operating Systems & Concurrency',
               subject: 'Computer Science',
               fileCount: 4,
-              color: const Color(0xFF6366F1),
+              color: AppColors.primary,
               tags: ['Deadlocks', 'Semaphores', 'Virtual Memory'],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _buildNotebookCard(
               context,
               title: 'Multivariable Calculus & Linear Algebra',
               subject: 'Mathematics',
-              fileCount: 6,
-              color: const Color(0xFF06B6D4),
-              tags: ['Eigenvalues', 'Stokes Theorem', 'Jacobians'],
+              fileCount: 3,
+              color: AppColors.accent,
+              tags: ['Eigenvalues', 'Stokes Theorem', 'Vector Fields'],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _buildNotebookCard(
               context,
-              title: 'Classical Mechanics & Wave Dynamics',
+              title: 'Quantum Mechanics & Wave Theory',
               subject: 'Physics',
-              fileCount: 3,
-              color: const Color(0xFF8B5CF6),
-              tags: ['Lagrangian', 'Harmonic Oscillator'],
+              fileCount: 5,
+              color: AppColors.secondary,
+              tags: ['Schrödinger Eq', 'Hamiltonian', 'State Vectors'],
             ),
-            const SizedBox(height: 32),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primary,
-        onPressed: () => context.go('/upload'),
-        icon: const Icon(Icons.upload_file, color: Colors.white),
-        label: const Text('Import Note / PDF', style: TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -309,11 +331,11 @@ class LibraryScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Text(
-                  '#$t',
+                  t,
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
               );

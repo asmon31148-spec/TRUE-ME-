@@ -226,7 +226,7 @@ class UpdateService {
                           const SizedBox(width: 12),
                           Expanded(
                             child: GlassButton(
-                              text: 'Update Now',
+                              isPrimary: true,
                               onPressed: () async {
                                 setState(() {
                                   isDownloading = true;
@@ -239,8 +239,11 @@ class UpdateService {
                                     });
                                   },
                                 );
-                                Navigator.of(dialogCtx).pop();
+                                if (Navigator.of(dialogCtx).canPop()) {
+                                  Navigator.of(dialogCtx).pop();
+                                }
                               },
+                              child: const Text('Update Now'),
                             ),
                           ),
                         ],
