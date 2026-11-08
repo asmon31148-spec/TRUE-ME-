@@ -92,38 +92,59 @@ class ChatNotifier extends StateNotifier<ChatState> {
     );
 
     try {
-      // 1. Retrieve relevant grounded chunks from pgvector
+      // 1. Retrieve relevant grounded chunks from pgvector ONLY if studying a notebook
       List<String> retrievedExcerpts = [];
       String? citationSource;
 
-      try {
-        final chunks = await _ragService.retrieveContext(
-          query: cleanQuestion,
-          userId: userId,
-          notebookId: notebookId,
-          topK: 4,
-        );
+      if (notebookId != null && notebookId.isNotEmpty) {
+        try {
+          final chunks = await _ragService
+              .retrieveContext(
+                query: cleanQuestion,
+                userId: userId,
+                notebookId: notebookId,
+                topK: 4,
+              )
+              .timeout(
+                const Duration(milliseconds: 1200),
+                onTimeout: () => [],
+              );
 
-        if (chunks.isNotEmpty) {
-          retrievedExcerpts = chunks.map((c) => c.content).toList();
-          final top = chunks.first;
-          citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
+          if (chunks.isNotEmpty) {
+            retrievedExcerpts = chunks.map((c) => c.content).toList();
+            final top = chunks.first;
+            citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
+          }
+        } catch (ragError) {
+          // Log gracefully; answer directly without grounded chunks
+          retrievedExcerpts = [];
+          citationSource = null;
         }
-      } catch (ragError) {
-        // Log gracefully; answer directly without grounded chunks
-        retrievedExcerpts = [];
-        citationSource = null;
       }
 
-      // 2. Query AI Router (Groq 70B -> Gemini Flash -> OpenRouter)
+      // 2. Query AI Router (Groq 8B instant LPU -> fast fallback)
       String answer;
       try {
         final name = studentName ?? OfflineCacheService.getUserName();
-        answer = await _aiRouter.chatWithNotes(
-          question: cleanQuestion,
-          retrievedChunks: retrievedExcerpts,
-          studentName: name,
-        );
+        if (retrievedExcerpts.isEmpty) {
+          // ULTRA FAST PATH: Real-time conversation (<500ms latency)
+          final systemPrompt = '''
+You are Sage, the personal AI mentor for $name in the True Me app.
+Provide direct, crystal-clear, concise, and helpful explanations.
+Format with concise paragraphs, bullet points, or bold highlights when useful.
+''';
+          answer = await _aiRouter.executeRealtimeChat(
+            prompt: cleanQuestion,
+            systemPrompt: systemPrompt,
+          );
+        } else {
+          // Grounded Notebook Chat
+          answer = await _aiRouter.chatWithNotes(
+            question: cleanQuestion,
+            retrievedChunks: retrievedExcerpts,
+            studentName: name,
+          );
+        }
       } catch (aiError) {
         answer =
             "I could not reach the AI models at this moment ($aiError). Please verify that your API keys are active or try again shortly.";

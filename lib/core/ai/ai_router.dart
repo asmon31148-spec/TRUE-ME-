@@ -347,22 +347,34 @@ Return ONLY valid JSON matching this schema:
   // ---------------------------------------------------------------------------
   // RAG KNOWLEDGE BASE CHAT (Cohere Rerank v3.5 Precision + Fast Synthesis)
   // ---------------------------------------------------------------------------
-  /// Grounded RAG Chat with precision reranking
+  /// Grounded RAG Chat with precision reranking & sub-second inference
   Future<String> chatWithNotes({
     required String question,
     required List<String> retrievedChunks,
     String studentName = 'Alex',
   }) async {
-    // Apply Cohere Rerank v3.5 if available (elevates recall by 25-30%)
+    if (retrievedChunks.isEmpty) {
+      return executeRealtimeChat(
+        prompt: question,
+        systemPrompt: 'You are Sage, the personal AI mentor for $studentName in the True Me app.',
+      );
+    }
+
+    // Apply Cohere Rerank v3.5 if multiple chunks exist with short timeout
     List<String> optimalChunks = retrievedChunks;
-    if (_cohere.isConfigured && retrievedChunks.length > 1 && await RateLimitGuardian.isAvailable('cohere')) {
+    if (_cohere.isConfigured && retrievedChunks.length > 2 && await RateLimitGuardian.isAvailable('cohere')) {
       try {
         await RateLimitGuardian.recordRequest('cohere');
-        optimalChunks = await _cohere.rerankDocuments(
-          query: question,
-          documents: retrievedChunks,
-          topN: 4,
-        );
+        optimalChunks = await _cohere
+            .rerankDocuments(
+              query: question,
+              documents: retrievedChunks,
+              topN: 3,
+            )
+            .timeout(
+              const Duration(milliseconds: 1000),
+              onTimeout: () => retrievedChunks,
+            );
       } catch (e) {
         RateLimitGuardian.trip('cohere');
       }
@@ -384,7 +396,18 @@ Student Question:
 $question
 ''';
 
-    // RAG synthesis priority: Groq OSS 120B (fastest readable answer) -> Gemini Flash -> OpenRouter Lightning
+    // RAG synthesis priority: Groq 8B (blazing fast sub-second) -> Groq 70B -> Gemini Flash -> OpenRouter Lightning
+    if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
+      try {
+        return await _groq.complete8B(
+          prompt: userPrompt,
+          systemPrompt: systemPrompt,
+        );
+      } catch (e) {
+        RateLimitGuardian.trip('groq_speed');
+      }
+    }
+
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_heavy')) {
       try {
         return await _groq.complete70B(

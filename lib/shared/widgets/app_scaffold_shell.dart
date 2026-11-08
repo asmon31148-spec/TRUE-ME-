@@ -51,56 +51,29 @@ class AppScaffoldShell extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      resizeToAvoidBottomInset: false,
-      body: Stack(
-        children: [
-          // Screen Content: bottom padding applied only when floating bar is present
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: showBar ? 78 : 0),
-              child: child,
-            ),
-          ),
-
-          // Modern Floating Liquid Glass Bottom Navigation Bar
-          if (showBar)
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 14,
-              child: SafeArea(
-              top: false,
-              child: Container(
-                height: 64,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.glassShadow,
-                      blurRadius: 20,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
+      body: child,
+      bottomNavigationBar: showBar
+          ? ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: LiquidGlassTheme.blurStandard,
+                  sigmaY: LiquidGlassTheme.blurStandard,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: LiquidGlassTheme.blurStandard,
-                      sigmaY: LiquidGlassTheme.blurStandard,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.glassSurface,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: AppColors.glassBorderDark,
-                          width: 1,
-                        ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xF20B0F19),
+                    border: Border(
+                      top: BorderSide(
+                        color: Colors.white.withOpacity(0.08),
+                        width: 1,
                       ),
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      height: 58,
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _NavItem(
                             icon: Icons.auto_stories_outlined,
@@ -136,10 +109,8 @@ class AppScaffoldShell extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
+            )
+          : null,
     );
   }
 }
@@ -161,36 +132,44 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.accentCyan.withOpacity(0.16)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 22,
-              color: isSelected ? AppColors.accentCyan : AppColors.textMuted,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? Colors.white : AppColors.textMuted,
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: AppColors.accentCyan.withOpacity(0.12),
+          highlightColor: Colors.transparent,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.accentCyan.withOpacity(0.16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isSelected ? activeIcon : icon,
+                  size: 22,
+                  color: isSelected ? AppColors.accentCyan : AppColors.textMuted,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : AppColors.textMuted,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

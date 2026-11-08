@@ -38,7 +38,7 @@ class GroqService {
     try {
       return await _callChatCompletion(
         model: 'llama-3.1-8b-instant',
-        rateLimitKey: 'groq_8b',
+        rateLimitKey: 'groq_speed',
         prompt: prompt,
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
@@ -46,8 +46,8 @@ class GroqService {
       );
     } catch (_) {
       return await _callChatCompletion(
-        model: 'llama3-8b-8192',
-        rateLimitKey: 'groq_8b',
+        model: 'llama-3.3-70b-versatile',
+        rateLimitKey: 'groq_heavy',
         prompt: prompt,
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
@@ -66,7 +66,7 @@ class GroqService {
     try {
       return await _callChatCompletion(
         model: 'llama-3.3-70b-versatile',
-        rateLimitKey: 'groq_70b',
+        rateLimitKey: 'groq_heavy',
         prompt: prompt,
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
@@ -75,7 +75,7 @@ class GroqService {
     } catch (_) {
       return await _callChatCompletion(
         model: 'mixtral-8x7b-32768',
-        rateLimitKey: 'groq_70b',
+        rateLimitKey: 'groq_heavy',
         prompt: prompt,
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
