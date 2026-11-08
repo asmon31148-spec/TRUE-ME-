@@ -5,6 +5,15 @@ class OpenRouterService {
   final String _apiKey;
   final Dio _dio;
 
+  /// Verified 100% free models on OpenRouter
+  static const List<String> freeModels = [
+    'nvidia/nemotron-3.5-lightning:free',
+    'liquid/lfm-3-1.7b:free',
+    'liquid/lfm-2.5-2.6b:free',
+    'cohere/north-mini-code:free',
+    'google/gemma-4-31b-it:free',
+  ];
+
   OpenRouterService({String? apiKey, Dio? dio})
       : _apiKey = apiKey ?? dotenv.env['OPENROUTER_API_KEY'] ?? '',
         _dio = dio ??
@@ -22,7 +31,7 @@ class OpenRouterService {
   Future<String> completeFallback({
     required String prompt,
     String? systemPrompt,
-    String model = 'meta-llama/llama-3.1-8b-instruct:free',
+    String model = 'nvidia/nemotron-3.5-lightning:free',
   }) async {
     if (!isConfigured) {
       throw StateError('OPENROUTER_API_KEY is not configured in .env');
