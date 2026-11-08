@@ -11,7 +11,7 @@ class GeminiService {
   GeminiService({String? apiKey})
       : _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '' {
     _reasoningModel = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       apiKey: _apiKey,
       generationConfig: GenerationConfig(
         temperature: 0.4,
@@ -20,14 +20,14 @@ class GeminiService {
     );
 
     _embeddingModel = GenerativeModel(
-      model: 'text-embedding-004',
+      model: 'gemini-embedding-2',
       apiKey: _apiKey,
     );
   }
 
   bool get isConfigured => _apiKey.isNotEmpty;
 
-  /// Generate structured content using Gemini 1.5 Flash.
+  /// Generate structured content using Gemini Flash.
   Future<String> generateContent(
     String prompt, {
     String? systemInstruction,
@@ -39,12 +39,12 @@ class GeminiService {
 
     final hasQuota = await LocalRateLimiter.hasQuota('gemini_flash');
     if (!hasQuota) {
-      throw StateError('Gemini 1.5 Flash daily limit of 1,500 reached');
+      throw StateError('Gemini Flash daily limit reached');
     }
 
     final model = systemInstruction != null
         ? GenerativeModel(
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             apiKey: _apiKey,
             systemInstruction: Content.system(systemInstruction),
             generationConfig: GenerationConfig(
@@ -73,7 +73,7 @@ class GeminiService {
 
     final hasQuota = await LocalRateLimiter.hasQuota('gemini_embeddings');
     if (!hasQuota) {
-      throw StateError('Gemini text-embedding-004 daily limit of 1,500 reached');
+      throw StateError('Gemini embedding daily limit reached');
     }
 
     final content = Content.text(text);
@@ -81,9 +81,9 @@ class GeminiService {
     await LocalRateLimiter.incrementUsage('gemini_embeddings');
 
     final values = response.embedding.values;
-    if (values.length != 768) {
-      // Return values directly or ensure correct dimensionality
-      return values.toList();
+    // Ensure 768 dimensions for Supabase pgvector
+    if (values.length > 768) {
+      return values.sublist(0, 768).toList();
     }
     return values.toList();
   }

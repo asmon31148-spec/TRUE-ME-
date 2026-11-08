@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- TRUE ME: Supabase PostgreSQL & pgvector Schema
--- Version: 1.0.0
+-- Version: 1.1.0
 -- ==============================================================================
 
 -- 1. Enable pgvector extension
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   file_type TEXT,
   chunk_index INT NOT NULL,
   content TEXT NOT NULL,
-  embedding VECTOR(768), -- Gemini text-embedding-004 dimension
+  embedding VECTOR(768), -- Gemini text-embedding dimension
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -78,6 +78,7 @@ RETURNS TABLE (
   similarity FLOAT
 )
 LANGUAGE plpgsql
+SECURITY DEFINER
 AS $$
 BEGIN
   RETURN QUERY
@@ -87,7 +88,7 @@ BEGIN
     dc.file_name,
     dc.chunk_index,
     dc.content,
-    1 - (dc.embedding <=> query_embedding) AS similarity
+    (1 - (dc.embedding <=> query_embedding))::FLOAT AS similarity
   FROM document_chunks dc
   WHERE
     (filter_user_id IS NULL OR dc.user_id = filter_user_id)
@@ -96,3 +97,17 @@ BEGIN
   LIMIT match_count;
 END;
 $$;
+
+-- 6. Row Level Security (RLS) Permissive Policies for True Me app
+ALTER TABLE document_chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow app access to document_chunks" ON document_chunks;
+CREATE POLICY "Allow app access to document_chunks" ON document_chunks FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow app access to user_files" ON user_files;
+CREATE POLICY "Allow app access to user_files" ON user_files FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow app access to study_sessions" ON study_sessions;
+CREATE POLICY "Allow app access to study_sessions" ON study_sessions FOR ALL USING (true) WITH CHECK (true);

@@ -28,38 +28,60 @@ class GroqService {
         'Content-Type': 'application/json',
       };
 
-  /// High-volume completion using LLaMA 3.1 8B (14,400 free req/day).
+  /// High-volume completion using fast inference model (14,400 free req/day).
   Future<String> complete8B({
     required String prompt,
     String? systemPrompt,
     bool jsonMode = false,
     double temperature = 0.3,
   }) async {
-    return _callChatCompletion(
-      model: 'llama-3.1-8b-instant',
-      rateLimitKey: 'groq_8b',
-      prompt: prompt,
-      systemPrompt: systemPrompt,
-      jsonMode: jsonMode,
-      temperature: temperature,
-    );
+    try {
+      return await _callChatCompletion(
+        model: 'openai/gpt-oss-20b',
+        rateLimitKey: 'groq_8b',
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        jsonMode: jsonMode,
+        temperature: temperature,
+      );
+    } catch (_) {
+      return await _callChatCompletion(
+        model: 'llama-3.1-8b-instant',
+        rateLimitKey: 'groq_8b',
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        jsonMode: jsonMode,
+        temperature: temperature,
+      );
+    }
   }
 
-  /// Complex reasoning and RAG chat using LLaMA 3.1 70B (1,000 free req/day).
+  /// Complex reasoning and RAG chat (1,000 free req/day).
   Future<String> complete70B({
     required String prompt,
     String? systemPrompt,
     bool jsonMode = false,
     double temperature = 0.3,
   }) async {
-    return _callChatCompletion(
-      model: 'llama-3.1-70b-versatile',
-      rateLimitKey: 'groq_70b',
-      prompt: prompt,
-      systemPrompt: systemPrompt,
-      jsonMode: jsonMode,
-      temperature: temperature,
-    );
+    try {
+      return await _callChatCompletion(
+        model: 'openai/gpt-oss-120b',
+        rateLimitKey: 'groq_70b',
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        jsonMode: jsonMode,
+        temperature: temperature,
+      );
+    } catch (_) {
+      return await _callChatCompletion(
+        model: 'llama-3.1-70b-versatile',
+        rateLimitKey: 'groq_70b',
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        jsonMode: jsonMode,
+        temperature: temperature,
+      );
+    }
   }
 
   Future<String> _callChatCompletion({
