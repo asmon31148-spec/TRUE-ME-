@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 
 class DriveService {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: dotenv.env['GOOGLE_DRIVE_CLIENT_ID'],
     scopes: [
       drive.DriveApi.driveFileScope,
       drive.DriveApi.driveAppdataScope,
