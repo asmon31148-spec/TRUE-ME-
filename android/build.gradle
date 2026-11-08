@@ -13,11 +13,11 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
-// Fix for legacy third-party plugins that require compileSdkVersion on their subproject
+// Safely configure compileSdkVersion on subprojects as plugins are added
 subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            android {
+    project.plugins.whenPluginAdded { plugin ->
+        if (plugin.class.name.startsWith("com.android.build.gradle")) {
+            project.android {
                 compileSdkVersion 34
                 buildToolsVersion "34.0.0"
             }
