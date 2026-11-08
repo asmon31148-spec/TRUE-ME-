@@ -13,6 +13,9 @@ class GlassButton extends StatefulWidget {
   final double? width;
   final double height;
   final Widget? icon;
+  final Color? surfaceColor;
+  final Color? borderColor;
+  final String? tooltip;
 
   const GlassButton({
     super.key,
@@ -24,6 +27,9 @@ class GlassButton extends StatefulWidget {
     this.width,
     this.height = 48,
     this.icon,
+    this.surfaceColor,
+    this.borderColor,
+    this.tooltip,
   });
 
   @override
@@ -39,22 +45,26 @@ class _GlassButtonState extends State<GlassButton> {
 
     final baseDecoration = BoxDecoration(
       borderRadius: BorderRadius.circular(widget.borderRadius),
-      gradient: widget.isPrimary
-          ? const LinearGradient(
-              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-            )
-          : LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(_isPressed ? 0.22 : 0.12),
-                Colors.white.withOpacity(_isPressed ? 0.12 : 0.05),
-              ],
-            ),
+      color: widget.surfaceColor,
+      gradient: widget.surfaceColor != null
+          ? null
+          : widget.isPrimary
+              ? const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                )
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(_isPressed ? 0.22 : 0.12),
+                    Colors.white.withOpacity(_isPressed ? 0.12 : 0.05),
+                  ],
+                ),
       border: Border.all(
-        color: widget.isPrimary
-            ? Colors.white.withOpacity(0.3)
-            : Colors.white.withOpacity(_isPressed ? 0.45 : 0.25),
+        color: widget.borderColor ??
+            (widget.isPrimary
+                ? Colors.white.withOpacity(0.3)
+                : Colors.white.withOpacity(_isPressed ? 0.45 : 0.25)),
         width: 1,
       ),
       boxShadow: [
@@ -68,7 +78,7 @@ class _GlassButtonState extends State<GlassButton> {
       ],
     );
 
-    return AnimatedScale(
+    Widget buttonBody = AnimatedScale(
       scale: _isPressed ? 0.97 : 1.0,
       duration: const Duration(milliseconds: 100),
       child: ClipRRect(
@@ -83,31 +93,37 @@ class _GlassButtonState extends State<GlassButton> {
             onTapUp: enabled ? (_) => setState(() => _isPressed = false) : null,
             onTapCancel: enabled ? () => setState(() => _isPressed = false) : null,
             onTap: widget.onPressed,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
               width: widget.width,
               height: widget.height,
               padding: widget.padding,
               decoration: baseDecoration,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (widget.icon != null) ...[
-                    widget.icon!,
-                    const SizedBox(width: 8),
-                  ],
-                  DefaultTextStyle(
-                    style: AppTypography.labelLarge.copyWith(
-                      color: enabled ? Colors.white : Colors.white54,
-                    ),
-                    child: widget.child,
-                  ),
-                ],
+              child: Center(
+                child: widget.icon != null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          widget.icon!,
+                          const SizedBox(width: 8),
+                          widget.child,
+                        ],
+                      )
+                    : widget.child,
               ),
             ),
           ),
         ),
       ),
     );
+
+    if (widget.tooltip != null) {
+      return Tooltip(
+        message: widget.tooltip!,
+        child: buttonBody,
+      );
+    }
+
+    return buttonBody;
   }
 }
