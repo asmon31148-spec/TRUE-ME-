@@ -49,7 +49,7 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.2
   archive: ^3.6.1
-  docx_template: ^0.7.0
+  docx_template: ^0.4.0
 
   # Rich Text Notes
   flutter_quill: ^10.8.2
