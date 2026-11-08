@@ -18,6 +18,22 @@ class YoutubeProcessor {
     return match?.group(1);
   }
 
+  /// Fetches video metadata via official public oEmbed API.
+  static Future<Map<String, String>> fetchVideoMetadata(String url) async {
+    try {
+      final oembedUrl = Uri.parse('https://www.youtube.com/oembed?url=$url&format=json');
+      final res = await http.get(oembedUrl).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return {
+          'title': data['title'] as String? ?? 'Lecture Video',
+          'author': data['author_name'] as String? ?? 'Educator',
+        };
+      }
+    } catch (_) {}
+    return {'title': 'Lecture Video', 'author': 'Educator'};
+  }
+
   /// Processes YouTube link into structured study notes.
   Future<String> summarizeVideoNotes({
     required String videoUrl,
@@ -28,25 +44,29 @@ class YoutubeProcessor {
       throw ArgumentError('Invalid YouTube URL: $videoUrl');
     }
 
+    final meta = await fetchVideoMetadata(videoUrl);
+    final videoTitle = meta['title']!;
+    final videoAuthor = meta['author']!;
+
     final transcript = providedTranscript ??
-        'Video: $videoUrl. Core lecture on topic with algorithmic breakdown and step by step walkthrough.';
+        'Video Title: "$videoTitle" by $videoAuthor.\nURL: $videoUrl';
 
     final systemPrompt = '''
-You are an expert academic note taker. Turn this YouTube lecture into clean, high-yield study notes.
+You are Sage, an expert academic note taker. Turn this lecture into clean, high-yield study notes.
 Include:
-1. Executive Concept Summary
+1. Executive Concept Summary for: $videoTitle
 2. Core Equations or Definitions
-3. Step-by-Step Mechanism / Breakdown
+3. Step-by-Step Breakdown
 4. 3 High-Yield Exam Takeaways
 ''';
 
     if (_groqService.isConfigured) {
       return await _groqService.complete8B(
-        prompt: 'Lecture transcript content:\n$transcript',
+        prompt: 'Content details:\n$transcript',
         systemPrompt: systemPrompt,
       );
     }
 
-    return 'Processed lecture notes for YouTube video: $videoUrl\n$transcript';
+    return '# $videoTitle\nBy $videoAuthor\n\nStudy notes processed for $videoUrl';
   }
 }

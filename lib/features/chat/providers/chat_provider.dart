@@ -107,15 +107,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
           final top = chunks.first;
           citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
         }
-      } catch (_) {
-        // Fallback gracefully if database is in local/mock mode
-        retrievedExcerpts = [
-          'Process Synchronization: Banker\'s algorithm guarantees safety by checking if Need <= Work for remaining process threads.'
-        ];
-        citationSource = 'Chapter 3 — Process Synchronization & Mutexes.pdf (Page 24)';
+      } catch (ragError) {
+        // Log gracefully; answer directly without grounded chunks
+        retrievedExcerpts = [];
+        citationSource = null;
       }
 
-      // 2. Query AI Router (Groq 70B -> Gemini Flash)
+      // 2. Query AI Router (Groq 70B -> Gemini Flash -> OpenRouter)
       String answer;
       try {
         answer = await _aiRouter.chatWithNotes(
@@ -123,10 +121,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           retrievedChunks: retrievedExcerpts,
           studentName: 'Alex',
         );
-      } catch (_) {
-        // Clean academic explanation if keys are not yet filled in .env
+      } catch (aiError) {
         answer =
-            "According to your notes on this topic:\n\nThe Banker's Algorithm safely avoids deadlocks by testing for safe states before granting resource requests. A state is considered safe if there exists at least one order of allocations where all processes can complete their maximum declared needs.";
+            "I could not reach the AI models at this moment ($aiError). Please verify that your API keys are active or try again shortly.";
       }
 
       final aiMsg = ChatMessage(

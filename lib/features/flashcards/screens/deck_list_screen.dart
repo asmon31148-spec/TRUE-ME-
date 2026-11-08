@@ -1,90 +1,113 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
+import '../providers/flashcard_provider.dart';
 
-class DeckListScreen extends StatefulWidget {
+class DeckListScreen extends ConsumerStatefulWidget {
   const DeckListScreen({super.key});
 
   @override
-  State<DeckListScreen> createState() => _DeckListScreenState();
+  ConsumerState<DeckListScreen> createState() => _DeckListScreenState();
 }
 
-class _DeckListScreenState extends State<DeckListScreen> {
+class _DeckListScreenState extends ConsumerState<DeckListScreen> {
   bool _isStudying = false;
   bool _isFlipped = false;
   int _currentCardIdx = 0;
+  FlashcardDeckModel? _selectedDeck;
 
-  final List<FlashcardModel> _sampleCards = [
-    FlashcardModel(
-      id: '1',
-      front: 'What are the 4 Coffman conditions required for Deadlock?',
-      back:
-          '1. Mutual Exclusion (non-shareable resources)\n2. Hold and Wait (process holds resource while waiting for more)\n3. No Preemption (resources cannot be forcibly taken)\n4. Circular Wait (circular chain of processes waiting on each other)',
-      nextReviewDate: DateTime.now().subtract(const Duration(hours: 4)),
-    ),
-    FlashcardModel(
-      id: '2',
-      front: 'What is an Eigenvector and Eigenvalue geometrically?',
-      back:
-          'An eigenvector of a linear transformation is a non-zero vector whose direction does not change when that linear transformation is applied. The eigenvalue is the scalar factor by which the eigenvector is stretched or shrunk: A * v = λ * v.',
-      nextReviewDate: DateTime.now().subtract(const Duration(hours: 1)),
-    ),
-    FlashcardModel(
-      id: '3',
-      front: 'State the Principle of Least Action (Hamilton\'s Principle).',
-      back:
-          'The actual path taken by a physical system between two states in a given time interval is the one for which the action integral S = ∫ L dt is stationary (extremum).',
-      nextReviewDate: DateTime.now().add(const Duration(days: 2)),
-    ),
-  ];
+  void _startStudying(FlashcardDeckModel deck) {
+    if (deck.cards.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This deck has no flashcards yet.'),
+          backgroundColor: AppColors.surface,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _selectedDeck = deck;
+      _currentCardIdx = 0;
+      _isFlipped = false;
+      _isStudying = true;
+    });
+  }
 
-  void _rateCurrentCard(int rating) {
-    final updatedCard = Sm2Algorithm.calculateNextReview(
-      card: _sampleCards[_currentCardIdx],
-      rating: rating,
-    );
-    _sampleCards[_currentCardIdx] = updatedCard;
+  void _rateCurrentCard(FlashcardDeckModel deck, int rating) {
+    final card = deck.cards[_currentCardIdx];
+
+    ref.read(flashcardProvider.notifier).recordCardRating(
+          deckId: deck.id,
+          cardId: card.id,
+          rating: rating,
+        );
+
+    // Save updated deck state to Hive offline cache
+    OfflineCacheService.cacheDeck(deck.id, deck.toMap());
 
     setState(() {
       _isFlipped = false;
-      if (_currentCardIdx < _sampleCards.length - 1) {
+      if (_currentCardIdx < deck.cards.length - 1) {
         _currentCardIdx++;
       } else {
         _isStudying = false;
         _currentCardIdx = 0;
+        _selectedDeck = null;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Session complete! SM-2 review dates updated.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isStudying) {
-      final card = _sampleCards[_currentCardIdx];
+    final flashState = ref.watch(flashcardProvider);
+    final allDecks = flashState.decks;
+
+    if (_isStudying && _selectedDeck != null) {
+      // Find latest state of selected deck from provider
+      final liveDeck = allDecks.firstWhere(
+        (d) => d.id == _selectedDeck!.id,
+        orElse: () => _selectedDeck!,
+      );
+
+      final cards = liveDeck.cards;
+      final safeIdx = _currentCardIdx < cards.length ? _currentCardIdx : 0;
+      final card = cards[safeIdx];
 
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: GlassAppBar(
-          title: 'Reviewing Card ${_currentCardIdx + 1}/${_sampleCards.length}',
+          title: '${liveDeck.subject} (${safeIdx + 1}/${cards.length})',
           leading: IconButton(
             icon: const Icon(Icons.close, color: Colors.white),
-            onPressed: () => setState(() => _isStudying = false),
+            onPressed: () => setState(() {
+              _isStudying = false;
+              _selectedDeck = null;
+            }),
           ),
         ),
         body: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
             children: [
-              // Progress Bar
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
-                  value: (_currentCardIdx + 1) / _sampleCards.length,
+                  value: (safeIdx + 1) / cards.length,
                   minHeight: 6,
                   backgroundColor: Colors.white.withOpacity(0.1),
                   valueColor: const AlwaysStoppedAnimation(AppColors.primaryLight),
@@ -151,7 +174,7 @@ class _DeckListScreenState extends State<DeckListScreen> {
                         height: 44,
                         padding: EdgeInsets.zero,
                         child: const Text('Blackout (0)'),
-                        onPressed: () => _rateCurrentCard(0),
+                        onPressed: () => _rateCurrentCard(liveDeck, 0),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -160,7 +183,7 @@ class _DeckListScreenState extends State<DeckListScreen> {
                         height: 44,
                         padding: EdgeInsets.zero,
                         child: const Text('Hard (2)'),
-                        onPressed: () => _rateCurrentCard(2),
+                        onPressed: () => _rateCurrentCard(liveDeck, 2),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -169,7 +192,7 @@ class _DeckListScreenState extends State<DeckListScreen> {
                         height: 44,
                         padding: EdgeInsets.zero,
                         child: const Text('Good (4)'),
-                        onPressed: () => _rateCurrentCard(4),
+                        onPressed: () => _rateCurrentCard(liveDeck, 4),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -179,7 +202,7 @@ class _DeckListScreenState extends State<DeckListScreen> {
                         padding: EdgeInsets.zero,
                         isPrimary: true,
                         child: const Text('Easy (5)'),
-                        onPressed: () => _rateCurrentCard(5),
+                        onPressed: () => _rateCurrentCard(liveDeck, 5),
                       ),
                     ),
                   ],
@@ -198,6 +221,12 @@ class _DeckListScreenState extends State<DeckListScreen> {
         ),
       );
     }
+
+    final totalCards = allDecks.fold<int>(0, (sum, d) => sum + d.cards.length);
+    final dueCards = allDecks.fold<int>(
+      0,
+      (sum, d) => sum + d.cards.where((c) => c.nextReviewDate.isBefore(DateTime.now())).length,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -226,101 +255,101 @@ class _DeckListScreenState extends State<DeckListScreen> {
                       const Text('SuperMemo SM-2 Active', style: AppTypography.titleLarge),
                       const SizedBox(height: 6),
                       Text(
-                        '2 cards are due for spaced repetition review today.',
+                        dueCards > 0
+                            ? '$dueCards cards are due for spaced repetition review today.'
+                            : 'All $totalCards cards are currently up to date! Great job.',
                         style: AppTypography.bodySmall,
                       ),
                     ],
                   ),
                 ),
-                GlassButton(
-                  isPrimary: true,
-                  child: const Text('Study Now'),
-                  onPressed: () => setState(() => _isStudying = true),
-                ),
+                if (allDecks.isNotEmpty)
+                  GlassButton(
+                    isPrimary: true,
+                    child: const Text('Study Now'),
+                    onPressed: () => _startStudying(allDecks.first),
+                  ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          const Text('All Decks', style: AppTypography.headlineMedium),
-          const SizedBox(height: 12),
-          _buildDeckItem(
-            title: 'OS — Process Synchronization',
-            cardCount: 24,
-            dueCount: 2,
-            subject: 'Computer Science',
-            color: AppColors.primary,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('All Decks', style: AppTypography.headlineMedium),
+              Text(
+                '${allDecks.length} Decks',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          _buildDeckItem(
-            title: 'Calculus — Matrices & Diagonalization',
-            cardCount: 30,
-            dueCount: 0,
-            subject: 'Calculus',
-            color: AppColors.accent,
-          ),
-          const SizedBox(height: 12),
-          _buildDeckItem(
-            title: 'Physics — Hamiltonian Mechanics',
-            cardCount: 18,
-            dueCount: 0,
-            subject: 'Physics',
-            color: AppColors.secondary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDeckItem({
-    required String title,
-    required int cardCount,
-    required int dueCount,
-    required String subject,
-    required Color color,
-  }) {
-    return GlassCard(
-      padding: const EdgeInsets.all(18),
-      borderRadius: 20,
-      onTap: () => setState(() => _isStudying = true),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.style, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  subject.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: color,
-                  ),
+          if (allDecks.isEmpty)
+            GlassCard(
+              padding: const EdgeInsets.all(32),
+              borderRadius: 20,
+              child: const Center(
+                child: Text(
+                  'No decks created yet. Upload lecture notes or open a notebook to generate AI flashcards!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textMuted),
                 ),
-                const SizedBox(height: 4),
-                Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 15)),
-                const SizedBox(height: 4),
-                Text(
-                  dueCount > 0 ? '$cardCount cards • $dueCount due today' : '$cardCount cards',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: dueCount > 0 ? AppColors.warning : AppColors.textSecondary,
-                    fontWeight: dueCount > 0 ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white54),
+          ...allDecks.map((deck) {
+            final dueCount = deck.cards.where((c) => c.nextReviewDate.isBefore(DateTime.now())).length;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: GlassCard(
+                padding: const EdgeInsets.all(18),
+                borderRadius: 20,
+                onTap: () => _startStudying(deck),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.style, color: AppColors.primaryLight, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            deck.subject.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: AppColors.primaryLight,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(deck.topic, style: AppTypography.titleLarge.copyWith(fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Text(
+                            dueCount > 0
+                                ? '${deck.cards.length} cards • $dueCount due today'
+                                : '${deck.cards.length} cards',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: dueCount > 0 ? AppColors.warning : AppColors.textSecondary,
+                              fontWeight: dueCount > 0 ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white54),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );

@@ -37,7 +37,7 @@ class GroqService {
   }) async {
     try {
       return await _callChatCompletion(
-        model: 'openai/gpt-oss-20b',
+        model: 'llama-3.1-8b-instant',
         rateLimitKey: 'groq_8b',
         prompt: prompt,
         systemPrompt: systemPrompt,
@@ -46,7 +46,7 @@ class GroqService {
       );
     } catch (_) {
       return await _callChatCompletion(
-        model: 'llama-3.1-8b-instant',
+        model: 'llama3-8b-8192',
         rateLimitKey: 'groq_8b',
         prompt: prompt,
         systemPrompt: systemPrompt,
@@ -65,7 +65,7 @@ class GroqService {
   }) async {
     try {
       return await _callChatCompletion(
-        model: 'openai/gpt-oss-120b',
+        model: 'llama-3.3-70b-versatile',
         rateLimitKey: 'groq_70b',
         prompt: prompt,
         systemPrompt: systemPrompt,
@@ -74,7 +74,7 @@ class GroqService {
       );
     } catch (_) {
       return await _callChatCompletion(
-        model: 'llama-3.1-70b-versatile',
+        model: 'mixtral-8x7b-32768',
         rateLimitKey: 'groq_70b',
         prompt: prompt,
         systemPrompt: systemPrompt,

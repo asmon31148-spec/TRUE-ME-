@@ -28,6 +28,7 @@ class TtsService {
     _flutterTts.setSpeechRate(0.5); // Natural conversational speed
     _flutterTts.setVolume(1.0);
     _flutterTts.setPitch(1.05); // Friendly, clear pitch
+    _flutterTts.awaitSpeakCompletion(true);
   }
 
   /// Speaks the provided text using device native engine (zero API cost).

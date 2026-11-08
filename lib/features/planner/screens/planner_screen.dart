@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
@@ -14,6 +15,8 @@ class PlannerScreen extends StatefulWidget {
 }
 
 class _PlannerScreenState extends State<PlannerScreen> {
+  late String _todayKey;
+
   final List<Map<String, dynamic>> _planSessions = [
     {
       'subject': 'Calculus',
@@ -40,6 +43,35 @@ class _PlannerScreenState extends State<PlannerScreen> {
       'priority': 'Scheduled',
     },
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _todayKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _loadCachedPlan();
+  }
+
+  void _loadCachedPlan() {
+    final cached = OfflineCacheService.getCachedStudyPlan(_todayKey);
+    if (cached != null && cached['sessions'] is List) {
+      final list = cached['sessions'] as List;
+      for (int i = 0; i < list.length && i < _planSessions.length; i++) {
+        final item = list[i];
+        if (item is Map && item['completed'] != null) {
+          _planSessions[i]['completed'] = item['completed'] == true;
+        }
+      }
+      setState(() {});
+    }
+  }
+
+  void _persistStudyPlan() {
+    OfflineCacheService.cacheStudyPlan(_todayKey, {
+      'sessions': _planSessions,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +156,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                         setState(() {
                           s['completed'] = val ?? false;
                         });
+                        _persistStudyPlan();
                       },
                     ),
                     const SizedBox(width: 8),

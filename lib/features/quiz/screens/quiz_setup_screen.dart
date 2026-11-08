@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
@@ -6,22 +7,24 @@ import '../../../core/models/quiz_model.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
+import '../providers/quiz_provider.dart';
 
-class QuizSetupScreen extends StatefulWidget {
+class QuizSetupScreen extends ConsumerStatefulWidget {
   const QuizSetupScreen({super.key});
 
   @override
-  State<QuizSetupScreen> createState() => _QuizSetupScreenState();
+  ConsumerState<QuizSetupScreen> createState() => _QuizSetupScreenState();
 }
 
-class _QuizSetupScreenState extends State<QuizSetupScreen> {
+class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
   bool _isPlaying = false;
   int _currentQuestionIdx = 0;
   int? _selectedOptionIdx;
   bool _hasSubmitted = false;
   int _scoreCount = 0;
+  String _selectedDifficulty = 'medium';
 
-  final List<QuizQuestionModel> _sampleQuestions = const [
+  final List<QuizQuestionModel> _defaultSampleQuestions = const [
     QuizQuestionModel(
       id: 'q1',
       question: 'Which of the following is NOT one of the Coffman conditions for deadlocks?',
@@ -48,14 +51,21 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
     ),
   ];
 
+  List<QuizQuestionModel> _getActiveQuestions(QuizState state) {
+    if (state.currentQuiz != null && state.currentQuiz!.questions.isNotEmpty) {
+      return state.currentQuiz!.questions;
+    }
+    return _defaultSampleQuestions;
+  }
+
   void _handleOptionSelect(int idx) {
     if (_hasSubmitted) return;
     setState(() => _selectedOptionIdx = idx);
   }
 
-  void _submitAnswer() {
+  void _submitAnswer(List<QuizQuestionModel> questions) {
     if (_selectedOptionIdx == null) return;
-    final currentQ = _sampleQuestions[_currentQuestionIdx];
+    final currentQ = questions[_currentQuestionIdx];
     final isCorrect = _selectedOptionIdx == currentQ.correctOptionIndex;
 
     setState(() {
@@ -64,28 +74,37 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
     });
   }
 
-  void _nextQuestion() {
+  void _nextQuestion(List<QuizQuestionModel> questions) {
     setState(() {
       _selectedOptionIdx = null;
       _hasSubmitted = false;
-      if (_currentQuestionIdx < _sampleQuestions.length - 1) {
+      if (_currentQuestionIdx < questions.length - 1) {
         _currentQuestionIdx++;
       } else {
-        // Quiz completed
         _isPlaying = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Quiz Completed! Score: $_scoreCount/${questions.length}'),
+            backgroundColor: AppColors.success,
+          ),
+        );
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final quizState = ref.watch(quizProvider);
+    final questions = _getActiveQuestions(quizState);
+
     if (_isPlaying) {
-      final q = _sampleQuestions[_currentQuestionIdx];
+      final safeIdx = _currentQuestionIdx < questions.length ? _currentQuestionIdx : 0;
+      final q = questions[safeIdx];
 
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: GlassAppBar(
-          title: 'Question ${_currentQuestionIdx + 1}/${_sampleQuestions.length}',
+          title: 'Question ${safeIdx + 1}/${questions.length}',
           leading: IconButton(
             icon: const Icon(Icons.close, color: Colors.white),
             onPressed: () => setState(() => _isPlaying = false),
@@ -99,7 +118,7 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
-                  value: (_currentQuestionIdx + 1) / _sampleQuestions.length,
+                  value: (safeIdx + 1) / questions.length,
                   minHeight: 6,
                   backgroundColor: Colors.white.withOpacity(0.1),
                   valueColor: const AlwaysStoppedAnimation(AppColors.accentCyan),
@@ -224,14 +243,14 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                 onPressed: _selectedOptionIdx == null
                     ? null
                     : _hasSubmitted
-                        ? _nextQuestion
-                        : _submitAnswer,
+                        ? () => _nextQuestion(questions)
+                        : () => _submitAnswer(questions),
                 child: Text(
                   !_hasSubmitted
                       ? 'Submit Answer'
-                      : _currentQuestionIdx < _sampleQuestions.length - 1
+                      : safeIdx < questions.length - 1
                           ? 'Next Question'
-                          : 'View Results',
+                          : 'Finish Quiz',
                 ),
               ),
               const SizedBox(height: 12),
@@ -275,19 +294,51 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySmall,
                   ),
-                  const SizedBox(height: 24),
-                  GlassButton(
-                    isPrimary: true,
-                    width: double.infinity,
-                    child: const Text('Start Quiz (Operating Systems)'),
-                    onPressed: () => setState(() {
-                      _isPlaying = true;
-                      _currentQuestionIdx = 0;
-                      _selectedOptionIdx = null;
-                      _hasSubmitted = false;
-                      _scoreCount = 0;
-                    }),
+                  const SizedBox(height: 20),
+
+                  // Difficulty Chips
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: ['easy', 'medium', 'hard'].map((d) {
+                      final isSel = _selectedDifficulty == d;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: ChoiceChip(
+                          label: Text(d.toUpperCase()),
+                          selected: isSel,
+                          selectedColor: AppColors.accentCyan.withOpacity(0.3),
+                          backgroundColor: Colors.white.withOpacity(0.06),
+                          labelStyle: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isSel ? AppColors.accentCyan : AppColors.textMuted,
+                          ),
+                          onSelected: (_) => setState(() => _selectedDifficulty = d),
+                        ),
+                      );
+                    }).toList(),
                   ),
+                  const SizedBox(height: 24),
+
+                  if (quizState.isGenerating)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: CircularProgressIndicator(color: AppColors.accentCyan),
+                    )
+                  else ...[
+                    GlassButton(
+                      isPrimary: true,
+                      width: double.infinity,
+                      child: Text('Start Quiz (${questions.length} Questions)'),
+                      onPressed: () => setState(() {
+                        _isPlaying = true;
+                        _currentQuestionIdx = 0;
+                        _selectedOptionIdx = null;
+                        _hasSubmitted = false;
+                        _scoreCount = 0;
+                      }),
+                    ),
+                  ],
                 ],
               ),
             ),

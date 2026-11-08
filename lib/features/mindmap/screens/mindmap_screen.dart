@@ -32,26 +32,50 @@ class _MindmapScreenState extends State<MindmapScreen> {
   }
 
   void _buildInitialGraph() {
-    // Root Node
-    final root = Node.Id('Operating Systems');
+    final rootTopic = widget.topic ?? 'Operating Systems';
+    final root = Node.Id(rootTopic);
 
-    // Level 1 Nodes
-    final nodeSync = Node.Id('Synchronization');
-    final nodeMemory = Node.Id('Virtual Memory');
-    final nodeStorage = Node.Id('File Systems');
+    final lower = rootTopic.toLowerCase();
+    Node nodeA, nodeB, nodeC;
+    Node sub1, sub2, sub3;
 
-    graph.addEdge(root, nodeSync);
-    graph.addEdge(root, nodeMemory);
-    graph.addEdge(root, nodeStorage);
+    if (lower.contains('calc') || lower.contains('math') || lower.contains('matr')) {
+      nodeA = Node.Id('Linear Algebra');
+      nodeB = Node.Id('Vector Spaces');
+      nodeC = Node.Id('Eigenvalues');
+      sub1 = Node.Id('Diagonalization');
+      sub2 = Node.Id('Spectral Theorem');
+      sub3 = Node.Id('Null Space & Rank');
+    } else if (lower.contains('phys') || lower.contains('mechanic')) {
+      nodeA = Node.Id('Classical Mechanics');
+      nodeB = Node.Id('Lagrangian & Action');
+      nodeC = Node.Id('Hamiltonian Formulation');
+      sub1 = Node.Id('Least Action Principle');
+      sub2 = Node.Id('Conservation Laws');
+      sub3 = Node.Id('Phase Space');
+    } else if (lower.contains('bio') || lower.contains('chem') || lower.contains('cell')) {
+      nodeA = Node.Id('Cellular Biology');
+      nodeB = Node.Id('Metabolic Pathways');
+      nodeC = Node.Id('Genetics & DNA');
+      sub1 = Node.Id('Krebs Cycle');
+      sub2 = Node.Id('Transcription');
+      sub3 = Node.Id('Enzyme Kinetics');
+    } else {
+      nodeA = Node.Id('Core Foundations');
+      nodeB = Node.Id('Core Mechanisms');
+      nodeC = Node.Id('Advanced Synthesis');
+      sub1 = Node.Id('Theoretical Basis');
+      sub2 = Node.Id('High-Yield Rules');
+      sub3 = Node.Id('Problem Solving');
+    }
 
-    // Level 2 Nodes
-    final nodeMutex = Node.Id('Mutexes & Locks');
-    final nodeDeadlock = Node.Id('Deadlocks (Coffman)');
-    final nodePaging = Node.Id('Paging & TLB');
+    graph.addEdge(root, nodeA);
+    graph.addEdge(root, nodeB);
+    graph.addEdge(root, nodeC);
 
-    graph.addEdge(nodeSync, nodeMutex);
-    graph.addEdge(nodeSync, nodeDeadlock);
-    graph.addEdge(nodeMemory, nodePaging);
+    graph.addEdge(nodeA, sub1);
+    graph.addEdge(nodeB, sub2);
+    graph.addEdge(nodeC, sub3);
   }
 
   @override

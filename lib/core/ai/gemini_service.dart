@@ -11,7 +11,7 @@ class GeminiService {
   GeminiService({String? apiKey})
       : _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '' {
     _reasoningModel = GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       apiKey: _apiKey,
       generationConfig: GenerationConfig(
         temperature: 0.4,
@@ -20,7 +20,7 @@ class GeminiService {
     );
 
     _embeddingModel = GenerativeModel(
-      model: 'gemini-embedding-2',
+      model: 'text-embedding-004',
       apiKey: _apiKey,
     );
   }
@@ -44,7 +44,7 @@ class GeminiService {
 
     final model = systemInstruction != null
         ? GenerativeModel(
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             apiKey: _apiKey,
             systemInstruction: Content.system(systemInstruction),
             generationConfig: GenerationConfig(
