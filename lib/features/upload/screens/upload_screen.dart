@@ -28,18 +28,28 @@ class _UploadScreenState extends State<UploadScreen> {
   String _statusMessage = '';
 
   final TextEditingController _urlController = TextEditingController();
-  final AudioProcessor _audioProcessor = AudioProcessor();
-  final OcrService _ocrService = OcrService();
-  final UrlProcessor _urlProcessor = UrlProcessor();
-  final YoutubeProcessor _youtubeProcessor = YoutubeProcessor();
+  AudioProcessor? _audioProcessor;
+  OcrService? _ocrService;
+  late final UrlProcessor _urlProcessor;
+  late final YoutubeProcessor _youtubeProcessor;
+
+  AudioProcessor get audioProcessor => _audioProcessor ??= AudioProcessor();
+  OcrService get ocrService => _ocrService ??= OcrService();
 
   bool _isRecordingAudio = false;
 
   @override
+  void initState() {
+    super.initState();
+    _urlProcessor = UrlProcessor();
+    _youtubeProcessor = YoutubeProcessor();
+  }
+
+  @override
   void dispose() {
     _urlController.dispose();
-    _audioProcessor.dispose();
-    _ocrService.dispose();
+    _audioProcessor?.dispose();
+    _ocrService?.dispose();
     super.dispose();
   }
 
@@ -81,7 +91,7 @@ class _UploadScreenState extends State<UploadScreen> {
       });
 
       try {
-        final text = await _ocrService.recognizeTextFromImage(File(picked.path));
+        final text = await ocrService.recognizeTextFromImage(File(picked.path));
         if (mounted) {
           _showSuccessDialog('OCR Finished', 'Extracted notes:\n\n${text.length > 200 ? text.substring(0, 200) + '...' : text}');
         }
@@ -182,20 +192,28 @@ class _UploadScreenState extends State<UploadScreen> {
               title: _isRecordingAudio ? 'Stop Recording' : 'Record Lecture Audio',
               subtitle: 'Transcribed by Groq Whisper Large v3 into structured notes',
               onTap: () async {
-                if (!_isRecordingAudio) {
-                  await _audioProcessor.startRecording();
-                  setState(() => _isRecordingAudio = true);
-                } else {
-                  setState(() {
-                    _isProcessing = true;
-                    _statusMessage = 'Transcribing audio with Groq Whisper...';
-                  });
-                  final text = await _audioProcessor.stopAndTranscribe();
+                try {
+                  if (!_isRecordingAudio) {
+                    await audioProcessor.startRecording();
+                    setState(() => _isRecordingAudio = true);
+                  } else {
+                    setState(() {
+                      _isProcessing = true;
+                      _statusMessage = 'Transcribing audio with Groq Whisper...';
+                    });
+                    final text = await audioProcessor.stopAndTranscribe();
+                    setState(() {
+                      _isRecordingAudio = false;
+                      _isProcessing = false;
+                    });
+                    _showSuccessDialog('Audio Transcribed', text);
+                  }
+                } catch (e) {
                   setState(() {
                     _isRecordingAudio = false;
                     _isProcessing = false;
                   });
-                  _showSuccessDialog('Audio Transcribed', text);
+                  _showError(e.toString());
                 }
               },
             ),

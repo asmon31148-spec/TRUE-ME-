@@ -9,6 +9,7 @@ class OfflineCacheService {
   static const String notebooksBox = 'offline_notebooks';
   static const String quizzesBox = 'offline_quizzes';
   static const String notesBox = 'offline_notes';
+  static const String userProfileBox = 'user_profile';
 
   static bool _isInitialized = false;
 
@@ -21,7 +22,113 @@ class OfflineCacheService {
     await Hive.openBox(notebooksBox);
     await Hive.openBox(quizzesBox);
     await Hive.openBox(notesBox);
+    await Hive.openBox(userProfileBox);
     _isInitialized = true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // USER PROFILE & AUTH CACHING
+  // ---------------------------------------------------------------------------
+  static Future<void> saveUserProfile({
+    required String name,
+    required String email,
+    List<String>? subjects,
+    String? learningStyle,
+    DateTime? targetExamDate,
+    bool isLoggedIn = true,
+    bool hasCompletedOnboarding = true,
+  }) async {
+    final box = Hive.box(userProfileBox);
+    final current = getUserProfile();
+    final updated = {
+      ...current,
+      'name': name.trim().isEmpty ? 'Student' : name.trim(),
+      'email': email.trim().isEmpty ? 'student@trueme.ai' : email.trim(),
+      'subjects': subjects ?? current['subjects'] ?? ['Computer Science', 'Calculus'],
+      'learningStyle': learningStyle ?? current['learningStyle'] ?? 'Visual (Diagrams & Videos)',
+      'targetExamDate': (targetExamDate ?? DateTime.now().add(const Duration(days: 45))).toIso8601String(),
+      'isLoggedIn': isLoggedIn,
+      'hasCompletedOnboarding': hasCompletedOnboarding,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    await box.put('current_user', updated);
+  }
+
+  static Map<String, dynamic> getUserProfile() {
+    try {
+      final box = Hive.box(userProfileBox);
+      final data = box.get('current_user');
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
+    return {
+      'name': 'Student',
+      'email': 'student@trueme.ai',
+      'subjects': <String>['Computer Science', 'Calculus', 'Physics'],
+      'learningStyle': 'Visual (Diagrams & Videos)',
+      'targetExamDate': DateTime.now().add(const Duration(days: 45)).toIso8601String(),
+      'isLoggedIn': false,
+      'hasCompletedOnboarding': false,
+    };
+  }
+
+  static bool hasCompletedOnboarding() {
+    try {
+      final box = Hive.box(userProfileBox);
+      final data = box.get('current_user');
+      if (data is Map && data['hasCompletedOnboarding'] == true) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  static bool isLoggedIn() {
+    try {
+      final box = Hive.box(userProfileBox);
+      final data = box.get('current_user');
+      if (data is Map && data['isLoggedIn'] == true) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  static String getUserName() {
+    final profile = getUserProfile();
+    final name = (profile['name'] as String?)?.trim();
+    if (name != null && name.isNotEmpty && name != 'Alex') {
+      return name;
+    }
+    return 'Student';
+  }
+
+  static String getUserEmail() {
+    final profile = getUserProfile();
+    return (profile['email'] as String?) ?? 'student@trueme.ai';
+  }
+
+  static List<String> getUserSubjects() {
+    final profile = getUserProfile();
+    final subs = profile['subjects'];
+    if (subs is List) return subs.map((e) => e.toString()).toList();
+    return ['Computer Science', 'Calculus', 'Physics'];
+  }
+
+  static DateTime getTargetExamDate() {
+    final profile = getUserProfile();
+    final d = profile['targetExamDate'] as String?;
+    if (d != null) {
+      final parsed = DateTime.tryParse(d);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now().add(const Duration(days: 45));
+  }
+
+  static Future<void> logout() async {
+    final box = Hive.box(userProfileBox);
+    final profile = getUserProfile();
+    profile['isLoggedIn'] = false;
+    await box.put('current_user', profile);
   }
 
   // ---------------------------------------------------------------------------

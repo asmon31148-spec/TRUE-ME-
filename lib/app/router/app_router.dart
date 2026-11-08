@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/onboarding_screen.dart';
 import '../../features/auth/screens/setup_profile_screen.dart';
+import '../../features/auth/screens/splash_screen.dart';
 import '../../features/chat/screens/chat_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/explainer/screens/explainer_player_screen.dart';
@@ -11,15 +12,24 @@ import '../../features/library/screens/notebook_detail_screen.dart';
 import '../../features/mindmap/screens/mindmap_screen.dart';
 import '../../features/notes/screens/note_editor_screen.dart';
 import '../../features/planner/screens/planner_screen.dart';
+import '../../features/profile/screens/account_center_screen.dart';
 import '../../features/quiz/screens/quiz_setup_screen.dart';
 import '../../features/upload/screens/upload_screen.dart';
 import '../../features/voice_tutor/screens/voice_session_screen.dart';
 import '../../shared/widgets/app_scaffold_shell.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/onboarding',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/',
+      redirect: (context, state) => '/splash',
+    ),
     // Standalone Fullscreen Flow
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     GoRoute(
       path: '/onboarding',
       builder: (context, state) => const OnboardingScreen(),
@@ -31,6 +41,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/setup-profile',
       builder: (context, state) => const SetupProfileScreen(),
+    ),
+    GoRoute(
+      path: '/account-center',
+      builder: (context, state) => const AccountCenterScreen(),
     ),
     GoRoute(
       path: '/note-editor',

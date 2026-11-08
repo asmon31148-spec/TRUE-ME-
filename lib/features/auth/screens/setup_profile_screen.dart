@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
 
@@ -13,13 +14,13 @@ class SetupProfileScreen extends StatefulWidget {
 }
 
 class _SetupProfileScreenState extends State<SetupProfileScreen> {
-  final TextEditingController _nameController = TextEditingController(text: 'Alex');
+  late final TextEditingController _nameController;
   final TextEditingController _goalController =
-      TextEditingController(text: 'Score GPA 3.8+ & Master Deep Concepts');
+      TextEditingController(text: 'Master core concepts & score highest GPA');
   
   String _selectedLearningStyle = 'Visual (Diagrams & Videos)';
   DateTime _targetExamDate = DateTime.now().add(const Duration(days: 45));
-  final List<String> _selectedSubjects = ['Computer Science', 'Calculus', 'Physics'];
+  final List<String> _selectedSubjects = [];
 
   final List<String> _allSubjects = [
     'Computer Science',
@@ -31,6 +32,8 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
     'History',
     'Psychology',
     'Economics',
+    'Data Structures & Algorithms',
+    'Machine Learning',
   ];
 
   final List<String> _learningStyles = [
@@ -41,10 +44,46 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final currentName = OfflineCacheService.getUserName();
+    _nameController = TextEditingController(
+      text: currentName != 'Student' ? currentName : '',
+    );
+    final cachedSubjects = OfflineCacheService.getUserSubjects();
+    if (cachedSubjects.isNotEmpty) {
+      _selectedSubjects.addAll(cachedSubjects);
+    } else {
+      _selectedSubjects.addAll(['Computer Science', 'Calculus']);
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _goalController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveAndProceed() async {
+    final name = _nameController.text.trim();
+    final displayName = name.isNotEmpty ? name : 'Asmon';
+
+    await OfflineCacheService.saveUserProfile(
+      name: displayName,
+      email: OfflineCacheService.getUserEmail(),
+      subjects: _selectedSubjects.isNotEmpty
+          ? _selectedSubjects
+          : ['Computer Science', 'Calculus'],
+      learningStyle: _selectedLearningStyle,
+      targetExamDate: _targetExamDate,
+      isLoggedIn: true,
+      hasCompletedOnboarding: true,
+    );
+
+    if (mounted) {
+      context.go('/library');
+    }
   }
 
   @override
@@ -62,36 +101,40 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: AppColors.sageGlowGradient,
                     ),
                     child: const Icon(Icons.psychology, color: Colors.white, size: 24),
                   ),
                   const SizedBox(width: 12),
-                  Column(
+                  const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Personalize Sage', style: AppTypography.headlineLarge),
-                      Text('Teach Sage how to coach you', style: AppTypography.bodySmall),
+                      Text('Personalize Sage', style: AppTypography.headlineLarge),
+                      Text('Teach Sage who you are & how to coach you', style: AppTypography.bodySmall),
                     ],
                   ),
                 ],
               ),
               const SizedBox(height: 28),
 
-              // Student Name
+              // Student Name Card
               GlassCard(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Your Name', style: AppTypography.titleLarge),
+                    const SizedBox(height: 6),
+                    const Text('Sage will address you directly by this name', style: AppTypography.bodySmall),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _nameController,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                       decoration: InputDecoration(
+                        hintText: 'Enter your name (e.g. Asmon)',
+                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.04),
                         border: OutlineInputBorder(
@@ -105,50 +148,50 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Subjects
+              // Subjects Selection Card
               GlassCard(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Select Your Subjects', style: AppTypography.titleLarge),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sage will create distinct notebooks and decks for each.',
-                      style: AppTypography.bodySmall,
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 4),
+                    const Text('Tap to select or unselect courses for your study plan', style: AppTypography.bodySmall),
+                    const SizedBox(height: 14),
                     Wrap(
                       spacing: 8,
-                      runSpacing: 8,
-                      children: _allSubjects.map((sub) {
-                        final isSelected = _selectedSubjects.contains(sub);
+                      runSpacing: 10,
+                      children: _allSubjects.map((subject) {
+                        final isSelected = _selectedSubjects.contains(subject);
                         return FilterChip(
-                          label: Text(sub),
                           selected: isSelected,
+                          showCheckmark: isSelected,
+                          checkmarkColor: Colors.white,
+                          label: Text(
+                            subject,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 13,
+                            ),
+                          ),
+                          backgroundColor: Colors.white.withOpacity(0.04),
+                          selectedColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isSelected ? AppColors.accentCyan : Colors.white.withOpacity(0.08),
+                            ),
+                          ),
                           onSelected: (selected) {
                             setState(() {
                               if (selected) {
-                                _selectedSubjects.add(sub);
+                                _selectedSubjects.add(subject);
                               } else {
-                                _selectedSubjects.remove(sub);
+                                _selectedSubjects.remove(subject);
                               }
                             });
                           },
-                          selectedColor: AppColors.primary.withOpacity(0.35),
-                          backgroundColor: Colors.white.withOpacity(0.06),
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? AppColors.primaryLight
-                                  : Colors.white.withOpacity(0.1),
-                            ),
-                          ),
                         );
                       }).toList(),
                     ),
@@ -157,31 +200,41 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Learning Style
+              // Primary Learning Style Card
               GlassCard(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Primary Learning Style', style: AppTypography.titleLarge),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     ..._learningStyles.map((style) {
                       final isSelected = _selectedLearningStyle == style;
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          color: isSelected ? AppColors.accentCyan : AppColors.textMuted,
-                        ),
-                        title: Text(
-                          style,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary.withOpacity(0.2) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? AppColors.accentCyan : Colors.transparent,
                           ),
                         ),
-                        onTap: () => setState(() => _selectedLearningStyle = style),
+                        child: RadioListTile<String>(
+                          title: Text(
+                            style,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                              fontSize: 14,
+                            ),
+                          ),
+                          value: style,
+                          groupValue: _selectedLearningStyle,
+                          activeColor: AppColors.accentCyan,
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedLearningStyle = val);
+                          },
+                        ),
                       );
                     }),
                   ],
@@ -189,7 +242,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Target Exam Date (Countdown)
+              // Target Exam Date Card
               GlassCard(
                 padding: const EdgeInsets.all(20),
                 child: Row(
@@ -198,11 +251,11 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.accent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Icon(Icons.calendar_today, color: AppColors.accentCyan),
+                      child: const Icon(Icons.event_note, color: AppColors.accentCyan, size: 24),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,7 +269,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.edit_calendar, color: Colors.white70),
+                      icon: const Icon(Icons.edit_calendar, color: Colors.white),
                       onPressed: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -239,9 +292,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                 isPrimary: true,
                 width: double.infinity,
                 child: const Text('Complete Setup & Meet Sage'),
-                onPressed: () {
-                  context.go('/library');
-                },
+                onPressed: _saveAndProceed,
               ),
               const SizedBox(height: 24),
             ],

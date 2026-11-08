@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
@@ -15,9 +16,13 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  String _studentName = 'Student';
+  List<String> _userSubjects = ['Computer Science', 'Calculus', 'Physics'];
+
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     // Check for in-app updates automatically in background
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -26,6 +31,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
           UpdateService.showUpdateDialog(context: context, info: updateInfo);
         }
       } catch (_) {}
+    });
+  }
+
+  void _loadUserData() {
+    final name = OfflineCacheService.getUserName();
+    final subs = OfflineCacheService.getUserSubjects();
+    setState(() {
+      _studentName = name;
+      if (subs.isNotEmpty) _userSubjects = subs;
     });
   }
 
@@ -44,6 +58,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: const Icon(Icons.school, size: 20, color: Colors.white),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined, color: AppColors.accentCyan),
+            tooltip: 'Account Center',
+            onPressed: () => context.push('/account-center'),
+          ),
           IconButton(
             icon: const Icon(Icons.system_update_alt_rounded, color: AppColors.accentCyan),
             tooltip: 'Check for Updates',
@@ -121,10 +140,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  const Text('Operating Systems & Calculus Focus', style: AppTypography.headlineMedium),
+                  Text('Hey $_studentName! 👋', style: AppTypography.headlineMedium),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Sage scheduled 2 review sessions today to prevent forgetting curve decay on deadlocks and eigenvalues.',
+                  Text(
+                    'Sage scheduled 2 review sessions today to prevent forgetting curve decay on ${_userSubjects.take(2).join(" & ")}.',
                     style: AppTypography.bodySmall,
                   ),
                   const SizedBox(height: 16),
