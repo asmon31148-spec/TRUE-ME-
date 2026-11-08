@@ -56,7 +56,7 @@ dependencies:
   docx_template: ^0.4.0
 
   # Rich Text Notes
-  flutter_quill: ^10.8.2
+  flutter_quill: any
 
   # Voice & Audio (On-device)
   speech_to_text: ^7.0.0
