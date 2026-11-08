@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/study_plan_model.dart';
 import '../models/user_model.dart';
 import 'ai_router.dart';
+import 'cohere_service.dart';
 import 'gemini_service.dart';
 import 'groq_service.dart';
 import 'sage_agent.dart';
@@ -14,10 +15,15 @@ final groqServiceProvider = Provider<GroqService>((ref) {
   return GroqService();
 });
 
+final cohereServiceProvider = Provider<CohereService>((ref) {
+  return CohereService();
+});
+
 final aiRouterProvider = Provider<AiRouter>((ref) {
   return AiRouter(
     gemini: ref.watch(geminiServiceProvider),
     groq: ref.watch(groqServiceProvider),
+    cohere: ref.watch(cohereServiceProvider),
   );
 });
 

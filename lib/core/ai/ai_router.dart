@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'cloudflare_service.dart';
+import 'cohere_service.dart';
 import 'gemini_service.dart';
 import 'groq_service.dart';
 import 'openrouter_service.dart';
@@ -8,27 +9,30 @@ import 'pollinations_service.dart';
 class AiRouter {
   final GeminiService _gemini;
   final GroqService _groq;
+  final CohereService _cohere;
   final CloudflareService _cloudflare;
   final OpenRouterService _openRouter;
 
   AiRouter({
     GeminiService? gemini,
     GroqService? groq,
+    CohereService? cohere,
     CloudflareService? cloudflare,
     OpenRouterService? openRouter,
   })  : _gemini = gemini ?? GeminiService(),
         _groq = groq ?? GroqService(),
+        _cohere = cohere ?? CohereService(),
         _cloudflare = cloudflare ?? CloudflareService(),
         _openRouter = openRouter ?? OpenRouterService();
 
   /// General reasoning with automatic fallback chain:
-  /// Gemini 1.5 Flash -> Groq 70B -> Groq 8B -> Cloudflare -> OpenRouter Free
+  /// Gemini Flash -> Groq (OSS 120B/20B) -> Cohere Command R+ -> Cloudflare -> OpenRouter Free
   Future<String> executeWithFallback({
     required String prompt,
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
-    // 1. Try Gemini 1.5 Flash
+    // 1. Try Gemini Flash
     if (_gemini.isConfigured) {
       try {
         return await _gemini.generateContent(
@@ -37,11 +41,11 @@ class AiRouter {
           jsonMode: jsonMode,
         );
       } catch (_) {
-        // Fallback to Groq 70B
+        // Fallback to Groq
       }
     }
 
-    // 2. Try Groq LLaMA 70B
+    // 2. Try Groq (Fast & High Volume)
     if (_groq.isConfigured) {
       try {
         return await _groq.complete70B(
@@ -50,17 +54,24 @@ class AiRouter {
           jsonMode: jsonMode,
         );
       } catch (_) {
-        // Fallback to Groq 8B
+        try {
+          return await _groq.complete8B(
+            prompt: prompt,
+            systemPrompt: systemPrompt,
+            jsonMode: jsonMode,
+          );
+        } catch (_) {
+          // Fallback to Cohere
+        }
       }
     }
 
-    // 3. Try Groq LLaMA 8B
-    if (_groq.isConfigured) {
+    // 3. Try Cohere Command R+
+    if (_cohere.isConfigured && !jsonMode) {
       try {
-        return await _groq.complete8B(
+        return await _cohere.chat(
           prompt: prompt,
           systemPrompt: systemPrompt,
-          jsonMode: jsonMode,
         );
       } catch (_) {
         // Fallback to Cloudflare
@@ -87,7 +98,7 @@ class AiRouter {
     throw StateError('All AI providers in fallback chain failed or lack keys');
   }
 
-  /// High-volume flashcard generation (Delegates to Groq 8B, 14,400 calls/day)
+  /// High-volume flashcard generation (Delegates to Groq, 14,400 calls/day)
   Future<String> generateFlashcards({
     required String content,
     int count = 10,
@@ -125,7 +136,7 @@ Return ONLY valid JSON matching this schema:
     );
   }
 
-  /// High-volume quiz generation (Delegates to Groq 8B)
+  /// High-volume quiz generation (Delegates to Groq)
   Future<String> generateQuiz({
     required String content,
     int count = 5,
@@ -165,13 +176,23 @@ Return ONLY valid JSON matching this schema:
     );
   }
 
-  /// Grounded RAG Chat (Delegates to Groq 70B)
+  /// Grounded RAG Chat with Cohere Rerank v3.5 precision
   Future<String> chatWithNotes({
     required String question,
     required List<String> retrievedChunks,
     String studentName = 'Alex',
   }) async {
-    final contextText = retrievedChunks.join('\n---\n');
+    // Apply Cohere Rerank v3.5 if available
+    List<String> optimalChunks = retrievedChunks;
+    if (_cohere.isConfigured && retrievedChunks.length > 1) {
+      optimalChunks = await _cohere.rerankDocuments(
+        query: question,
+        documents: retrievedChunks,
+        topN: 4,
+      );
+    }
+
+    final contextText = optimalChunks.join('\n---\n');
     final systemPrompt = '''
 You are Sage, the personal AI study mentor for $studentName in the True Me app.
 Answer the student's question grounded firmly on the provided lecture notes and document excerpts.
@@ -194,7 +215,7 @@ $question
           systemPrompt: systemPrompt,
         );
       } catch (_) {
-        // Fallback to Gemini
+        // Fallback
       }
     }
 
@@ -204,7 +225,7 @@ $question
     );
   }
 
-  /// Embeddings for Vector Search (Delegates to Gemini text-embedding-004)
+  /// Embeddings for Vector Search (Delegates to Gemini)
   Future<List<double>> embedText(String text) {
     return _gemini.generateEmbedding(text);
   }
