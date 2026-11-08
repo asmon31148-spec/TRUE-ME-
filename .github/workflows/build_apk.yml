@@ -27,7 +27,12 @@ jobs:
           cache: true
 
       - name: Scaffold Official Android Project
-        run: flutter create . --platforms=android --org com.trueme.study --project-name trueme
+        run: |
+          flutter create . --platforms=android --org com.trueme.study --project-name trueme
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i 's/flutter\.versionCode/1/g' android/app/build.gradle.kts
+            sed -i 's/flutter\.versionName/"1.0.0"/g' android/app/build.gradle.kts
+          fi
 
       - name: Create .env for Build
         run: |
