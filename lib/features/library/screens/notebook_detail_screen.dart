@@ -3,9 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../shared/widgets/glass_app_bar.dart';
-import '../../../shared/widgets/glass_button.dart';
-import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/app_components.dart';
+import '../../upload/widgets/add_files_sheet.dart';
 
 class NotebookDetailScreen extends StatefulWidget {
   final String notebookId;
@@ -21,18 +20,22 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
   late final TabController _tabController;
   Map<String, dynamic>? _notebook;
 
+  // 4 Standard sections in fixed order
+  final List<String> _syllabusFiles = ['Microbiology_syllabus.pdf'];
+  final List<String> _notesFiles = ['Lecture_01_intro.pdf', 'Gram_stain_notes.pdf'];
+  final List<String> _booksFiles = ['Prescott_Microbiology.pdf', 'Jawetz_Microbiology.pdf'];
+  final List<String> _paperFiles = ['Microbio_2023_QP.pdf', 'Microbio_2022_QP.pdf'];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _loadNotebookData();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadNotebook();
   }
 
-  void _loadNotebookData() {
+  void _loadNotebook() {
     final nb = OfflineCacheService.getCachedNotebook(widget.notebookId);
-    setState(() {
-      _notebook = nb;
-    });
+    setState(() => _notebook = nb);
   }
 
   @override
@@ -41,284 +44,230 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
     super.dispose();
   }
 
-  void _confirmDelete() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Delete Notebook', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Are you sure you want to delete this notebook? This action cannot be undone.',
-          style: TextStyle(color: Colors.white70),
-        ),
+  void _openAddFiles() {
+    final title = _notebook?['title'] as String? ?? 'Subject';
+    AddFilesSheet.show(
+      context,
+      subjectName: title,
+      onFileAdded: (fileName, section) {
+        setState(() {
+          if (section == 'Syllabus') _syllabusFiles.add(fileName);
+          if (section == 'Notes') _notesFiles.add(fileName);
+          if (section == 'Books') _booksFiles.add(fileName);
+          if (section == 'Previous papers') _paperFiles.add(fileName);
+        });
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _notebook?['title'] as String? ?? 'Microbiology';
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text(title, style: AppTypography.screenTitle),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () async {
-              await OfflineCacheService.deleteNotebook(widget.notebookId);
-              if (mounted) {
-                Navigator.pop(ctx);
-                context.go('/library');
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 22),
+            onSelected: (val) {
+              if (val == 'delete') {
+                OfflineCacheService.deleteNotebook(widget.notebookId);
+                context.pop();
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'rename', child: Text('Rename')),
+              const PopupMenuItem(value: 'remove', child: Text('Remove from app')),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Delete from app and Drive', style: TextStyle(color: AppColors.error)),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppColors.accent,
+          unselectedLabelColor: AppColors.textSecondary,
+          indicatorColor: AppColors.accent,
+          indicatorSize: TabBarIndicatorSize.tab,
+          tabs: const [
+            Tab(text: 'Sources'),
+            Tab(text: 'Chat'),
+            Tab(text: 'Study'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // 1. Sources Tab
+          Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  children: [
+                    _buildSectionCard('Syllabus', _syllabusFiles),
+                    const SizedBox(height: 12),
+                    _buildSectionCard('Notes', _notesFiles),
+                    const SizedBox(height: 12),
+                    _buildSectionCard('Books', _booksFiles),
+                    const SizedBox(height: 12),
+                    _buildSectionCard('Previous papers', _paperFiles),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+
+              // Pinned Primary "Add files" Button
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+                ),
+                child: AppPrimaryButton(
+                  label: 'Add files',
+                  onPressed: _openAddFiles,
+                ),
+              ),
+            ],
+          ),
+
+          // 2. Chat Tab (Limited to this subject)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.chat_bubble_outline, size: 48, color: AppColors.textSecondary),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Ask Sage about $title',
+                    style: AppTypography.sectionHeading,
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Answers are grounded directly in your syllabus and notes.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.secondary,
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: 160,
+                    child: AppPrimaryButton(
+                      label: 'Open Chat',
+                      onPressed: () => context.push('/chat?subject=$title'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Study Tab
+          ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            children: [
+              AppListRow(
+                leading: const Icon(Icons.summarize_outlined, size: 22, color: AppColors.textPrimary),
+                title: 'Summary',
+                subtitle: 'Key concepts across all sources',
+                onTap: () => context.push('/chat?prompt=Summarize%20$title'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: const Icon(Icons.style_outlined, size: 22, color: AppColors.textPrimary),
+                title: 'Flashcards',
+                subtitle: 'Active recall for $title',
+                onTap: () => context.push('/flashcards'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: const Icon(Icons.quiz_outlined, size: 22, color: AppColors.textPrimary),
+                title: 'Quiz',
+                subtitle: 'Practice questions from your notes',
+                onTap: () => context.push('/quiz'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: const Icon(Icons.account_tree_outlined, size: 22, color: AppColors.textPrimary),
+                title: 'Mind map',
+                subtitle: 'Visual concept hierarchy',
+                onTap: () => context.push('/mindmap'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: const Icon(Icons.picture_as_pdf_outlined, size: 22, color: AppColors.textPrimary),
+                title: 'Make a PDF',
+                subtitle: 'Export formatted study sheet',
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Study sheet PDF generated in True Me folder.')),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final title = _notebook?['title'] as String? ?? 'Notebook Details';
-    final subject = _notebook?['subject'] as String? ?? 'Study';
-    final files = List<String>.from(_notebook?['fileRefs'] ?? const []);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: GlassAppBar(
-        title: title,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
-          onPressed: () => context.go('/library'),
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            color: AppColors.surface,
-            onSelected: (val) {
-              if (val == 'import') {
-                context.go('/upload');
-              } else if (val == 'delete') {
-                _confirmDelete();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'import',
-                child: Row(
-                  children: [
-                    Icon(Icons.add_to_photos, size: 18, color: AppColors.accentCyan),
-                    SizedBox(width: 8),
-                    Text('Add Document', style: TextStyle(color: Colors.white)),
-                  ],
-                ),
+  Widget _buildSectionCard(String sectionName, List<String> files) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$sectionName (${files.length} ${files.length == 1 ? 'file' : 'files'})',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
               ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                    SizedBox(width: 8),
-                    Text('Delete Notebook', style: TextStyle(color: AppColors.error)),
-                  ],
-                ),
-              ),
+              if (files.length > 3)
+                Text('See all', style: AppTypography.smallLabel.copyWith(color: AppColors.accent)),
             ],
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 12),
-          // Tab bar in glass container
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              indicator: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              dividerColor: Colors.transparent,
-              labelColor: Colors.white,
-              unselectedLabelColor: AppColors.textSecondary,
-              labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: 'Documents'),
-                Tab(text: 'Flashcards'),
-                Tab(text: 'AI Chat'),
-                Tab(text: 'Explainer'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Documents Tab
-                files.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.description_outlined, size: 48, color: Colors.white38),
-                            const SizedBox(height: 12),
-                            const Text('No documents added yet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            const Text('Import lecture slides, PDFs, or photos into this notebook.', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                            const SizedBox(height: 16),
-                            GlassButton(
-                              isPrimary: true,
-                              child: const Text('Add Document / Notes'),
-                              onPressed: () => context.go('/upload'),
-                            ),
-                          ],
+          const SizedBox(height: 10),
+          if (files.isEmpty)
+            const Text('No files yet', style: AppTypography.secondary)
+          else
+            ...files.take(3).map((f) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          f,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        itemCount: files.length,
-                        itemBuilder: (context, idx) {
-                          final fName = files[idx];
-                          final isPdf = fName.toLowerCase().endsWith('.pdf');
-                          final isAudio = fName.toLowerCase().endsWith('.m4a') || fName.toLowerCase().endsWith('.mp3');
-
-                          return GlassCard(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            borderRadius: 18,
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accent.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Icon(
-                                    isPdf
-                                        ? Icons.picture_as_pdf
-                                        : isAudio
-                                            ? Icons.mic
-                                            : Icons.image,
-                                    color: AppColors.accentCyan,
-                                    size: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        fName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: AppTypography.titleLarge.copyWith(fontSize: 14),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Grounded in local pgvector embeddings',
-                                        style: AppTypography.bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuButton<String>(
-                                  icon: const Icon(Icons.more_horiz, color: Colors.white70),
-                                  color: AppColors.surface,
-                                  onSelected: (action) {
-                                    if (action == 'chat') context.go('/chat');
-                                    if (action == 'quiz') context.go('/quiz');
-                                    if (action == 'cards') context.go('/flashcards');
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'chat',
-                                      child: Text('Ask AI with this Doc', style: TextStyle(color: Colors.white)),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'quiz',
-                                      child: Text('Generate Quiz', style: TextStyle(color: Colors.white)),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'cards',
-                                      child: Text('Generate Flashcards', style: TextStyle(color: Colors.white)),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
                       ),
-
-                // Flashcards Tab Preview
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.style_outlined, size: 54, color: AppColors.primaryLight),
-                      const SizedBox(height: 16),
-                      Text('Flashcard Decks for $subject', style: AppTypography.headlineMedium),
-                      const SizedBox(height: 8),
-                      const Text('SuperMemo SM-2 spaced repetition active.', style: AppTypography.bodySmall),
-                      const SizedBox(height: 20),
-                      GlassButton(
-                        isPrimary: true,
-                        child: const Text('Start Review Session'),
-                        onPressed: () => context.go('/flashcards'),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Synced',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
-                ),
-
-                // AI Chat Tab Preview
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.psychology, size: 54, color: AppColors.accentCyan),
-                      const SizedBox(height: 16),
-                      Text('Chat with $title', style: AppTypography.headlineMedium),
-                      const SizedBox(height: 8),
-                      const Text('Grounded in your lecture notes with citations.', style: AppTypography.bodySmall),
-                      const SizedBox(height: 20),
-                      GlassButton(
-                        isPrimary: true,
-                        child: const Text('Open Notebook RAG Chat'),
-                        onPressed: () => context.go('/chat'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Explainer Tab Preview
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.movie_creation_outlined, size: 54, color: AppColors.secondary),
-                      const SizedBox(height: 16),
-                      const Text('10-Min Concept Video', style: AppTypography.headlineMedium),
-                      const SizedBox(height: 8),
-                      const Text('Generates Flutter animated timelines + speech narration.', style: AppTypography.bodySmall),
-                      const SizedBox(height: 20),
-                      GlassButton(
-                        isPrimary: true,
-                        child: const Text('Watch Explainer Video'),
-                        onPressed: () => context.go('/explainer'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+                )),
         ],
       ),
     );

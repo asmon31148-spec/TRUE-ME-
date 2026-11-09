@@ -4,64 +4,68 @@ import 'colors.dart';
 class AppTypography {
   AppTypography._();
 
-  static const TextStyle displayLarge = TextStyle(
-    fontSize: 32,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
-    color: AppColors.textPrimary,
-  );
+  static const String fontFamily = 'Inter';
 
-  static const TextStyle displayMedium = TextStyle(
-    fontSize: 26,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.4,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle headlineLarge = TextStyle(
-    fontSize: 22,
+  // Screen Title: 24 px, Semibold (w600)
+  static const TextStyle screenTitle = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 24,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.3,
     color: AppColors.textPrimary,
+    letterSpacing: -0.4,
   );
 
-  static const TextStyle headlineMedium = TextStyle(
+  // Section Heading: 18 px, Semibold (w600)
+  static const TextStyle sectionHeading = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 18,
     fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
     letterSpacing: -0.2,
-    color: AppColors.textPrimary,
   );
 
-  static const TextStyle titleLarge = TextStyle(
+  // Body: 16 px, Regular (w400)
+  static const TextStyle body = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 16,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle bodyLarge = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    height: 1.5,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle bodyMedium = TextStyle(
-    fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.45,
+    color: AppColors.textPrimary,
+  );
+
+  // Secondary text and captions: 14 px, Regular (w400)
+  static const TextStyle secondary = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    height: 1.4,
     color: AppColors.textSecondary,
   );
 
-  static const TextStyle bodySmall = TextStyle(
+  // Small label: 12 px, Medium (w500)
+  static const TextStyle smallLabel = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textMuted,
+    fontWeight: FontWeight.w500,
+    color: AppColors.textSecondary,
   );
 
+  // Aliases for backwards compatibility
+  static const TextStyle displayLarge = screenTitle;
+  static const TextStyle displayMedium = screenTitle;
+  static const TextStyle headlineLarge = screenTitle;
+  static const TextStyle headlineMedium = sectionHeading;
+  static const TextStyle headlineSmall = sectionHeading;
+  static const TextStyle titleLarge = sectionHeading;
+  static const TextStyle bodyLarge = body;
+  static const TextStyle bodyMedium = body;
+  static const TextStyle bodySmall = secondary;
   static const TextStyle labelLarge = TextStyle(
-    fontSize: 14,
+    fontFamily: fontFamily,
+    fontSize: 15,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0.1,
-    color: AppColors.textPrimary,
+    color: Colors.white,
   );
+  static const TextStyle labelMedium = smallLabel;
+  static const TextStyle labelSmall = smallLabel;
 }

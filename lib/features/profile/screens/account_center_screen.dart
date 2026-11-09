@@ -4,9 +4,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/update_service.dart';
-import '../../../shared/widgets/glass_app_bar.dart';
-import '../../../shared/widgets/glass_button.dart';
-import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/app_components.dart';
 
 class AccountCenterScreen extends StatefulWidget {
   const AccountCenterScreen({super.key});
@@ -21,6 +19,7 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
   late List<String> _userSubjects;
   late String _learningStyle;
   late DateTime _targetExamDate;
+  String _selectedTheme = 'Light';
 
   @override
   void initState() {
@@ -35,8 +34,10 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
           ? profile['name']
           : 'Asmon';
       _userEmail = profile['email'] ?? 'asmon@trueme.ai';
-      _userSubjects = List<String>.from(profile['subjects'] ?? ['Computer Science', 'Calculus', 'Physics']);
-      _learningStyle = profile['learningStyle'] ?? 'Visual (Diagrams & Videos)';
+      _userSubjects = List<String>.from(
+        profile['subjects'] ?? ['Microbiology', 'Biochemistry', 'Immunology'],
+      );
+      _learningStyle = profile['learningStyle'] ?? 'Visual (Diagrams & Notes)';
       _targetExamDate = OfflineCacheService.getTargetExamDate();
     });
   }
@@ -46,28 +47,27 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Edit Student Name', style: TextStyle(color: Colors.white)),
-        content: TextField(
+        backgroundColor: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text('Edit name', style: AppTypography.sectionHeading),
+        content: AppInput(
           controller: controller,
+          hintText: 'Enter your name',
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Enter your name...',
-            hintStyle: const TextStyle(color: Colors.white54),
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.06),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
         ),
         actions: [
-          TextButton(
+          AppSecondaryButton(
+            label: 'Cancel',
+            height: 40,
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          const SizedBox(width: 8),
+          AppPrimaryButton(
+            label: 'Save',
+            height: 40,
             onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty) {
@@ -82,7 +82,70 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
               }
               if (mounted) Navigator.pop(ctx);
             },
-            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConfirmDeleteDialog({required bool deleteAll}) {
+    final confirmationController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text(
+          deleteAll ? 'Delete everything' : 'Remove from app',
+          style: AppTypography.sectionHeading.copyWith(color: AppColors.error),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              deleteAll
+                  ? 'This will delete all local data AND files in Google Drive. Type "DELETE" below to confirm.'
+                  : 'This will reset local data on this phone. Your Google Drive files will remain safe.',
+              style: AppTypography.bodySmall,
+            ),
+            if (deleteAll) ...[
+              const SizedBox(height: 12),
+              AppInput(
+                controller: confirmationController,
+                hintText: 'Type DELETE',
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          AppSecondaryButton(
+            label: 'Cancel',
+            height: 40,
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          const SizedBox(width: 8),
+          AppPrimaryButton(
+            label: deleteAll ? 'Delete all' : 'Remove',
+            height: 40,
+            backgroundColor: AppColors.error,
+            onPressed: () async {
+              if (deleteAll && confirmationController.text.trim() != 'DELETE') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please type DELETE to confirm.')),
+                );
+                return;
+              }
+              await OfflineCacheService.clearAllCache();
+              await OfflineCacheService.logout();
+              if (mounted) {
+                Navigator.pop(ctx);
+                context.go('/login');
+              }
+            },
           ),
         ],
       ),
@@ -92,270 +155,193 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
   @override
   Widget build(BuildContext context) {
     final daysRemaining = _targetExamDate.difference(DateTime.now()).inDays;
-    final initialLetter = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'A';
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: GlassAppBar(
-        title: 'Account Center',
+      appBar: AppBar(
+        title: const Text('Account', style: AppTypography.screenTitle),
+        centerTitle: false,
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 22),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go('/library');
+              context.go('/today');
             }
           },
         ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: AppColors.border, height: 1),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Student Profile Header Card
-            GlassCard(
-              borderRadius: 24,
-              padding: const EdgeInsets.all(20),
-              surfaceColor: AppColors.primary.withOpacity(0.12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 68,
-                    height: 68,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.sageGlowGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.5),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initialLetter,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(_userName, style: AppTypography.headlineMedium),
-                            const SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: _showEditNameDialog,
-                              child: const Icon(Icons.edit, size: 16, color: AppColors.accentCyan),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _userEmail,
-                          style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentCyan.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.accentCyan.withOpacity(0.3)),
-                          ),
-                          child: const Text(
-                            '⭐ PRO SCHOLAR ACTIVE',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.8,
-                              color: AppColors.accentCyan,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Study Metrics & Sage Settings
-            const Text('Academic & AI Mentor Setup', style: AppTypography.headlineMedium),
-            const SizedBox(height: 12),
-
-            GlassCard(
-              borderRadius: 20,
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  // Streak & Goal
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.local_fire_department, color: AppColors.warning, size: 24),
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Study Streak', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                            Text('7 consecutive days of active recall', style: AppTypography.bodySmall),
-                          ],
-                        ),
-                      ),
-                      const Text(
-                        '7 Days 🔥',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.warning),
-                      ),
-                    ],
-                  ),
-                  const Divider(color: Colors.white12, height: 28),
-
-                  // Target Exam Date
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.event_available, color: AppColors.accentCyan, size: 24),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Target Exam Date', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                            Text(
-                              '${_targetExamDate.day}/${_targetExamDate.month}/${_targetExamDate.year}',
-                              style: AppTypography.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        '$daysRemaining days left',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accentCyan),
-                      ),
-                    ],
-                  ),
-                  const Divider(color: Colors.white12, height: 28),
-
-                  // Learning Style
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.psychology, color: AppColors.secondary, size: 24),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Learning Style', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                            Text(_learningStyle, style: AppTypography.bodySmall),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Active Subjects
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Active Subjects', style: AppTypography.headlineMedium),
-                TextButton(
-                  onPressed: () => context.go('/setup-profile'),
-                  child: const Text('Change', style: TextStyle(color: AppColors.accentCyan, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
+            // Profile Section
+            const Text('Profile', style: AppTypography.sectionHeading),
             const SizedBox(height: 8),
-
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _userSubjects.map((s) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.school, size: 14, color: AppColors.primaryLight),
-                      const SizedBox(width: 6),
-                      Text(
-                        s,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 28),
-
-            // System & App Updates
-            const Text('System & In-App Updates', style: AppTypography.headlineMedium),
-            const SizedBox(height: 12),
-
-            GlassCard(
-              borderRadius: 20,
-              padding: const EdgeInsets.all(18),
+            AppCard(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentCyan.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.system_update_alt_rounded, color: AppColors.accentCyan),
+                  AppListRow(
+                    title: _userName,
+                    subtitle: 'Name',
+                    trailing: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+                    onTap: _showEditNameDialog,
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  AppListRow(
+                    title: _userEmail,
+                    subtitle: 'Email',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Study Section
+            const Text('Study', style: AppTypography.sectionHeading),
+            const SizedBox(height: 8),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  AppListRow(
+                    title: '${_targetExamDate.day}/${_targetExamDate.month}/${_targetExamDate.year}',
+                    subtitle: 'Target exam deadline ($daysRemaining days left)',
+                    trailing: const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.textSecondary),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _targetExamDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 730)),
+                      );
+                      if (picked != null) {
+                        await OfflineCacheService.saveTargetExamDate(picked);
+                        setState(() => _targetExamDate = picked);
+                      }
+                    },
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  AppListRow(
+                    title: _userSubjects.join(', '),
+                    subtitle: 'Active subjects (${_userSubjects.length})',
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                    onTap: () => context.push('/setup-profile'),
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  AppListRow(
+                    title: _learningStyle,
+                    subtitle: 'Learning style',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Storage Section
+            const Text('Storage', style: AppTypography.sectionHeading),
+            const SizedBox(height: 8),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  AppListRow(
+                    title: 'Connected',
+                    subtitle: 'Google Drive status',
+                    trailing: TextButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Google Drive is synced.')),
+                        );
+                      },
+                      child: const Text('Reconnect', style: TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
-                    title: const Text('Check for Updates', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('True Me v1.0.23 (Latest Engine)', style: AppTypography.bodySmall),
-                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  const AppListRow(
+                    title: 'True Me',
+                    subtitle: 'Folder location',
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  AppListRow(
+                    title: 'Clear local cache',
+                    subtitle: 'Frees temporary files stored on phone',
+                    trailing: const Icon(Icons.delete_outline, size: 18, color: AppColors.textSecondary),
+                    onTap: () async {
+                      await OfflineCacheService.clearAllCache();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Local cache cleared successfully.')),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // App Section
+            const Text('App', style: AppTypography.sectionHeading),
+            const SizedBox(height: 8),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  AppListRow(
+                    title: _selectedTheme,
+                    subtitle: 'Theme',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: ['System', 'Light', 'Dark'].map((theme) {
+                        final isSelected = _selectedTheme == theme;
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: InkWell(
+                            onTap: () => setState(() => _selectedTheme = theme),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.accent : AppColors.surface,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isSelected ? AppColors.accent : AppColors.border,
+                                ),
+                              ),
+                              child: Text(
+                                theme,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  AppListRow(
+                    title: 'Check for updates',
+                    subtitle: 'Current version: v1.0.32',
+                    trailing: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
                     onTap: () async {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Checking GitHub Releases for latest APK...'),
-                          backgroundColor: AppColors.surface,
+                          content: Text('Checking for updates...'),
                           duration: Duration(seconds: 1),
                         ),
                       );
@@ -365,63 +351,61 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                         UpdateService.showUpdateDialog(context: context, info: info);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('🎉 True Me is up to date! (v${info?.latestVersion ?? 'latest'})'),
-                            backgroundColor: AppColors.success,
+                          const SnackBar(
+                            content: Text('True Me is up to date (v1.0.32)'),
                           ),
                         );
                       }
                     },
                   ),
-                  const Divider(color: Colors.white12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.cleaning_services_rounded, color: Colors.white70),
-                    ),
-                    title: const Text('Clear Offline Cache', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Frees local Hive disk storage', style: AppTypography.bodySmall),
-                    trailing: TextButton(
-                      child: const Text('Clear', style: TextStyle(color: AppColors.warning)),
-                      onPressed: () async {
-                        await OfflineCacheService.clearAllCache();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Offline storage cleared successfully.')),
-                          );
-                        }
-                      },
-                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Data Section
+            const Text('Data', style: AppTypography.sectionHeading),
+            const SizedBox(height: 8),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  AppListRow(
+                    title: 'Remove from app',
+                    subtitle: 'Clears local data, leaves Drive files intact',
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                    onTap: () => _showConfirmDeleteDialog(deleteAll: false),
+                  ),
+                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  AppListRow(
+                    title: 'Delete everything',
+                    subtitle: 'Permanently deletes Drive files and local data',
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.error),
+                    onTap: () => _showConfirmDeleteDialog(deleteAll: true),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
 
-            // Logout Button
-            GlassButton(
-              width: double.infinity,
-              surfaceColor: AppColors.error.withOpacity(0.15),
-              borderColor: AppColors.error.withOpacity(0.4),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.logout, color: AppColors.error, size: 20),
-                  SizedBox(width: 8),
-                  Text('Sign Out of True Me', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
-                ],
+            // Sign Out
+            Center(
+              child: TextButton(
+                onPressed: () async {
+                  await OfflineCacheService.logout();
+                  if (mounted) {
+                    context.go('/login');
+                  }
+                },
+                child: const Text(
+                  'Sign out',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-              onPressed: () async {
-                await OfflineCacheService.logout();
-                if (mounted) {
-                  context.go('/login');
-                }
-              },
             ),
             const SizedBox(height: 40),
           ],

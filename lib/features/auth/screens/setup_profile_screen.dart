@@ -3,8 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../shared/widgets/glass_button.dart';
-import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/app_components.dart';
 
 class SetupProfileScreen extends StatefulWidget {
   const SetupProfileScreen({super.key});
@@ -14,287 +13,296 @@ class SetupProfileScreen extends StatefulWidget {
 }
 
 class _SetupProfileScreenState extends State<SetupProfileScreen> {
+  int _currentStep = 1;
+
+  // Step 1 Fields
   late final TextEditingController _nameController;
-  final TextEditingController _goalController =
-      TextEditingController(text: 'Master core concepts & score highest GPA');
-  
-  String _selectedLearningStyle = 'Visual (Diagrams & Videos)';
-  DateTime _targetExamDate = DateTime.now().add(const Duration(days: 45));
-  final List<String> _selectedSubjects = [];
-
-  final List<String> _allSubjects = [
-    'Computer Science',
-    'Calculus',
-    'Physics',
-    'Biology',
-    'Chemistry',
-    'Literature',
-    'History',
-    'Psychology',
-    'Economics',
-    'Data Structures & Algorithms',
-    'Machine Learning',
-  ];
-
-  final List<String> _learningStyles = [
-    'Visual (Diagrams & Videos)',
-    'Auditory (Voice Tutor & Audio)',
-    'Kinesthetic (Quizzes & Flashcards)',
-    'Reading & Text Analysis',
-  ];
+  final List<String> _subjects = [];
+  DateTime _deadline = DateTime.now().add(const Duration(days: 21));
 
   @override
   void initState() {
     super.initState();
-    final currentName = OfflineCacheService.getUserName();
-    _nameController = TextEditingController(
-      text: currentName != 'Student' ? currentName : '',
-    );
-    final cachedSubjects = OfflineCacheService.getUserSubjects();
-    if (cachedSubjects.isNotEmpty) {
-      _selectedSubjects.addAll(cachedSubjects);
-    } else {
-      _selectedSubjects.addAll(['Computer Science', 'Calculus']);
-    }
+    final name = OfflineCacheService.getUserName();
+    _nameController = TextEditingController(text: name != 'Student' ? name : '');
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _goalController.dispose();
     super.dispose();
   }
 
-  Future<void> _saveAndProceed() async {
-    final name = _nameController.text.trim();
-    final displayName = name.isNotEmpty ? name : 'Asmon';
+  void _showAddSubjectDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border, width: 1),
+        ),
+        title: const Text('Add subject', style: AppTypography.sectionHeading),
+        content: AppInput(
+          controller: controller,
+          hintText: 'e.g. Microbiology, Calculus...',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              final sub = controller.text.trim();
+              if (sub.isNotEmpty && !_subjects.contains(sub)) {
+                setState(() => _subjects.add(sub));
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickDeadline() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _deadline,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.accent,
+              onPrimary: Colors.white,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _deadline = picked);
+    }
+  }
+
+  Future<void> _completeSetup() async {
+    final name = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()
+        : 'Student';
+    final subjectsList = _subjects.isNotEmpty
+        ? _subjects
+        : ['Microbiology', 'Biochemistry'];
 
     await OfflineCacheService.saveUserProfile(
-      name: displayName,
+      name: name,
       email: OfflineCacheService.getUserEmail(),
-      subjects: _selectedSubjects.isNotEmpty
-          ? _selectedSubjects
-          : ['Computer Science', 'Calculus'],
-      learningStyle: _selectedLearningStyle,
-      targetExamDate: _targetExamDate,
+      subjects: subjectsList,
+      targetExamDate: _deadline,
       isLoggedIn: true,
       hasCompletedOnboarding: true,
     );
 
-    if (mounted) {
-      context.go('/library');
+    // Create initial notebooks for added subjects
+    for (final s in subjectsList) {
+      await OfflineCacheService.createNotebook(title: s, subject: s);
     }
+
+    if (mounted) context.go('/today');
   }
 
   @override
   Widget build(BuildContext context) {
+    final daysLeft = _deadline.difference(DateTime.now()).inDays.clamp(0, 999);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.sageGlowGradient,
-                    ),
-                    child: const Icon(Icons.psychology, color: Colors.white, size: 24),
+              // Step Counter
+              Text(
+                'Step $_currentStep of 2',
+                style: AppTypography.smallLabel.copyWith(color: AppColors.accent),
+              ),
+              const SizedBox(height: 8),
+
+              if (_currentStep == 1) ...[
+                const Text('About you', style: AppTypography.screenTitle),
+                const SizedBox(height: 24),
+
+                AppInput(
+                  label: 'Name',
+                  hintText: 'Your name',
+                  controller: _nameController,
+                ),
+                const SizedBox(height: 24),
+
+                const Text(
+                  'Subjects',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
                   ),
-                  const SizedBox(width: 12),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+                const SizedBox(height: 8),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ..._subjects.map(
+                      (sub) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(sub, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () => setState(() => _subjects.remove(sub)),
+                              child: const Icon(Icons.close, size: 16, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _showAddSubjectDialog,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.accent, width: 1),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add, size: 16, color: AppColors.accent),
+                            SizedBox(width: 4),
+                            Text('Add subject', style: TextStyle(fontSize: 14, color: AppColors.accent, fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                const Text(
+                  'Exam or syllabus deadline',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: _pickDeadline,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border, width: 1),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${_deadline.day}/${_deadline.month}/${_deadline.year}',
+                          style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                        ),
+                        const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.textSecondary),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$daysLeft days left',
+                  style: AppTypography.secondary,
+                ),
+
+                const Spacer(),
+                AppPrimaryButton(
+                  label: 'Continue',
+                  onPressed: () => setState(() => _currentStep = 2),
+                ),
+              ] else ...[
+                const Text('Connect Google Drive', style: AppTypography.screenTitle),
+                const SizedBox(height: 16),
+                const Text(
+                  'Your files stay in your Google Drive. True Me creates a folder called True Me for you.',
+                  style: AppTypography.body,
+                ),
+                const SizedBox(height: 32),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border, width: 1),
+                  ),
+                  child: const Row(
                     children: [
-                      Text('Personalize Sage', style: AppTypography.headlineLarge),
-                      Text('Teach Sage who you are & how to coach you', style: AppTypography.bodySmall),
+                      Icon(Icons.folder_shared_outlined, size: 28, color: AppColors.accent),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('True Me / [Subject]', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
+                            SizedBox(height: 2),
+                            Text('Syllabus, Notes, Books, Previous papers', style: AppTypography.secondary),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 28),
-
-              // Student Name Card
-              GlassCard(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Your Name', style: AppTypography.titleLarge),
-                    const SizedBox(height: 6),
-                    const Text('Sage will address you directly by this name', style: AppTypography.bodySmall),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameController,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                      decoration: InputDecoration(
-                        hintText: 'Enter your name (e.g. Asmon)',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.04),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-              const SizedBox(height: 20),
 
-              // Subjects Selection Card
-              GlassCard(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Select Your Subjects', style: AppTypography.titleLarge),
-                    const SizedBox(height: 4),
-                    const Text('Tap to select or unselect courses for your study plan', style: AppTypography.bodySmall),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 10,
-                      children: _allSubjects.map((subject) {
-                        final isSelected = _selectedSubjects.contains(subject);
-                        return FilterChip(
-                          selected: isSelected,
-                          showCheckmark: isSelected,
-                          checkmarkColor: Colors.white,
-                          label: Text(
-                            subject,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textSecondary,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              fontSize: 13,
-                            ),
-                          ),
-                          backgroundColor: Colors.white.withOpacity(0.04),
-                          selectedColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: isSelected ? AppColors.accentCyan : Colors.white.withOpacity(0.08),
-                            ),
-                          ),
-                          onSelected: (selected) {
-                            setState(() {
-                              if (selected) {
-                                _selectedSubjects.add(subject);
-                              } else {
-                                _selectedSubjects.remove(subject);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                const Spacer(),
+                AppPrimaryButton(
+                  label: 'Connect Google Drive',
+                  onPressed: _completeSetup,
                 ),
-              ),
-              const SizedBox(height: 20),
-
-              // Primary Learning Style Card
-              GlassCard(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Primary Learning Style', style: AppTypography.titleLarge),
-                    const SizedBox(height: 14),
-                    ..._learningStyles.map((style) {
-                      final isSelected = _selectedLearningStyle == style;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary.withOpacity(0.2) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppColors.accentCyan : Colors.transparent,
-                          ),
-                        ),
-                        child: RadioListTile<String>(
-                          title: Text(
-                            style,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : AppColors.textSecondary,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              fontSize: 14,
-                            ),
-                          ),
-                          value: style,
-                          groupValue: _selectedLearningStyle,
-                          activeColor: AppColors.accentCyan,
-                          onChanged: (val) {
-                            if (val != null) setState(() => _selectedLearningStyle = val);
-                          },
-                        ),
-                      );
-                    }),
-                  ],
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: _completeSetup,
+                    child: const Text('Do this later'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-
-              // Target Exam Date Card
-              GlassCard(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(Icons.event_note, color: AppColors.accentCyan, size: 24),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Target Exam Date', style: AppTypography.titleLarge),
-                          Text(
-                            '${_targetExamDate.day}/${_targetExamDate.month}/${_targetExamDate.year} (${_targetExamDate.difference(DateTime.now()).inDays} days remaining)',
-                            style: AppTypography.bodySmall.copyWith(color: AppColors.accentCyan),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_calendar, color: Colors.white),
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _targetExamDate,
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (picked != null) {
-                          setState(() => _targetExamDate = picked);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Complete Setup Button
-              GlassButton(
-                isPrimary: true,
-                width: double.infinity,
-                child: const Text('Complete Setup & Meet Sage'),
-                onPressed: _saveAndProceed,
-              ),
-              const SizedBox(height: 24),
+              ],
             ],
           ),
         ),

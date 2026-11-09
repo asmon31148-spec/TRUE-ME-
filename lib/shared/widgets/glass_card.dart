@@ -1,131 +1,60 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../app/theme/colors.dart';
-import '../../app/theme/liquid_glass_theme.dart';
 
 class GlassCard extends StatelessWidget {
   final Widget child;
-  final EdgeInsetsGeometry? padding;
+  final double? width;
+  final double? height;
+  final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry? margin;
   final double borderRadius;
-  final double blur;
+  final VoidCallback? onTap;
   final Color? surfaceColor;
+  final Color? borderColor;
   final Gradient? surfaceGradient;
   final Gradient? borderGradient;
-  final double borderWidth;
-  final VoidCallback? onTap;
-  final bool showShadow;
 
   const GlassCard({
     super.key,
     required this.child,
-    this.padding,
+    this.width,
+    this.height,
+    this.padding = const EdgeInsets.all(16.0),
     this.margin,
-    this.borderRadius = LiquidGlassTheme.radiusMedium,
-    this.blur = LiquidGlassTheme.blurStandard,
+    this.borderRadius = 12.0,
+    this.onTap,
     this.surfaceColor,
+    this.borderColor,
     this.surfaceGradient,
     this.borderGradient,
-    this.borderWidth = 1.0,
-    this.onTap,
-    this.showShadow = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    Widget cardContent = Container(
-      padding: padding ?? const EdgeInsets.all(16),
+    Widget content = Container(
+      width: width,
+      height: height,
+      margin: margin,
+      padding: padding,
       decoration: BoxDecoration(
-        color: surfaceGradient == null
-            ? (surfaceColor ?? AppColors.glassSurface)
-            : null,
-        gradient: surfaceGradient,
+        color: surfaceColor ?? AppColors.surface,
         borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: borderColor ?? AppColors.border,
+          width: 1.0,
+        ),
       ),
       child: child,
     );
 
     if (onTap != null) {
-      cardContent = Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(borderRadius),
-          onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.08),
-          highlightColor: Colors.white.withOpacity(0.04),
-          child: cardContent,
-        ),
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: content,
       );
     }
 
-    final cardWithBorder = CustomPaint(
-      painter: _GlassBorderPainter(
-        borderRadius: borderRadius,
-        borderWidth: borderWidth,
-        gradient: borderGradient ?? AppColors.glassBorderGradient,
-      ),
-      child: cardContent,
-    );
-
-    return Container(
-      margin: margin,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: showShadow
-            ? [
-                const BoxShadow(
-                  color: AppColors.glassShadow,
-                  blurRadius: 28,
-                  spreadRadius: -6,
-                  offset: Offset(0, 14),
-                ),
-              ]
-            : null,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: cardWithBorder,
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassBorderPainter extends CustomPainter {
-  final double borderRadius;
-  final double borderWidth;
-  final Gradient gradient;
-
-  _GlassBorderPainter({
-    required this.borderRadius,
-    required this.borderWidth,
-    required this.gradient,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(
-      borderWidth / 2,
-      borderWidth / 2,
-      size.width - borderWidth,
-      size.height - borderWidth,
-    );
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(borderRadius));
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = borderWidth
-      ..shader = gradient.createShader(rect);
-
-    canvas.drawRRect(rrect, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GlassBorderPainter oldDelegate) {
-    return oldDelegate.borderRadius != borderRadius ||
-        oldDelegate.borderWidth != borderWidth ||
-        oldDelegate.gradient != gradient;
+    return content;
   }
 }

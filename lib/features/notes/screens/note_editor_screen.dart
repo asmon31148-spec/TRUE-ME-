@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../shared/widgets/glass_app_bar.dart';
-import '../../../shared/widgets/glass_card.dart';
 
 class NoteEditorScreen extends StatefulWidget {
   final String? noteId;
@@ -75,153 +74,191 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: GlassAppBar(
-        title: 'Study Note',
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
-          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 22),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/library');
+            }
+          },
+        ),
+        title: TextField(
+          controller: _titleController,
+          style: AppTypography.screenTitle,
+          decoration: const InputDecoration(
+            hintText: 'Untitled note',
+            hintStyle: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              _previewMode ? Icons.edit_note : Icons.preview,
-              color: AppColors.accentCyan,
-            ),
-            tooltip: _previewMode ? 'Switch to Edit' : 'Preview Note',
+          TextButton(
             onPressed: () {
               setState(() {
                 _previewMode = !_previewMode;
               });
             },
+            child: Text(
+              _previewMode ? 'Edit' : 'Preview',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.check, color: AppColors.accentCyan),
-            tooltip: 'Save Note',
-            onPressed: () async {
-              final title = _titleController.text.trim();
-              final content = _contentController.text.trim();
-              if (title.isEmpty && content.isEmpty) return;
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton(
+              onPressed: () async {
+                final title = _titleController.text.trim();
+                final content = _contentController.text.trim();
+                if (title.isEmpty && content.isEmpty) return;
 
-              final id = widget.noteId ?? 'note_${DateTime.now().millisecondsSinceEpoch}';
-              await OfflineCacheService.cacheNote(id, {
-                'id': id,
-                'title': title.isNotEmpty ? title : 'Untitled Note',
-                'content': content,
-                'updatedAt': DateTime.now().toIso8601String(),
-              });
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Note saved to notebook!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go('/library');
+                final id = widget.noteId ?? 'note_${DateTime.now().millisecondsSinceEpoch}';
+                await OfflineCacheService.cacheNote(id, {
+                  'id': id,
+                  'title': title.isNotEmpty ? title : 'Untitled Note',
+                  'content': content,
+                  'updatedAt': DateTime.now().toIso8601String(),
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Note saved')),
+                  );
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/library');
+                  }
                 }
-              }
-            },
+              },
+              child: const Text(
+                'Save',
+                style: TextStyle(
+                  color: AppColors.accent,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: AppColors.border, height: 1),
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 12),
-            // Note Title Input in Glass Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GlassCard(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                borderRadius: 16,
-                child: TextField(
-                  controller: _titleController,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Note Title...',
-                    hintStyle: TextStyle(color: AppColors.textMuted),
-                  ),
-                ),
-              ),
+            // Full-height writing area (white/background color, no card)
+            Expanded(
+              child: _previewMode
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: SelectionArea(
+                        child: Text(
+                          _contentController.text.isEmpty
+                              ? 'Nothing to preview.'
+                              : _contentController.text,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 14,
+                            height: 1.6,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    )
+                  : TextField(
+                      controller: _contentController,
+                      focusNode: _contentFocusNode,
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: AppTypography.bodyMedium.copyWith(height: 1.6),
+                      decoration: const InputDecoration(
+                        hintText: 'Start writing your note...',
+                        hintStyle: TextStyle(color: AppColors.textMuted),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(20),
+                      ),
+                    ),
             ),
-            const SizedBox(height: 10),
 
-            // Markdown Formatting Toolbar
+            // Single horizontal formatting row just above the keyboard
             if (!_previewMode)
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(
+                    top: BorderSide(color: AppColors.border, width: 1),
+                  ),
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _ToolbarButton(label: 'B', tooltip: 'Bold', onTap: () => _insertFormatting('**', '**')),
-                      _ToolbarButton(label: 'I', tooltip: 'Italic', isItalic: true, onTap: () => _insertFormatting('*', '*')),
-                      _ToolbarButton(label: 'H1', tooltip: 'Heading 1', onTap: () => _insertFormatting('\n# ')),
-                      _ToolbarButton(label: 'H2', tooltip: 'Heading 2', onTap: () => _insertFormatting('\n## ')),
-                      _ToolbarButton(label: '• List', tooltip: 'Bullet List', onTap: () => _insertFormatting('\n• ')),
-                      _ToolbarButton(label: '[ ] Todo', tooltip: 'Checklist', onTap: () => _insertFormatting('\n[ ] ')),
-                      _ToolbarButton(label: '</>', tooltip: 'Code Block', onTap: () => _insertFormatting('\n```\n', '\n```\n')),
-                      _ToolbarButton(label: '> Quote', tooltip: 'Blockquote', onTap: () => _insertFormatting('\n> ')),
+                      _FormatButton(
+                        label: 'B',
+                        isBold: true,
+                        tooltip: 'Bold',
+                        onTap: () => _insertFormatting('**', '**'),
+                      ),
+                      _FormatButton(
+                        label: 'I',
+                        isItalic: true,
+                        tooltip: 'Italic',
+                        onTap: () => _insertFormatting('*', '*'),
+                      ),
+                      _FormatButton(
+                        label: 'H1',
+                        tooltip: 'Heading 1',
+                        onTap: () => _insertFormatting('\n# '),
+                      ),
+                      _FormatButton(
+                        label: 'H2',
+                        tooltip: 'Heading 2',
+                        onTap: () => _insertFormatting('\n## '),
+                      ),
+                      _FormatButton(
+                        label: '• List',
+                        tooltip: 'Bullet list',
+                        onTap: () => _insertFormatting('\n- '),
+                      ),
+                      _FormatButton(
+                        label: '[ ] Checklist',
+                        tooltip: 'Checklist',
+                        onTap: () => _insertFormatting('\n- [ ] '),
+                      ),
+                      _FormatButton(
+                        label: '" Quote',
+                        tooltip: 'Quote',
+                        onTap: () => _insertFormatting('\n> '),
+                      ),
+                      _FormatButton(
+                        label: '</> Code',
+                        tooltip: 'Code',
+                        onTap: () => _insertFormatting('\n```\n', '\n```\n'),
+                      ),
                     ],
                   ),
                 ),
               ),
-            const SizedBox(height: 10),
-
-            // Note Body Editor or Rendered View
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.surface.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: _previewMode
-                    ? SingleChildScrollView(
-                        child: SelectionArea(
-                          child: Text(
-                            _contentController.text,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 15,
-                              height: 1.6,
-                            ),
-                          ),
-                        ),
-                      )
-                    : TextField(
-                        controller: _contentController,
-                        focusNode: _contentFocusNode,
-                        maxLines: null,
-                        expands: true,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          height: 1.5,
-                        ),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: 'Start writing your study notes here...',
-                          hintStyle: TextStyle(color: AppColors.textMuted),
-                        ),
-                      ),
-              ),
-            ),
           ],
         ),
       ),
@@ -229,41 +266,44 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 }
 
-class _ToolbarButton extends StatelessWidget {
+class _FormatButton extends StatelessWidget {
   final String label;
+  final bool isBold;
+  final bool isItalic;
   final String tooltip;
   final VoidCallback onTap;
-  final bool isItalic;
 
-  const _ToolbarButton({
+  const _FormatButton({
     required this.label,
+    this.isBold = false,
+    this.isItalic = false,
     required this.tooltip,
     required this.onTap,
-    this.isItalic = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.only(right: 6),
       child: Tooltip(
         message: tooltip,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border, width: 1),
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
+                color: AppColors.textPrimary,
                 fontSize: 13,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+                fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
               ),
             ),
           ),

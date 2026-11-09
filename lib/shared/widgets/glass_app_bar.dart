@@ -1,87 +1,47 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../app/theme/colors.dart';
-import '../../app/theme/liquid_glass_theme.dart';
 import '../../app/theme/typography.dart';
 
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final Widget? titleWidget;
-  final List<Widget>? actions;
   final Widget? leading;
-  final bool centerTitle;
-  final double elevation;
+  final List<Widget>? actions;
+  final PreferredSizeWidget? bottom;
 
   const GlassAppBar({
     super.key,
-    this.title = '',
-    this.titleWidget,
-    this.actions,
+    required this.title,
     this.leading,
-    this.centerTitle = false,
-    this.elevation = 0,
+    this.actions,
+    this.bottom,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 16);
+  Size get preferredSize => Size.fromHeight(
+        kToolbarHeight + (bottom?.preferredSize.height ?? 0.0),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: kToolbarHeight,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.glassShadow,
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
+    return AppBar(
+      backgroundColor: AppColors.background,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+          letterSpacing: -0.2,
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: LiquidGlassTheme.blurStandard,
-              sigmaY: LiquidGlassTheme.blurStandard,
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: AppColors.glassSurface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.glassBorderDark,
-                  width: 1,
-                ),
-              ),
-              child: NavigationToolbar(
-                leading: leading,
-                middle: titleWidget ??
-                    Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.headlineMedium.copyWith(
-                        color: AppColors.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                trailing: actions != null
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: actions!,
-                      )
-                    : null,
-                centerMiddle: centerTitle,
-              ),
-            ),
-          ),
-        ),
+      ),
+      leading: leading,
+      actions: actions,
+      bottom: bottom,
+      shape: const Border(
+        bottom: BorderSide(color: AppColors.border, width: 1),
       ),
     );
   }

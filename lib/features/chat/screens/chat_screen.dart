@@ -4,316 +4,284 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../shared/widgets/ai_thinking_indicator.dart';
-import '../../../shared/widgets/glass_app_bar.dart';
-import '../../../shared/widgets/glass_card.dart';
 import '../providers/chat_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String? notebookId;
+  final String? subject;
 
-  const ChatScreen({super.key, this.notebookId});
+  const ChatScreen({super.key, this.notebookId, this.subject});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-  final TextEditingController _textController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _textCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+
+  final List<Map<String, dynamic>> _messages = [
+    {
+      'isUser': true,
+      'text': 'What is the difference between Gram-positive and Gram-negative bacteria?',
+      'time': '3:41 PM',
+    },
+    {
+      'isUser': false,
+      'text':
+          'Gram-positive bacteria have a thick peptidoglycan layer and retain the crystal violet stain, appearing purple. Gram-negative bacteria have a thin peptidoglycan layer with an outer membrane and appear pink after counterstaining.',
+      'source': 'Notes, page 12',
+      'time': '3:42 PM',
+    },
+  ];
 
   @override
   void dispose() {
-    _textController.dispose();
-    _scrollController.dispose();
+    _textCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _sendMessage([String? textToSend]) {
+    final text = textToSend ?? _textCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.add({
+        'isUser': true,
+        'text': text,
+        'time': 'Now',
+      });
+      _textCtrl.clear();
+    });
+
+    // Simulate grounded response
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      setState(() {
+        _messages.add({
+          'isUser': false,
+          'text':
+              'Based on your uploaded syllabus and lecture slides, key exam focus includes cell wall synthesis inhibitors and differential diagnostic staining protocols.',
+          'source': 'Syllabus, page 4',
+          'time': 'Now',
+        });
+      });
+      _scrollToBottom();
+    });
+
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  void _sendMessage() {
-    final text = _textController.text.trim();
-    if (text.isEmpty) return;
-
-    _textController.clear();
-    final studentName = OfflineCacheService.getUserName();
-
-    ref.read(chatProvider.notifier).sendMessage(
-          question: text,
-          userId: 'local_student',
-          notebookId: widget.notebookId,
-          studentName: studentName,
-        );
-
-    _scrollToBottom();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final chatState = ref.watch(chatProvider);
-    final messages = chatState.messages;
-    final isThinking = chatState.isThinking;
-
-    // Trigger auto-scroll on new messages
-    ref.listen(chatProvider, (_, __) => _scrollToBottom());
+    final scope = widget.subject ?? 'Microbiology';
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: GlassAppBar(
-        title: 'Sage AI Study Chat',
+      appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/library');
-            }
-          },
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => context.pop(),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Sage', style: AppTypography.sectionHeading),
+            Text(scope, style: AppTypography.smallLabel),
+          ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
-            tooltip: 'Clear Chat History',
-            onPressed: () {
-              ref.read(chatProvider.notifier).clearHistory();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Chat conversation reset.'),
-                  duration: Duration(seconds: 1),
-                  backgroundColor: AppColors.surface,
-                ),
-              );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 22),
+            onSelected: (val) {
+              if (val == 'clear') setState(() => _messages.clear());
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'clear', child: Text('Clear chat')),
+            ],
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        bottom: true,
         child: Column(
           children: [
-            // Chat message list
             Expanded(
-              child: messages.isEmpty
+              child: _messages.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: AppColors.sageGlowGradient,
-                            ),
-                            child: const Icon(Icons.psychology, size: 36, color: Colors.white),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Hey ${OfflineCacheService.getUserName()}!',
-                            style: AppTypography.headlineMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Ask me any question from your lectures, formulas, or flashcards.',
-                            textAlign: TextAlign.center,
-                            style: AppTypography.bodySmall,
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Suggestions', style: AppTypography.sectionHeading),
+                            const SizedBox(height: 12),
+                            _buildSuggestionRow('Summarize this chapter'),
+                            _buildSuggestionRow('Quiz me on this topic'),
+                            _buildSuggestionRow('What should I study today?'),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.builder(
-                      controller: _scrollController,
+                      controller: _scrollCtrl,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      itemCount: messages.length,
+                      itemCount: _messages.length,
                       itemBuilder: (context, idx) {
-                        final msg = messages[idx];
-                        final bool isUser = msg.isUser;
+                        final msg = _messages[idx];
+                        final isUser = msg['isUser'] == true;
+                        final text = msg['text'] as String;
+                        final source = msg['source'] as String?;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: Row(
-                            mainAxisAlignment:
-                                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (!isUser) ...[
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  margin: const EdgeInsets.only(right: 10, top: 4),
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: AppColors.sageGlowGradient,
-                                  ),
-                                  child: const Icon(Icons.psychology, size: 18, color: Colors.white),
-                                ),
-                              ],
-                              Flexible(
-                                child: GlassCard(
-                                  borderRadius: 20,
-                                  padding: const EdgeInsets.all(16),
-                                  surfaceColor: isUser
-                                      ? AppColors.primary.withOpacity(0.3)
-                                      : Colors.white.withOpacity(0.06),
-                                  borderGradient: isUser
-                                      ? const LinearGradient(
-                                          colors: [Color(0x99818CF8), Color(0x336366F1)],
-                                        )
-                                      : null,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      SelectableText(
-                                        msg.text,
-                                        style: AppTypography.bodyMedium.copyWith(
-                                          color: Colors.white,
-                                          height: 1.45,
-                                        ),
-                                      ),
-                                      if (msg.citation != null) ...[
-                                        const SizedBox(height: 10),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.accentCyan.withOpacity(0.12),
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: AppColors.accentCyan.withOpacity(0.3),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.auto_stories,
-                                                size: 13,
-                                                color: AppColors.accentCyan,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Flexible(
-                                                child: Text(
-                                                  msg.citation!,
-                                                  style: const TextStyle(
-                                                    fontSize: 11,
-                                                    color: AppColors.accentCyan,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
+                          child: Align(
+                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.78,
                               ),
-                              if (isUser) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  margin: const EdgeInsets.only(top: 4),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: AppColors.primary.withOpacity(0.5),
-                                  ),
-                                  child: Center(
+                              child: Column(
+                                crossAxisAlignment:
+                                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: isUser ? AppColors.accent : AppColors.surface,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(14),
+                                        topRight: const Radius.circular(14),
+                                        bottomLeft: Radius.circular(isUser ? 14 : 2),
+                                        bottomRight: Radius.circular(isUser ? 2 : 14),
+                                      ),
+                                      border: !isUser
+                                          ? Border.all(color: AppColors.border, width: 1)
+                                          : null,
+                                    ),
                                     child: Text(
-                                      OfflineCacheService.getUserName().isNotEmpty
-                                          ? OfflineCacheService.getUserName()[0].toUpperCase()
-                                          : 'U',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
+                                      text,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        height: 1.45,
+                                        color: isUser ? Colors.white : AppColors.textPrimary,
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ],
+                                  if (source != null) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.link, size: 12, color: AppColors.accent),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          source,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.accent,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
                         );
                       },
                     ),
             ),
 
-            if (isThinking) ...[
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: AiThinkingIndicator(),
-              ),
-            ],
-
-            // Input Bar with Glassmorphism
+            // Pinned Input Row at Bottom
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surface.withOpacity(0.92),
-                border: Border(
-                  top: BorderSide(color: Colors.white.withOpacity(0.1)),
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                border: Border(top: BorderSide(color: AppColors.border, width: 1)),
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.mic, color: AppColors.accentCyan),
-                    tooltip: 'Launch Voice Tutor',
-                    onPressed: () => context.go('/voice-tutor'),
-                  ),
                   Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      style: const TextStyle(color: Colors.white),
-                      textInputAction: TextInputAction.send,
-                      decoration: InputDecoration(
-                        hintText: 'Ask Sage about your notes & exams...',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.06),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
-                        ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border, width: 1),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
+                      child: TextField(
+                        controller: _textCtrl,
+                        style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                        decoration: const InputDecoration(
+                          hintText: 'Ask Sage...',
+                          hintStyle: AppTypography.secondary,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.sageGlowGradient,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_upward, color: Colors.white),
-                      onPressed: _sendMessage,
-                    ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    icon: const Icon(Icons.mic_none, color: AppColors.textPrimary, size: 22),
+                    tooltip: 'Voice Input',
+                    onPressed: () => context.push('/voice-tutor'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: AppColors.accent, size: 22),
+                    tooltip: 'Send',
+                    onPressed: () => _sendMessage(),
                   ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionRow(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () => _sendMessage(text),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border, width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(text, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+              const Icon(Icons.arrow_forward, size: 16, color: AppColors.textSecondary),
+            ],
+          ),
         ),
       ),
     );
