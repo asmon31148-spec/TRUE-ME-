@@ -13,6 +13,7 @@ class GlassButton extends StatelessWidget {
   final Color? surfaceColor;
   final Color? borderColor;
   final double? borderRadius;
+  final EdgeInsetsGeometry? padding;
 
   const GlassButton({
     super.key,
@@ -26,6 +27,7 @@ class GlassButton extends StatelessWidget {
     this.surfaceColor,
     this.borderColor,
     this.borderRadius,
+    this.padding,
   });
 
   @override
@@ -42,6 +44,7 @@ class GlassButton extends StatelessWidget {
             backgroundColor: surfaceColor ?? AppColors.accent,
             foregroundColor: Colors.white,
             elevation: 0,
+            padding: padding,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
           ),
           onPressed: onPressed,
@@ -73,6 +76,7 @@ class GlassButton extends StatelessWidget {
           backgroundColor: surfaceColor ?? AppColors.surface,
           foregroundColor: AppColors.textPrimary,
           elevation: 0,
+          padding: padding,
           side: BorderSide(color: borderColor ?? AppColors.border, width: 1.0),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
         ),
