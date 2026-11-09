@@ -72,7 +72,7 @@ final appRouter = GoRouter(
       path: '/chat',
       builder: (context, state) {
         final scope = state.uri.queryParameters['scope'];
-        return ChatScreen(subjectScope: scope);
+        return ChatScreen(subject: scope);
       },
     ),
     GoRoute(

@@ -10,7 +10,9 @@ class TrueMeApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'True Me',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.light,
       routerConfig: appRouter,
     );
   }

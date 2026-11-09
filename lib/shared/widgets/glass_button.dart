@@ -12,6 +12,7 @@ class GlassButton extends StatelessWidget {
   final Widget? icon;
   final Color? surfaceColor;
   final Color? borderColor;
+  final double? borderRadius;
 
   const GlassButton({
     super.key,
@@ -24,11 +25,13 @@ class GlassButton extends StatelessWidget {
     this.icon,
     this.surfaceColor,
     this.borderColor,
+    this.borderRadius,
   });
 
   @override
   Widget build(BuildContext context) {
     final effectiveChild = child ?? Text(text ?? '');
+    final radius = borderRadius ?? 12.0;
 
     if (isPrimary) {
       return SizedBox(
@@ -39,7 +42,7 @@ class GlassButton extends StatelessWidget {
             backgroundColor: surfaceColor ?? AppColors.accent,
             foregroundColor: Colors.white,
             elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
           ),
           onPressed: onPressed,
           child: Row(
@@ -63,15 +66,15 @@ class GlassButton extends StatelessWidget {
     }
 
     return SizedBox(
-      width: width,
+      width: width ?? double.infinity,
       height: height,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           backgroundColor: surfaceColor ?? AppColors.surface,
           foregroundColor: AppColors.textPrimary,
           elevation: 0,
-          side: BorderSide(color: borderColor ?? AppColors.border, width: 1),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          side: BorderSide(color: borderColor ?? AppColors.border, width: 1.0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
         ),
         onPressed: onPressed,
         child: Row(
@@ -82,7 +85,7 @@ class GlassButton extends StatelessWidget {
             DefaultTextStyle(
               style: const TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: AppColors.textPrimary,
                 fontFamily: AppTypography.fontFamily,
               ),

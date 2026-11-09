@@ -124,6 +124,17 @@ class OfflineCacheService {
     return DateTime.now().add(const Duration(days: 45));
   }
 
+  static Future<void> saveTargetExamDate(DateTime date) async {
+    final profile = getUserProfile();
+    await saveUserProfile(
+      name: profile['name'] ?? 'Student',
+      email: profile['email'] ?? 'student@trueme.ai',
+      subjects: (profile['subjects'] as List?)?.cast<String>(),
+      learningStyle: profile['learningStyle'],
+      targetExamDate: date,
+    );
+  }
+
   static Future<void> logout() async {
     final box = Hive.box(userProfileBox);
     final profile = getUserProfile();

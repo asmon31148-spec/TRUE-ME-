@@ -8,6 +8,10 @@ class AppPrimaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
   final Widget? icon;
+  final double? height;
+  final double? width;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   const AppPrimaryButton({
     super.key,
@@ -15,27 +19,34 @@ class AppPrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.isLoading = false,
     this.icon,
+    this.height,
+    this.width,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bg = backgroundColor ?? AppColors.accent;
+    final fg = foregroundColor ?? Colors.white;
+
     return SizedBox(
-      width: double.infinity,
-      height: 52,
+      width: width ?? double.infinity,
+      height: height ?? 52,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.accent.withOpacity(0.5),
+          backgroundColor: bg,
+          foregroundColor: fg,
+          disabledBackgroundColor: bg.withOpacity(0.5),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: isLoading ? null : onPressed,
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -43,10 +54,10 @@ class AppPrimaryButton extends StatelessWidget {
                   if (icon != null) ...[icon!, const SizedBox(width: 8)],
                   Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: fg,
                     ),
                   ),
                 ],
@@ -61,19 +72,23 @@ class AppSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final Widget? icon;
+  final double? height;
+  final double? width;
 
   const AppSecondaryButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
+    this.height,
+    this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
-      height: 52,
+      width: width ?? double.infinity,
+      height: height ?? 52,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           backgroundColor: AppColors.surface,
@@ -224,6 +239,7 @@ class AppInput extends StatelessWidget {
   final String? hintText;
   final TextEditingController? controller;
   final bool obscureText;
+  final bool autofocus;
   final TextInputType keyboardType;
   final String? errorText;
   final Widget? prefixIcon;
@@ -236,6 +252,7 @@ class AppInput extends StatelessWidget {
     this.hintText,
     this.controller,
     this.obscureText = false,
+    this.autofocus = false,
     this.keyboardType = TextInputType.text,
     this.errorText,
     this.prefixIcon,
@@ -262,6 +279,7 @@ class AppInput extends StatelessWidget {
         TextField(
           controller: controller,
           obscureText: obscureText,
+          autofocus: autofocus,
           keyboardType: keyboardType,
           onChanged: onChanged,
           style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
