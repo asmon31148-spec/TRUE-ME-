@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_card.dart';
 
@@ -30,23 +31,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(
-      text: widget.initialTitle ?? 'Lecture Notes — System Calls & Kernels',
+      text: widget.initialTitle ?? '',
     );
     _contentController = TextEditingController(
-      text: widget.initialContent ??
-          '# Introduction to System Calls\n\n'
-          'A **system call** is the programmatic mechanism by which a computer program requests a service from the kernel of the operating system it is executed on.\n\n'
-          '### Core Concepts:\n'
-          '• **User Mode vs Kernel Mode**: Hardware-enforced separation for memory security\n'
-          '• **Trap Instructions**: Software interrupts that transfer CPU control to the kernel dispatcher\n'
-          '• **Context Switching**: Register save/restore cycles causing execution overhead\n\n'
-          '```c\n'
-          '// Example: fork() and exec() paradigm\n'
-          'pid_t pid = fork();\n'
-          'if (pid == 0) {\n'
-          '    execlp("/bin/ls", "ls", NULL);\n'
-          '}\n'
-          '```\n',
+      text: widget.initialContent ?? '',
     );
   }
 
@@ -109,13 +97,31 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           IconButton(
             icon: const Icon(Icons.check, color: AppColors.accentCyan),
             tooltip: 'Save Note',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Note saved to notebook!'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
+            onPressed: () async {
+              final title = _titleController.text.trim();
+              final content = _contentController.text.trim();
+              if (title.isEmpty && content.isEmpty) return;
+
+              final id = widget.noteId ?? 'note_${DateTime.now().millisecondsSinceEpoch}';
+              await OfflineCacheService.cacheNote(id, {
+                'id': id,
+                'title': title.isNotEmpty ? title : 'Untitled Note',
+                'content': content,
+                'updatedAt': DateTime.now().toIso8601String(),
+              });
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Note saved to notebook!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/library');
+                }
+              }
             },
           ),
         ],

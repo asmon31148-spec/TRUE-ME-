@@ -151,6 +151,42 @@ class OfflineCacheService {
     await box.delete(notebookId);
   }
 
+  static Future<Map<String, dynamic>> createNotebook({
+    required String title,
+    required String subject,
+    List<String>? tags,
+    int? colorValue,
+  }) async {
+    final box = Hive.box(notebooksBox);
+    final id = 'nb_${DateTime.now().millisecondsSinceEpoch}';
+    final nb = {
+      'id': id,
+      'userId': 'current_user',
+      'title': title.trim(),
+      'subject': subject.trim(),
+      'colorValue': colorValue ?? 0xFF6366F1,
+      'tags': tags ?? [subject, 'Lecture Notes'],
+      'fileRefs': <String>[],
+      'documents': <Map<String, dynamic>>[],
+      'createdAt': DateTime.now().toIso8601String(),
+      'lastModified': DateTime.now().toIso8601String(),
+    };
+    await box.put(id, nb);
+    return nb;
+  }
+
+  static Future<void> addDocumentToNotebook(String notebookId, Map<String, dynamic> doc) async {
+    final box = Hive.box(notebooksBox);
+    final nb = getCachedNotebook(notebookId);
+    if (nb != null) {
+      final docs = List<Map<String, dynamic>>.from(nb['documents'] ?? []);
+      docs.add(doc);
+      nb['documents'] = docs;
+      nb['lastModified'] = DateTime.now().toIso8601String();
+      await box.put(notebookId, nb);
+    }
+  }
+
   static List<Map<String, dynamic>> getAllCachedNotebooks() {
     final box = Hive.box(notebooksBox);
     final list = box.values
@@ -158,47 +194,36 @@ class OfflineCacheService {
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
 
-    if (list.isEmpty) {
-      // Seed initial high-yield default notebooks
-      final defaults = [
-        {
-          'id': 'nb_1',
-          'userId': 'default_user',
-          'title': 'Operating Systems & Concurrency',
-          'subject': 'Computer Science',
-          'colorValue': 0xFF6366F1,
-          'tags': ['Deadlocks', 'Semaphores', 'Virtual Memory'],
-          'fileRefs': ['Chapter 3 — Process Synchronization & Mutexes.pdf', 'Lecture 7 — Deadlock Prevention.m4a'],
-          'createdAt': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(),
-          'lastModified': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
-        },
-        {
-          'id': 'nb_2',
-          'userId': 'default_user',
-          'title': 'Multivariable Calculus & Linear Algebra',
-          'subject': 'Mathematics',
-          'colorValue': 0xFF06B6D4,
-          'tags': ['Eigenvalues', 'Stokes Theorem', 'Vector Fields'],
-          'fileRefs': ['Unit 4 — Double Integrals & Green Theorem.pdf'],
-          'createdAt': DateTime.now().subtract(const Duration(days: 8)).toIso8601String(),
-          'lastModified': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
-        },
-        {
-          'id': 'nb_3',
-          'userId': 'default_user',
-          'title': 'Quantum Mechanics & Wave Theory',
-          'subject': 'Physics',
-          'colorValue': 0xFFEC4899,
-          'tags': ['Schrödinger Eq', 'Hamiltonian', 'State Vectors'],
-          'fileRefs': ['Quantum Harmonic Oscillator Notes.pdf'],
-          'createdAt': DateTime.now().subtract(const Duration(days: 12)).toIso8601String(),
-          'lastModified': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
-        },
-      ];
-      for (final n in defaults) {
+    // Clear legacy hardcoded notebooks
+    final hasOnlyLegacy = list.isNotEmpty &&
+        list.every((n) => n['id'] == 'nb_1' || n['id'] == 'nb_2' || n['id'] == 'nb_3');
+
+    if (list.isEmpty || hasOnlyLegacy) {
+      if (hasOnlyLegacy) {
+        box.clear();
+      }
+      final subjects = getUserSubjects();
+      final List<Map<String, dynamic>> seeds = [];
+      final colors = [0xFF6366F1, 0xFF06B6D4, 0xFFEC4899, 0xFF10B981, 0xFFF59E0B];
+      for (int i = 0; i < subjects.length; i++) {
+        final sub = subjects[i];
+        seeds.add({
+          'id': 'nb_${DateTime.now().millisecondsSinceEpoch}_$i',
+          'userId': 'current_user',
+          'title': '$sub Core Study & Notes',
+          'subject': sub,
+          'colorValue': colors[i % colors.length],
+          'tags': [sub, 'Active Recall', 'Lecture Notes'],
+          'fileRefs': <String>[],
+          'documents': <Map<String, dynamic>>[],
+          'createdAt': DateTime.now().toIso8601String(),
+          'lastModified': DateTime.now().toIso8601String(),
+        });
+      }
+      for (final n in seeds) {
         box.put(n['id'], n);
       }
-      return defaults;
+      return seeds;
     }
     return list;
   }
@@ -231,6 +256,11 @@ class OfflineCacheService {
     final data = box.get(deckId);
     if (data is Map) return Map<String, dynamic>.from(data);
     return null;
+  }
+
+  static Future<void> deleteDeck(String deckId) async {
+    final box = Hive.box(flashcardsBox);
+    await box.delete(deckId);
   }
 
   static List<Map<String, dynamic>> getAllCachedDecks() {

@@ -35,8 +35,9 @@ final sageAgentProvider = Provider<SageAgent>((ref) {
 final dailyStudyPlanProvider =
     FutureProvider.family<DailyStudyPlanModel, UserModel>((ref, user) async {
   final sage = ref.watch(sageAgentProvider);
+  final weakTopics = user.subjects.map((s) => '$s Core Synthesis').toList();
   return sage.generateDailyStudyPlan(
     user: user,
-    weakTopics: ['Calculus Eigenvalues', 'OS Process Synchronization'],
+    weakTopics: weakTopics.isNotEmpty ? weakTopics : ['Foundational Problem Solving'],
   );
 });

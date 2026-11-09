@@ -51,9 +51,6 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
           rating: rating,
         );
 
-    // Save updated deck state to Hive offline cache
-    OfflineCacheService.cacheDeck(deck.id, deck.toMap());
-
     setState(() {
       _isFlipped = false;
       if (_currentCardIdx < deck.cards.length - 1) {
@@ -72,13 +69,168 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     });
   }
 
+  void _showGenerateDeckDialog() {
+    final topicController = TextEditingController();
+    final userSubjects = OfflineCacheService.getUserSubjects();
+    String selectedSubject = userSubjects.isNotEmpty ? userSubjects.first : 'General';
+    bool isGeneratingLocal = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: AppColors.accentCyan, size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Text('Generate AI Deck', style: TextStyle(color: Colors.white, fontSize: 18)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Subject', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedSubject,
+                        dropdownColor: AppColors.surface,
+                        isExpanded: true,
+                        style: const TextStyle(color: Colors.white),
+                        items: userSubjects.map((s) {
+                          return DropdownMenuItem(value: s, child: Text(s));
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setDialogState(() => selectedSubject = val);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Topic / Chapter Concept', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: topicController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Mitosis & Meiosis, Thermodynamics...',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.06),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  if (isGeneratingLocal) ...[
+                    const SizedBox(height: 20),
+                    const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(color: AppColors.accentCyan),
+                          SizedBox(height: 10),
+                          Text('Sage AI is creating active recall cards...', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                onPressed: isGeneratingLocal
+                    ? null
+                    : () async {
+                        final topic = topicController.text.trim();
+                        if (topic.isEmpty) return;
+
+                        setDialogState(() => isGeneratingLocal = true);
+                        try {
+                          await ref.read(flashcardProvider.notifier).generateDeck(
+                                notebookId: 'nb_custom',
+                                subject: selectedSubject,
+                                topic: topic,
+                                content: 'Key definitions and high-yield questions on $topic in $selectedSubject',
+                                count: 6,
+                              );
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('🎉 Sage generated a new deck for "$topic"!'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() => isGeneratingLocal = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      },
+                child: const Text('Generate with Sage', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmDeleteDeck(FlashcardDeckModel deck) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete Deck', style: TextStyle(color: Colors.white)),
+        content: Text('Are you sure you want to delete "${deck.topic}"?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              await ref.read(flashcardProvider.notifier).deleteDeck(deck.id);
+              if (mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final flashState = ref.watch(flashcardProvider);
     final allDecks = flashState.decks;
 
     if (_isStudying && _selectedDeck != null) {
-      // Find latest state of selected deck from provider
       final liveDeck = allDecks.firstWhere(
         (d) => d.id == _selectedDeck!.id,
         orElse: () => _selectedDeck!,
@@ -119,89 +271,129 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
               Expanded(
                 child: GestureDetector(
                   onTap: () => setState(() => _isFlipped = !_isFlipped),
-                  child: GlassCard(
-                    borderRadius: 32,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                    width: double.infinity,
                     padding: const EdgeInsets.all(28),
-                    child: Center(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: _isFlipped
-                                    ? AppColors.success.withOpacity(0.2)
-                                    : AppColors.primary.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                    decoration: BoxDecoration(
+                      color: _isFlipped ? AppColors.surface : AppColors.surface.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: _isFlipped
+                            ? AppColors.primary.withOpacity(0.4)
+                            : Colors.white.withOpacity(0.1),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _isFlipped
+                              ? AppColors.primary.withOpacity(0.15)
+                              : Colors.black.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _isFlipped ? 'ANSWER (BACK)' : 'QUESTION (FRONT)',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: AppColors.accentCyan,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Expanded(
+                          child: Center(
+                            child: SingleChildScrollView(
                               child: Text(
-                                _isFlipped ? 'ANSWER (BACK)' : 'QUESTION (FRONT)',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.0,
-                                  color: _isFlipped ? AppColors.success : AppColors.primaryLight,
+                                _isFlipped ? card.back : card.front,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.5,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
-                            Text(
-                              _isFlipped ? card.back : card.front,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.headlineMedium.copyWith(height: 1.5),
-                            ),
-                            const SizedBox(height: 32),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.touch_app, size: 16, color: Colors.white.withOpacity(0.4)),
+                            const SizedBox(width: 6),
                             Text(
                               _isFlipped ? 'Tap to see question' : 'Tap to reveal answer',
-                              style: AppTypography.bodySmall,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.4),
+                              ),
                             ),
                           ],
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
-              // SM-2 Recall Rating Buttons
+              // Rating Buttons
               if (_isFlipped) ...[
+                const Text(
+                  'How well did you know this concept?',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
                       child: GlassButton(
-                        height: 44,
-                        padding: EdgeInsets.zero,
-                        child: const Text('Blackout (0)'),
-                        onPressed: () => _rateCurrentCard(liveDeck, 0),
+                        surfaceColor: AppColors.error.withOpacity(0.2),
+                        borderColor: AppColors.error.withOpacity(0.4),
+                        child: const Text('Again (1)', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        onPressed: () => _rateCurrentCard(liveDeck, 1),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: GlassButton(
-                        height: 44,
-                        padding: EdgeInsets.zero,
-                        child: const Text('Hard (2)'),
+                        surfaceColor: AppColors.warning.withOpacity(0.2),
+                        borderColor: AppColors.warning.withOpacity(0.4),
+                        child: const Text('Hard (2)', style: TextStyle(color: Colors.white, fontSize: 12)),
                         onPressed: () => _rateCurrentCard(liveDeck, 2),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: GlassButton(
-                        height: 44,
-                        padding: EdgeInsets.zero,
-                        child: const Text('Good (4)'),
-                        onPressed: () => _rateCurrentCard(liveDeck, 4),
+                        surfaceColor: AppColors.primary.withOpacity(0.3),
+                        borderColor: AppColors.primaryLight.withOpacity(0.4),
+                        child: const Text('Good (3)', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        onPressed: () => _rateCurrentCard(liveDeck, 3),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: GlassButton(
-                        height: 44,
-                        padding: EdgeInsets.zero,
-                        isPrimary: true,
-                        child: const Text('Easy (5)'),
+                        surfaceColor: AppColors.success.withOpacity(0.2),
+                        borderColor: AppColors.success.withOpacity(0.4),
+                        child: const Text('Easy (5)', style: TextStyle(color: Colors.white, fontSize: 12)),
                         onPressed: () => _rateCurrentCard(liveDeck, 5),
                       ),
                     ),
@@ -236,6 +428,13 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
           onPressed: () => context.go('/library'),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: AppColors.accentCyan),
+            tooltip: 'Generate AI Deck',
+            onPressed: _showGenerateDeckDialog,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -277,9 +476,10 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('All Decks', style: AppTypography.headlineMedium),
-              Text(
-                '${allDecks.length} Decks',
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+              TextButton.icon(
+                icon: const Icon(Icons.add, size: 16, color: AppColors.accentCyan),
+                label: const Text('New Deck', style: TextStyle(color: AppColors.accentCyan, fontWeight: FontWeight.bold)),
+                onPressed: _showGenerateDeckDialog,
               ),
             ],
           ),
@@ -288,11 +488,21 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
             GlassCard(
               padding: const EdgeInsets.all(32),
               borderRadius: 20,
-              child: const Center(
-                child: Text(
-                  'No decks created yet. Upload lecture notes or open a notebook to generate AI flashcards!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMuted),
+              child: Center(
+                child: Column(
+                  children: [
+                    const Icon(Icons.style_outlined, size: 48, color: Colors.white38),
+                    const SizedBox(height: 12),
+                    const Text('No decks created yet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text('Tap "New Deck" to generate AI active recall cards on any topic.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const SizedBox(height: 16),
+                    GlassButton(
+                      isPrimary: true,
+                      child: const Text('Generate First Deck'),
+                      onPressed: _showGenerateDeckDialog,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -344,7 +554,11 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white54),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20, color: Colors.white38),
+                      tooltip: 'Delete Deck',
+                      onPressed: () => _confirmDeleteDeck(deck),
+                    ),
                   ],
                 ),
               ),

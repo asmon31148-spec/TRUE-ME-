@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/models/quiz_model.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../shared/widgets/glass_card.dart';
@@ -18,93 +19,62 @@ class QuizSetupScreen extends ConsumerStatefulWidget {
 
 class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
   bool _isPlaying = false;
-  int _currentQuestionIdx = 0;
-  int? _selectedOptionIdx;
-  bool _hasSubmitted = false;
-  int _scoreCount = 0;
+  final TextEditingController _topicController = TextEditingController();
+  late String _selectedSubject;
+  late List<String> _userSubjects;
   String _selectedDifficulty = 'medium';
 
-  final List<QuizQuestionModel> _defaultSampleQuestions = const [
-    QuizQuestionModel(
-      id: 'q1',
-      question: 'Which of the following is NOT one of the Coffman conditions for deadlocks?',
-      options: [
-        'Mutual Exclusion',
-        'Hold and Wait',
-        'Preemptive Scheduling',
-        'Circular Wait',
-      ],
-      correctOptionIndex: 2,
-      explanation: 'The condition is "No Preemption". Preemptive scheduling actually helps break or prevent deadlocks.',
-    ),
-    QuizQuestionModel(
-      id: 'q2',
-      question: "In Banker's Algorithm, what must hold true for a state to be classified as 'safe'?",
-      options: [
-        'All processes have finished executing',
-        'There exists at least one sequence of process allocations that does not lead to deadlock',
-        'All resources are currently fully allocated to CPU threads',
-        'No processes are currently waiting on I/O',
-      ],
-      correctOptionIndex: 1,
-      explanation: 'A safe state guarantees that there exists at least one order in which all processes can satisfy their maximum claim without deadlock.',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _userSubjects = OfflineCacheService.getUserSubjects();
+    _selectedSubject = _userSubjects.isNotEmpty ? _userSubjects.first : 'Computer Science';
+    _topicController.text = 'Core Principles & Formulas';
+  }
 
-  List<QuizQuestionModel> _getActiveQuestions(QuizState state) {
-    if (state.currentQuiz != null && state.currentQuiz!.questions.isNotEmpty) {
-      return state.currentQuiz!.questions;
+  @override
+  void dispose() {
+    _topicController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _generateAndStartQuiz() async {
+    final topic = _topicController.text.trim();
+    if (topic.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a topic for the quiz.')),
+      );
+      return;
     }
-    return _defaultSampleQuestions;
-  }
 
-  void _handleOptionSelect(int idx) {
-    if (_hasSubmitted) return;
-    setState(() => _selectedOptionIdx = idx);
-  }
-
-  void _submitAnswer(List<QuizQuestionModel> questions) {
-    if (_selectedOptionIdx == null) return;
-    final currentQ = questions[_currentQuestionIdx];
-    final isCorrect = _selectedOptionIdx == currentQ.correctOptionIndex;
-
-    setState(() {
-      _hasSubmitted = true;
-      if (isCorrect) _scoreCount++;
-    });
-  }
-
-  void _nextQuestion(List<QuizQuestionModel> questions) {
-    setState(() {
-      _selectedOptionIdx = null;
-      _hasSubmitted = false;
-      if (_currentQuestionIdx < questions.length - 1) {
-        _currentQuestionIdx++;
-      } else {
-        _isPlaying = false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 Quiz Completed! Score: $_scoreCount/${questions.length}'),
-            backgroundColor: AppColors.success,
-          ),
+    await ref.read(quizProvider.notifier).generateQuiz(
+          notebookId: 'nb_active',
+          subject: _selectedSubject,
+          topic: topic,
+          difficulty: _selectedDifficulty,
+          count: 5,
         );
-      }
-    });
+
+    final quiz = ref.read(quizProvider).currentQuiz;
+    if (quiz != null && quiz.questions.isNotEmpty) {
+      setState(() => _isPlaying = true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final quizState = ref.watch(quizProvider);
-    final questions = _getActiveQuestions(quizState);
+    final quiz = quizState.currentQuiz;
 
-    if (_isPlaying) {
-      final safeIdx = _currentQuestionIdx < questions.length ? _currentQuestionIdx : 0;
-      final q = questions[safeIdx];
+    if (_isPlaying && quiz != null && quiz.questions.isNotEmpty) {
+      final safeIdx = quizState.currentQuestionIndex.clamp(0, quiz.questions.length - 1);
+      final q = quiz.questions[safeIdx];
+      final isFinished = quizState.hasSubmitted && safeIdx == quiz.questions.length - 1;
 
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: GlassAppBar(
-          title: 'Question ${safeIdx + 1}/${questions.length}',
+          title: '${quiz.subject} • Q${safeIdx + 1}/${quiz.questions.length}',
           leading: IconButton(
             icon: const Icon(Icons.close, color: Colors.white),
             onPressed: () => setState(() => _isPlaying = false),
@@ -118,38 +88,66 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
-                  value: (safeIdx + 1) / questions.length,
+                  value: (safeIdx + 1) / quiz.questions.length,
                   minHeight: 6,
                   backgroundColor: Colors.white.withOpacity(0.1),
-                  valueColor: const AlwaysStoppedAnimation(AppColors.accentCyan),
+                  valueColor: const AlwaysStoppedAnimation(AppColors.primaryLight),
                 ),
               ),
               const SizedBox(height: 24),
 
               // Question Card
               GlassCard(
-                padding: const EdgeInsets.all(20),
-                borderRadius: 24,
-                child: Text(
-                  q.question,
-                  style: AppTypography.headlineMedium.copyWith(height: 1.4),
+                padding: const EdgeInsets.all(22),
+                borderRadius: 22,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentCyan.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            quiz.difficulty.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                              color: AppColors.accentCyan,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Score: ${quizState.correctCount}',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(q.question, style: AppTypography.titleLarge),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
-              // Options
+              // Multiple-Choice Options
               Expanded(
                 child: ListView.builder(
                   itemCount: q.options.length,
                   itemBuilder: (context, idx) {
-                    final opt = q.options[idx];
-                    final isSelected = _selectedOptionIdx == idx;
+                    final optText = q.options[idx];
+                    final isSelected = quizState.selectedOptionIndex == idx;
                     final isCorrect = idx == q.correctOptionIndex;
 
-                    Color? borderColor;
-                    Color? bgColor;
+                    Color borderColor = Colors.white.withOpacity(0.1);
+                    Color bgColor = Colors.white.withOpacity(0.04);
 
-                    if (_hasSubmitted) {
+                    if (quizState.hasSubmitted) {
                       if (isCorrect) {
                         borderColor = AppColors.success;
                         bgColor = AppColors.success.withOpacity(0.18);
@@ -159,61 +157,68 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                       }
                     } else if (isSelected) {
                       borderColor = AppColors.accentCyan;
-                      bgColor = AppColors.accent.withOpacity(0.12);
+                      bgColor = AppColors.accentCyan.withOpacity(0.15);
                     }
 
-                    return GlassCard(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      borderRadius: 16,
-                      surfaceColor: bgColor,
-                      borderGradient: borderColor != null
-                          ? LinearGradient(colors: [borderColor, borderColor])
-                          : null,
-                      onTap: () => _handleOptionSelect(idx),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected
-                                  ? AppColors.accentCyan
-                                  : Colors.white.withOpacity(0.1),
-                            ),
-                            child: Center(
-                              child: Text(
-                                String.fromCharCode(65 + idx),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: isSelected ? Colors.black : Colors.white,
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: GestureDetector(
+                        onTap: () => ref.read(quizProvider.notifier).selectOption(idx),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: borderColor, width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected
+                                      ? (quizState.hasSubmitted
+                                          ? (isCorrect ? AppColors.success : AppColors.error)
+                                          : AppColors.accentCyan)
+                                      : Colors.white.withOpacity(0.08),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  String.fromCharCode(65 + idx),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: isSelected ? Colors.black : Colors.white70,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              opt,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: isSelected ? Colors.white : AppColors.textPrimary,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  optText,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     );
                   },
                 ),
               ),
 
-              // Explanation if submitted
-              if (_hasSubmitted) ...[
+              // Explanation Card
+              if (quizState.hasSubmitted) ...[
                 GlassCard(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   borderRadius: 16,
                   surfaceColor: AppColors.surface,
                   child: Column(
@@ -228,29 +233,39 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                           color: AppColors.accentCyan,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(q.explanation, style: AppTypography.bodySmall),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
               ],
 
               // Action Button
               GlassButton(
                 isPrimary: true,
                 width: double.infinity,
-                onPressed: _selectedOptionIdx == null
+                onPressed: quizState.selectedOptionIndex == null
                     ? null
-                    : _hasSubmitted
-                        ? () => _nextQuestion(questions)
-                        : () => _submitAnswer(questions),
+                    : quizState.hasSubmitted
+                        ? (isFinished
+                            ? () {
+                                setState(() => _isPlaying = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('🎉 Completed! Final Score: ${quizState.correctCount}/${quiz.questions.length}'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            : () => ref.read(quizProvider.notifier).nextQuestion())
+                        : () => ref.read(quizProvider.notifier).submitAnswer(),
                 child: Text(
-                  !_hasSubmitted
+                  !quizState.hasSubmitted
                       ? 'Submit Answer'
-                      : safeIdx < questions.length - 1
-                          ? 'Next Question'
-                          : 'Finish Quiz',
+                      : isFinished
+                          ? 'Finish Quiz'
+                          : 'Next Question',
                 ),
               ),
               const SizedBox(height: 12),
@@ -263,82 +278,139 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: GlassAppBar(
-        title: 'Adaptive Quiz',
+        title: 'Adaptive AI Quiz',
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
           onPressed: () => context.go('/library'),
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           children: [
             GlassCard(
               borderRadius: 24,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(22),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.primary.withOpacity(0.18),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.primary.withOpacity(0.18),
+                      ),
+                      child: const Icon(Icons.psychology_alt, color: AppColors.accentCyan, size: 36),
                     ),
-                    child: const Icon(Icons.psychology_alt, color: AppColors.primaryLight, size: 40),
+                  ),
+                  const SizedBox(height: 14),
+                  const Center(
+                    child: Text('Adaptive Mastery Quiz', style: AppTypography.headlineMedium),
+                  ),
+                  const SizedBox(height: 6),
+                  const Center(
+                    child: Text(
+                      'Sage uses active recall to test your exact course concepts.',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySmall,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Subject Selector
+                  const Text('Select Subject', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedSubject,
+                        dropdownColor: AppColors.surface,
+                        isExpanded: true,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        items: _userSubjects.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedSubject = val);
+                        },
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 18),
-                  const Text('Adaptive Mastery Quiz', style: AppTypography.headlineMedium),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Sage generates adaptive questions calibrated to your weak topics. Scoring >85% automatically raises your subject level.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodySmall,
+
+                  // Topic Input
+                  const Text('Topic / Chapter Concept', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _topicController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Thermodynamics, Mitochondria, Taylor Series...',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.06),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
                   ),
                   const SizedBox(height: 20),
 
                   // Difficulty Chips
+                  const Text('Difficulty Level', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: ['easy', 'medium', 'hard'].map((d) {
                       final isSel = _selectedDifficulty == d;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text(d.toUpperCase()),
-                          selected: isSel,
-                          selectedColor: AppColors.accentCyan.withOpacity(0.3),
-                          backgroundColor: Colors.white.withOpacity(0.06),
-                          labelStyle: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isSel ? AppColors.accentCyan : AppColors.textMuted,
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: ChoiceChip(
+                            label: Center(child: Text(d.toUpperCase())),
+                            selected: isSel,
+                            selectedColor: AppColors.accentCyan.withOpacity(0.3),
+                            backgroundColor: Colors.white.withOpacity(0.06),
+                            labelStyle: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isSel ? AppColors.accentCyan : AppColors.textMuted,
+                            ),
+                            onSelected: (_) => setState(() => _selectedDifficulty = d),
                           ),
-                          onSelected: (_) => setState(() => _selectedDifficulty = d),
                         ),
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
+                  // Start Quiz Button
                   if (quizState.isGenerating)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: CircularProgressIndicator(color: AppColors.accentCyan),
+                    const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(color: AppColors.accentCyan),
+                          SizedBox(height: 12),
+                          Text('Sage AI is formulating exam questions...', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        ],
+                      ),
                     )
-                  else ...[
+                  else
                     GlassButton(
                       isPrimary: true,
                       width: double.infinity,
-                      child: Text('Start Quiz (${questions.length} Questions)'),
-                      onPressed: () => setState(() {
-                        _isPlaying = true;
-                        _currentQuestionIdx = 0;
-                        _selectedOptionIdx = null;
-                        _hasSubmitted = false;
-                        _scoreCount = 0;
-                      }),
+                      onPressed: _generateAndStartQuiz,
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.bolt, size: 20),
+                          SizedBox(width: 8),
+                          Text('Generate & Start AI Quiz'),
+                        ],
+                      ),
                     ),
-                  ],
                 ],
               ),
             ),

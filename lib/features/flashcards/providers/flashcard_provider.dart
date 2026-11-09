@@ -4,6 +4,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
+import '../../../core/services/offline_cache_service.dart';
 
 class FlashcardState {
   final List<FlashcardDeckModel> decks;
@@ -11,7 +12,7 @@ class FlashcardState {
   final String? error;
 
   const FlashcardState({
-    this.decks = const [],
+    required this.decks,
     this.isGenerating = false,
     this.error,
   });
@@ -34,55 +35,76 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
 
   FlashcardNotifier({required AiRouter aiRouter})
       : _aiRouter = aiRouter,
-        super(
-          FlashcardState(
-            decks: [
-              FlashcardDeckModel(
-                id: 'deck_1',
-                notebookId: '1',
-                subject: 'Computer Science',
-                topic: 'OS — Process Synchronization',
-                createdAt: DateTime.now().subtract(const Duration(days: 3)),
-                cards: [
-                  FlashcardModel(
-                    id: 'c1',
-                    front: 'What are the 4 Coffman conditions required for Deadlock?',
-                    back:
-                        '1. Mutual Exclusion\n2. Hold and Wait\n3. No Preemption\n4. Circular Wait',
-                    easeFactor: 2.5,
-                    interval: 1,
-                    repetitions: 2,
-                    nextReviewDate: DateTime.now().subtract(const Duration(hours: 3)),
-                  ),
-                  FlashcardModel(
-                    id: 'c2',
-                    front: 'What is the distinction between a Mutex and a Binary Semaphore?',
-                    back:
-                        'A Mutex has an ownership mechanism (only the thread that locked it can unlock it). A Binary Semaphore has no ownership and can be signaled by any thread.',
-                    easeFactor: 2.3,
-                    interval: 3,
-                    repetitions: 3,
-                    nextReviewDate: DateTime.now().add(const Duration(days: 2)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
+        super(FlashcardState(decks: _loadInitialDecks()));
 
-  /// Generates a brand new high-yield deck from lecture notes using Groq LLaMA 8B.
+  static List<FlashcardDeckModel> _loadInitialDecks() {
+    try {
+      final cached = OfflineCacheService.getAllCachedDecks();
+      if (cached.isNotEmpty) {
+        return cached.map((m) => FlashcardDeckModel.fromMap(m)).toList();
+      }
+    } catch (_) {}
+
+    // Seed dynamic decks matching student's enrolled subjects
+    final subjects = OfflineCacheService.getUserSubjects();
+    final List<FlashcardDeckModel> seeds = [];
+
+    for (int i = 0; i < subjects.length; i++) {
+      final sub = subjects[i];
+      final deckId = 'deck_${DateTime.now().millisecondsSinceEpoch}_$i';
+      final deck = FlashcardDeckModel(
+        id: deckId,
+        notebookId: 'nb_$i',
+        subject: sub,
+        topic: '$sub High-Yield Review',
+        createdAt: DateTime.now(),
+        cards: [
+          FlashcardModel(
+            id: 'c_${deckId}_1',
+            front: 'What is the fundamental theorem or core principle of $sub?',
+            back: 'A foundational axiom in $sub that governs system behavior and analytical solutions.',
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 1,
+            nextReviewDate: DateTime.now(),
+          ),
+          FlashcardModel(
+            id: 'c_${deckId}_2',
+            front: 'Name 3 critical components or problem-solving steps in $sub.',
+            back: '1. Problem definition & assumptions\n2. Analytical formulation & equations\n3. Verification & edge-case testing',
+            easeFactor: 2.5,
+            interval: 2,
+            repetitions: 1,
+            nextReviewDate: DateTime.now().add(const Duration(days: 1)),
+          ),
+        ],
+      );
+      seeds.add(deck);
+      try {
+        OfflineCacheService.cacheDeck(deck.id, deck.toMap());
+      } catch (_) {}
+    }
+
+    return seeds;
+  }
+
+  /// Generates a brand new high-yield deck on any topic using Gemini/Groq AI.
   Future<void> generateDeck({
     required String notebookId,
     required String subject,
     required String topic,
     required String content,
-    int count = 10,
+    int count = 6,
   }) async {
     state = state.copyWith(isGenerating: true, error: null);
 
     try {
+      final promptContent = content.trim().isNotEmpty
+          ? content
+          : 'High-yield key concepts, formulas, definitions, and active recall questions for $subject on the topic: $topic.';
+
       final jsonString = await _aiRouter.generateFlashcards(
-        content: content,
+        content: promptContent,
         count: count,
       );
 
@@ -106,6 +128,18 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         );
       }
 
+      if (newCards.isEmpty) {
+        // Fallback card if AI returned empty
+        newCards.add(
+          FlashcardModel(
+            id: 'gen_${DateTime.now().millisecondsSinceEpoch}_0',
+            front: 'Core concept of $topic',
+            back: 'Key formulation and definitions in $subject.',
+            nextReviewDate: DateTime.now(),
+          ),
+        );
+      }
+
       final newDeck = FlashcardDeckModel(
         id: 'deck_${DateTime.now().millisecondsSinceEpoch}',
         notebookId: notebookId,
@@ -114,6 +148,9 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         cards: newCards,
         createdAt: DateTime.now(),
       );
+
+      // Persist to Hive
+      await OfflineCacheService.cacheDeck(newDeck.id, newDeck.toMap());
 
       state = state.copyWith(
         decks: [newDeck, ...state.decks],
@@ -125,6 +162,33 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         error: e.toString(),
       );
     }
+  }
+
+  /// Creates a manual custom deck created by the student.
+  Future<void> createCustomDeck({
+    required String subject,
+    required String topic,
+    required List<FlashcardModel> cards,
+  }) async {
+    final newDeck = FlashcardDeckModel(
+      id: 'deck_${DateTime.now().millisecondsSinceEpoch}',
+      notebookId: 'custom',
+      subject: subject,
+      topic: topic,
+      cards: cards,
+      createdAt: DateTime.now(),
+    );
+
+    await OfflineCacheService.cacheDeck(newDeck.id, newDeck.toMap());
+    state = state.copyWith(decks: [newDeck, ...state.decks]);
+  }
+
+  /// Deletes a deck from state and Hive cache.
+  Future<void> deleteDeck(String deckId) async {
+    await OfflineCacheService.deleteDeck(deckId);
+    state = state.copyWith(
+      decks: state.decks.where((d) => d.id != deckId).toList(),
+    );
   }
 
   /// Rates a card and applies SuperMemo SM-2 algorithm to reschedule review.
@@ -141,7 +205,7 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         return Sm2Algorithm.calculateNextReview(card: card, rating: rating);
       }).toList();
 
-      return FlashcardDeckModel(
+      final updated = FlashcardDeckModel(
         id: deck.id,
         notebookId: deck.notebookId,
         subject: deck.subject,
@@ -149,6 +213,9 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         cards: updatedCards,
         createdAt: deck.createdAt,
       );
+
+      OfflineCacheService.cacheDeck(deck.id, updated.toMap());
+      return updated;
     }).toList();
 
     state = state.copyWith(decks: updatedDecks);

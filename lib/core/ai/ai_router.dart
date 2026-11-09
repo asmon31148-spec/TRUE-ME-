@@ -351,7 +351,7 @@ Return ONLY valid JSON matching this schema:
   Future<String> chatWithNotes({
     required String question,
     required List<String> retrievedChunks,
-    String studentName = 'Alex',
+    String studentName = 'Student',
   }) async {
     if (retrievedChunks.isEmpty) {
       return executeRealtimeChat(
