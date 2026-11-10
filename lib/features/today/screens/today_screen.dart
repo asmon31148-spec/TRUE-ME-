@@ -25,6 +25,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   int _streak = 0;
   String _userName = 'Student';
   bool _isGeneratingPlan = false;
+  String _subjectFilter = 'All';
 
   // Dynamic real insight state (never hardcoded)
   String _insightText = '';
@@ -225,6 +226,38 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     }
   }
 
+  Future<void> _moveTaskToTomorrow(int index) async {
+    final task = Map<String, dynamic>.from(_tasks[index]);
+    task['completed'] = false;
+    setState(() {
+      _tasks.removeAt(index);
+    });
+    await _savePlan();
+
+    final tmCached = OfflineCacheService.getCachedStudyPlan(_tomorrowKey);
+    final tmTasks = (tmCached?['sessions'] as List? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    tmTasks.add(task);
+    await OfflineCacheService.cacheStudyPlan(_tomorrowKey, {
+      'sessions': tmTasks,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Moved "${task['title'] ?? 'Task'}" to tomorrow')),
+      );
+    }
+  }
+
+  Future<void> _removeTask(int index) async {
+    setState(() {
+      _tasks.removeAt(index);
+    });
+    await _savePlan();
+  }
+
   void _launchTask(Map<String, dynamic> task) {
     final type = (task['type'] as String? ?? 'reading').toLowerCase();
     final subject = Uri.encodeComponent(task['subject'] as String? ?? '');
@@ -290,6 +323,23 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
         ? ((_totalExamSpanDays - _daysLeft) / _totalExamSpanDays).clamp(0.08, 1.0)
         : 0.1;
     final int filledSegments = (examElapsedRatio * 10).round().clamp(1, 10);
+
+    final taskSubjects = _tasks
+        .map((t) => (t['subject'] as String? ?? 'Study').trim())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+    if (_subjectFilter != 'All' && !taskSubjects.contains(_subjectFilter)) {
+      _subjectFilter = 'All';
+    }
+
+    final List<int> visibleIndices = [];
+    for (int i = 0; i < _tasks.length; i++) {
+      final sub = (_tasks[i]['subject'] as String? ?? 'Study').trim();
+      if (_subjectFilter == 'All' || sub == _subjectFilter) {
+        visibleIndices.add(i);
+      }
+    }
 
     final initialLetter = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'S';
 
@@ -665,10 +715,30 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                 ),
               ] else ...[
-                ...List.generate(_tasks.length, (i) {
+                if (taskSubjects.length >= 2) ...[
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: ['All', ...taskSubjects].map((sub) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: AppChip(
+                            label: sub,
+                            isSelected: _subjectFilter == sub,
+                            onTap: () => setState(() => _subjectFilter = sub),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                ...visibleIndices.map((i) {
                   final t = _tasks[i];
                   final isDone = t['completed'] == true;
                   final isUpNext = i == upNextIdx;
+                  final isHighPriority = (t['priority'] as String? ?? 'Normal') == 'High';
                   final type = t['type'] as String? ?? 'reading';
                   final subject = t['subject'] as String? ?? 'Study';
                   final mins = (t['duration'] as num? ?? 20).toInt();
@@ -677,6 +747,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: InkWell(
                       onTap: () => _launchTask(t),
+                      onLongPress: () => _moveTaskToTomorrow(i),
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -712,16 +783,33 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    t['title'] as String? ?? 'Task',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDone ? context.textSecondary : context.textPrimary,
-                                      decoration: isDone ? TextDecoration.lineThrough : null,
-                                    ),
+                                  Row(
+                                    children: [
+                                      if (isHighPriority && !isDone) ...[
+                                        Container(
+                                          width: 7,
+                                          height: 7,
+                                          margin: const EdgeInsets.only(right: 6),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.warning,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          t['title'] as String? ?? 'Task',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDone ? context.textSecondary : context.textPrimary,
+                                            decoration: isDone ? TextDecoration.lineThrough : null,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
@@ -736,7 +824,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 4),
 
                             if (isUpNext) ...[
                               Container(
@@ -754,8 +842,30 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                             ],
+
+                            PopupMenuButton<String>(
+                              icon: Icon(Icons.more_vert, size: 18, color: context.textSecondary),
+                              padding: EdgeInsets.zero,
+                              onSelected: (val) {
+                                if (val == 'start') {
+                                  _launchTask(t);
+                                } else if (val == 'tomorrow') {
+                                  _moveTaskToTomorrow(i);
+                                } else if (val == 'delete') {
+                                  _removeTask(i);
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(value: 'start', child: Text('Start session')),
+                                PopupMenuItem(value: 'tomorrow', child: Text('Move to tomorrow')),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Remove', style: TextStyle(color: AppColors.error)),
+                                ),
+                              ],
+                            ),
 
                             // Circular Check Button
                             InkWell(
@@ -834,7 +944,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           ),
                           const SizedBox(height: 8),
                           InkWell(
-                            onTap: () => context.push(_insightRoute),
+                            onTap: () {
+                              if (_insightRoute == '/library') {
+                                context.go('/library');
+                              } else {
+                                context.push(_insightRoute);
+                              }
+                            },
                             child: Text(
                               _insightRoute == '/library'
                                   ? 'Go to Library'

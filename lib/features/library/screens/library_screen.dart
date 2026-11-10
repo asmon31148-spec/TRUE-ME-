@@ -18,6 +18,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _notebooks = [];
   String _filter = '';
+  String _sortBy = 'Recent'; // 'Recent', 'A-Z', 'Files'
   bool _isConnectingDrive = false;
 
   @override
@@ -119,6 +120,58 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  void _showRenameSubjectDialog(String notebookId, String currentTitle) {
+    final controller = TextEditingController(text: currentTitle);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.bgColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: ctx.borderColor, width: 1),
+        ),
+        title: const Text('Rename subject', style: AppTypography.sectionHeading),
+        content: AppInput(
+          controller: controller,
+          autofocus: true,
+          hintText: 'Subject name',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ctx.accentColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              minimumSize: const Size(80, 40),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final title = controller.text.trim();
+              if (title.isNotEmpty) {
+                await OfflineCacheService.renameNotebook(notebookId, title);
+                _loadNotebooks();
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buildSubjectSubtitle(List docs) {
+    final fileCount = docs.length;
+    if (fileCount == 0) return 'No files yet • Tap to add sources';
+    final sections = docs
+        .map((d) => ((d as Map)['section'] as String? ?? 'Notes'))
+        .toSet()
+        .toList();
+    final secLabel = sections.take(3).join(', ');
+    return '$fileCount ${fileCount == 1 ? 'file' : 'files'} • $secLabel';
+  }
+
   @override
   Widget build(BuildContext context) {
     final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
@@ -133,11 +186,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
           docMatch;
     }).toList();
 
+    if (_sortBy == 'A-Z') {
+      filtered.sort((a, b) => (a['title'] as String? ?? '').toLowerCase().compareTo((b['title'] as String? ?? '').toLowerCase()));
+    } else if (_sortBy == 'Files') {
+      filtered.sort((a, b) => ((b['documents'] as List? ?? []).length).compareTo((a['documents'] as List? ?? []).length));
+    }
+
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Library', style: AppTypography.screenTitle),
         actions: [
+          if (_notebooks.length > 1)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.sort, size: 22),
+              tooltip: 'Sort subjects',
+              onSelected: (val) => setState(() => _sortBy = val),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 'Recent', child: Text(_sortBy == 'Recent' ? '✓ Recent' : 'Recent')),
+                PopupMenuItem(value: 'A-Z', child: Text(_sortBy == 'A-Z' ? '✓ A–Z' : 'A–Z')),
+                PopupMenuItem(value: 'Files', child: Text(_sortBy == 'Files' ? '✓ Most files' : 'Most files')),
+              ],
+            ),
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline, size: 22),
             tooltip: 'Ask Sage',
@@ -214,15 +285,36 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 final id = nb['id'] as String? ?? '';
                 final title = nb['title'] as String? ?? 'Untitled';
                 final docs = List.from(nb['documents'] ?? []);
-                final fileCount = docs.length;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: AppListRow(
                     title: title,
-                    subtitle: fileCount == 0
-                        ? 'No files yet • Tap to add sources'
-                        : '$fileCount ${fileCount == 1 ? 'file' : 'files'}',
+                    subtitle: _buildSubjectSubtitle(docs),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PopupMenuButton<String>(
+                          icon: Icon(Icons.more_horiz, size: 20, color: context.textSecondary),
+                          onSelected: (val) async {
+                            if (val == 'rename') {
+                              _showRenameSubjectDialog(id, title);
+                            } else if (val == 'delete') {
+                              await OfflineCacheService.deleteNotebook(id);
+                              _loadNotebooks();
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'rename', child: Text('Rename')),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete subject', style: TextStyle(color: AppColors.error)),
+                            ),
+                          ],
+                        ),
+                        Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
+                      ],
+                    ),
                     onTap: () async {
                       await context.push('/notebook/$id');
                       if (mounted) _loadNotebooks();

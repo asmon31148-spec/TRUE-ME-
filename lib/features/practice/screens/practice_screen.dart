@@ -42,7 +42,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Practice', style: AppTypography.screenTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline, size: 22),
+            tooltip: 'Ask Sage',
+            onPressed: () => context.push('/chat'),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: ListView(

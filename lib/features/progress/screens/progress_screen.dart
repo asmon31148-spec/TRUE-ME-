@@ -65,6 +65,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return Scaffold(
       backgroundColor: context.bgColor,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Progress', style: AppTypography.screenTitle),
         actions: [
           IconButton(

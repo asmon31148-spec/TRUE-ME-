@@ -23,6 +23,8 @@ class NotebookDetailScreen extends ConsumerStatefulWidget {
 class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final TextEditingController _sourceSearchCtrl = TextEditingController();
+  String _sourceFilter = '';
   Map<String, dynamic>? _notebook;
   bool _isGeneratingPdf = false;
 
@@ -40,16 +42,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
 
   @override
   void dispose() {
+    _sourceSearchCtrl.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
-  void _openAddFiles() {
+  void _openAddFiles({String initialSection = 'Notes'}) {
     final title = _notebook?['title'] as String? ?? 'Subject';
     AddFilesSheet.show(
       context,
       notebookId: widget.notebookId,
       subjectName: title,
+      initialSection: initialSection,
       onFileAdded: _loadNotebook,
     );
   }
@@ -87,12 +91,49 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     );
   }
 
+  void _showRenameDocDialog(String docId, String currentName) {
+    final ctrl = TextEditingController(text: currentName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.bgColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: ctx.borderColor),
+        ),
+        title: const Text('Rename file', style: AppTypography.sectionHeading),
+        content: AppInput(controller: ctrl, autofocus: true, hintText: 'File name'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ctx.accentColor,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(80, 40),
+            ),
+            onPressed: () async {
+              await OfflineCacheService.updateDocumentInNotebook(
+                widget.notebookId,
+                docId,
+                fileName: ctrl.text,
+              );
+              _loadNotebook();
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDocumentViewer(Map<String, dynamic> doc) {
-    final fileName = doc['fileName'] as String? ?? 'Document';
-    final section = doc['section'] as String? ?? 'Notes';
+    String fileName = doc['fileName'] as String? ?? 'Document';
+    String section = doc['section'] as String? ?? 'Notes';
     final content = doc['content'] as String? ?? '';
     final docId = doc['id'] as String? ?? '';
     final title = _notebook?['title'] as String? ?? 'Subject';
+    const sections = ['Syllabus', 'Notes', 'Books', 'Previous papers'];
 
     showModalBottomSheet(
       context: context,
@@ -101,61 +142,100 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.92,
-        builder: (_, scrollCtrl) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(fileName, style: AppTypography.sectionHeading, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text('$section • ${content.length} characters', style: AppTypography.smallLabel),
-                      ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.72,
+          maxChildSize: 0.92,
+          builder: (_, scrollCtrl) => Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(fileName, style: AppTypography.sectionHeading, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text('$section • ${content.length} characters', style: AppTypography.smallLabel),
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                    tooltip: 'Remove file',
-                    onPressed: () async {
-                      await OfflineCacheService.removeDocumentFromNotebook(widget.notebookId, docId);
-                      _loadNotebook();
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              Divider(color: ctx.borderColor, height: 24),
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: scrollCtrl,
-                  child: SelectableText(
-                    content.isNotEmpty ? content : 'No extracted text available.',
-                    style: AppTypography.body.copyWith(height: 1.6),
+                    IconButton(
+                      icon: Icon(Icons.edit_outlined, color: sheetCtx.textSecondary),
+                      tooltip: 'Rename file',
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showRenameDocDialog(docId, fileName);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                      tooltip: 'Remove file',
+                      onPressed: () async {
+                        await OfflineCacheService.removeDocumentFromNotebook(widget.notebookId, docId);
+                        _loadNotebook();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      Text('Section: ', style: AppTypography.smallLabel),
+                      const SizedBox(width: 6),
+                      ...sections.map((s) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: AppChip(
+                            label: s,
+                            isSelected: section == s,
+                            onTap: () async {
+                              if (s == section) return;
+                              setSheetState(() => section = s);
+                              await OfflineCacheService.updateDocumentInNotebook(
+                                widget.notebookId,
+                                docId,
+                                section: s,
+                              );
+                              _loadNotebook();
+                            },
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              AppPrimaryButton(
-                label: 'Ask Sage about this file',
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  final q = Uri.encodeComponent('Explain the key points from "$fileName"');
-                  context.push('/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=$q');
-                },
-              ),
-            ],
+                Divider(color: ctx.borderColor, height: 24),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollCtrl,
+                    child: SelectableText(
+                      content.isNotEmpty ? content : 'No extracted text available.',
+                      style: AppTypography.body.copyWith(height: 1.6),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AppPrimaryButton(
+                  label: 'Ask Sage about this file',
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    final q = Uri.encodeComponent('Explain the key points from "$fileName"');
+                    context.push('/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=$q');
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -259,13 +339,22 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   children: [
-                    _buildSectionCard('Syllabus', syllabusFiles),
+                    if (totalDocs >= 2) ...[
+                      AppInput(
+                        controller: _sourceSearchCtrl,
+                        hintText: 'Filter files in $title...',
+                        prefixIcon: Icon(Icons.search, size: 18, color: context.textSecondary),
+                        onChanged: (val) => setState(() => _sourceFilter = val.trim().toLowerCase()),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    _buildSectionCard('Syllabus', _filterFiles(syllabusFiles)),
                     const SizedBox(height: 12),
-                    _buildSectionCard('Notes', notesFiles),
+                    _buildSectionCard('Notes', _filterFiles(notesFiles)),
                     const SizedBox(height: 12),
-                    _buildSectionCard('Books', booksFiles),
+                    _buildSectionCard('Books', _filterFiles(booksFiles)),
                     const SizedBox(height: 12),
-                    _buildSectionCard('Previous papers', paperFiles),
+                    _buildSectionCard('Previous papers', _filterFiles(paperFiles)),
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -401,6 +490,13 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     );
   }
 
+  List<Map<String, dynamic>> _filterFiles(List<Map<String, dynamic>> files) {
+    if (_sourceFilter.isEmpty) return files;
+    return files
+        .where((d) => (d['fileName'] as String? ?? '').toLowerCase().contains(_sourceFilter))
+        .toList();
+  }
+
   Widget _buildSectionCard(String sectionName, List<Map<String, dynamic>> files) {
     return Container(
       width: double.infinity,
@@ -413,9 +509,32 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$sectionName (${files.length})',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.textPrimary),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$sectionName (${files.length})',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.textPrimary),
+              ),
+              InkWell(
+                onTap: () => _openAddFiles(initialSection: sectionName),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 16, color: context.accentColor),
+                      const SizedBox(width: 2),
+                      Text(
+                        'Add',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.accentColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           if (files.isEmpty)

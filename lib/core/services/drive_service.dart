@@ -22,6 +22,7 @@ class DriveService {
 
   drive.DriveApi? _driveApi;
   String? _vaultFolderId;
+  final Map<String, String> _folderCache = {};
   GoogleSignInAccount? _currentAccount;
   String? lastError;
 
@@ -102,11 +103,12 @@ class DriveService {
     } catch (_) {}
     _driveApi = null;
     _vaultFolderId = null;
+    _folderCache.clear();
     _currentAccount = null;
     await OfflineCacheService.saveDriveStatus(false);
   }
 
-  /// Ensures a dedicated 'True Me' folder exists in user's Google Drive.
+  /// Ensures a dedicated 'True Me' root folder exists in user's Google Drive.
   Future<String> _ensureVaultFolder() async {
     if (_vaultFolderId != null) return _vaultFolderId!;
     if (_driveApi == null) throw StateError('Not signed in to Google Drive');
@@ -130,18 +132,83 @@ class DriveService {
     return _vaultFolderId!;
   }
 
-  /// Lists files inside the user's Google Drive 'True Me' folder or recent Drive files.
-  Future<List<drive.File>> listFiles({int pageSize = 25}) async {
+  Future<String> _ensureSubfolder(String name, String parentId) async {
+    final cleanName = name.trim().isNotEmpty ? name.trim() : 'General';
+    final cacheKey = '$parentId/$cleanName';
+    if (_folderCache.containsKey(cacheKey)) return _folderCache[cacheKey]!;
+
+    final escapedName = cleanName.replaceAll("'", "\\'");
+    final existing = await _driveApi!.files.list(
+      q: "mimeType = 'application/vnd.google-apps.folder' and name = '$escapedName' and '$parentId' in parents and trashed = false",
+      spaces: 'drive',
+      $fields: 'files(id, name)',
+    );
+
+    if (existing.files != null && existing.files!.isNotEmpty && existing.files!.first.id != null) {
+      final id = existing.files!.first.id!;
+      _folderCache[cacheKey] = id;
+      return id;
+    }
+
+    final meta = drive.File()
+      ..name = cleanName
+      ..mimeType = 'application/vnd.google-apps.folder'
+      ..parents = [parentId];
+    final created = await _driveApi!.files.create(meta);
+    final id = created.id!;
+    _folderCache[cacheKey] = id;
+    return id;
+  }
+
+  /// Resolves `True Me / [Subject] / [Section]` folder ID cleanly.
+  Future<String> _resolveTargetFolder({String? subject, String? section}) async {
+    String currentParent = await _ensureVaultFolder();
+    if (subject != null && subject.trim().isNotEmpty) {
+      currentParent = await _ensureSubfolder(subject.trim(), currentParent);
+    }
+    if (section != null && section.trim().isNotEmpty) {
+      currentParent = await _ensureSubfolder(section.trim(), currentParent);
+    }
+    return currentParent;
+  }
+
+  /// Lists files from Google Drive (optionally filtered to the `True Me` vault).
+  Future<List<drive.File>> listFiles({
+    int pageSize = 30,
+    bool onlyTrueMeVault = false,
+  }) async {
     if (_driveApi == null) {
       final ok = await signIn();
       if (!ok) return [];
     }
     try {
+      String query = "trashed = false and mimeType != 'application/vnd.google-apps.folder'";
+      if (onlyTrueMeVault) {
+        final vaultId = await _ensureVaultFolder();
+        final subFolders = await _driveApi!.files.list(
+          q: "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+          pageSize: 100,
+          $fields: 'files(id, parents)',
+        );
+        final allowedParents = <String>{vaultId};
+        final folderList = subFolders.files ?? [];
+        // Two-pass BFS to collect Subject and Section subfolder IDs under True Me
+        for (int pass = 0; pass < 2; pass++) {
+          for (final f in folderList) {
+            if (f.id != null && (f.parents?.any(allowedParents.contains) ?? false)) {
+              allowedParents.add(f.id!);
+            }
+          }
+        }
+        final parentClauses = allowedParents.map((id) => "'$id' in parents").join(' or ');
+        query = "trashed = false and mimeType != 'application/vnd.google-apps.folder' and ($parentClauses)";
+      }
+
       final res = await _driveApi!.files.list(
-        q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+        q: query,
         pageSize: pageSize,
         orderBy: 'modifiedTime desc',
-        $fields: 'files(id, name, mimeType, size, modifiedTime)',
+        $fields: 'files(id, name, mimeType, size, modifiedTime, parents)',
       );
       return res.files ?? [];
     } catch (_) {
@@ -149,11 +216,16 @@ class DriveService {
     }
   }
 
-  /// Uploads a local file directly into the user's Google Drive vault.
-  Future<String> uploadFile(File file, {String? customName}) async {
+  /// Uploads a file into `True Me / [subject] / [section]` in user's Google Drive.
+  Future<String> uploadFile(
+    File file, {
+    String? customName,
+    String? subject,
+    String? section,
+  }) async {
     if (_driveApi == null) throw StateError('Not signed in to Google Drive');
 
-    final folderId = await _ensureVaultFolder();
+    final folderId = await _resolveTargetFolder(subject: subject, section: section);
     final fileName = customName ?? file.path.split(Platform.pathSeparator).last;
 
     final driveFile = drive.File()
@@ -193,6 +265,7 @@ class DriveService {
       final folderId = await _ensureVaultFolder();
       await _driveApi!.files.delete(folderId);
       _vaultFolderId = null;
+      _folderCache.clear();
     } catch (_) {}
   }
 }

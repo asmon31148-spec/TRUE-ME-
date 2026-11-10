@@ -293,9 +293,10 @@ class OfflineCacheService {
         }
       }
 
-      // 3. Pull Today's & Tomorrow's Tasks
+      // 3. Pull Upcoming 7 Days of Study Tasks
       final now = DateTime.now();
-      for (final dKey in [dateKey(now), dateKey(now.add(const Duration(days: 1)))]) {
+      for (int offset = 0; offset < 7; offset++) {
+        final dKey = dateKey(now.add(Duration(days: offset)));
         final remoteTasks = await sb.fetchStudyTasksForDate(userId: userId, planDate: dKey);
         if (remoteTasks != null && remoteTasks.isNotEmpty) {
           await Hive.box(studyPlanBox).put(dKey, {
@@ -478,6 +479,38 @@ class OfflineCacheService {
       final rawDocs = nb['documents'] as List? ?? [];
       final docs = rawDocs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       docs.removeWhere((d) => d['id'] == docId);
+      nb['documents'] = docs;
+      nb['fileRefs'] = docs.map((d) => (d['fileName'] as String? ?? '')).where((s) => s.isNotEmpty).toList();
+      nb['lastModified'] = DateTime.now().toIso8601String();
+      await cacheNotebook(notebookId, nb);
+    }
+  }
+
+  static Future<void> updateDocumentInNotebook(
+    String notebookId,
+    String docId, {
+    String? fileName,
+    String? section,
+  }) async {
+    final nb = getCachedNotebook(notebookId);
+    if (nb == null) return;
+    final rawDocs = nb['documents'] as List? ?? [];
+    final docs = rawDocs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    bool changed = false;
+    for (final d in docs) {
+      if (d['id'] == docId) {
+        if (fileName != null && fileName.trim().isNotEmpty) {
+          d['fileName'] = fileName.trim();
+          changed = true;
+        }
+        if (section != null && section.trim().isNotEmpty) {
+          d['section'] = section.trim();
+          changed = true;
+        }
+        break;
+      }
+    }
+    if (changed) {
       nb['documents'] = docs;
       nb['fileRefs'] = docs.map((d) => (d['fileName'] as String? ?? '')).where((s) => s.isNotEmpty).toList();
       nb['lastModified'] = DateTime.now().toIso8601String();

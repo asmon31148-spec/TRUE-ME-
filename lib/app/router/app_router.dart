@@ -16,7 +16,6 @@ import '../../features/profile/screens/account_center_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
 import '../../features/quiz/screens/quiz_setup_screen.dart';
 import '../../features/today/screens/today_screen.dart';
-import '../../features/upload/screens/upload_screen.dart';
 import '../../features/voice_tutor/screens/voice_session_screen.dart';
 import '../../shared/widgets/app_scaffold_shell.dart';
 
@@ -126,7 +125,7 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/upload',
-      builder: (context, state) => const UploadScreen(),
+      redirect: (context, state) => '/library',
     ),
 
     // Main App Navigation Shell (Stationary 4-Tab Bottom Bar)

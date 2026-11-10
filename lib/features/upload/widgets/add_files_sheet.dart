@@ -19,12 +19,14 @@ import '../services/youtube_processor.dart';
 class AddFilesSheet extends StatefulWidget {
   final String notebookId;
   final String subjectName;
+  final String initialSection;
   final VoidCallback? onFileAdded;
 
   const AddFilesSheet({
     super.key,
     required this.notebookId,
     required this.subjectName,
+    this.initialSection = 'Notes',
     this.onFileAdded,
   });
 
@@ -32,6 +34,7 @@ class AddFilesSheet extends StatefulWidget {
     BuildContext context, {
     required String notebookId,
     required String subjectName,
+    String initialSection = 'Notes',
     VoidCallback? onFileAdded,
   }) {
     return showModalBottomSheet(
@@ -44,6 +47,7 @@ class AddFilesSheet extends StatefulWidget {
       builder: (ctx) => AddFilesSheet(
         notebookId: notebookId,
         subjectName: subjectName,
+        initialSection: initialSection,
         onFileAdded: onFileAdded,
       ),
     );
@@ -54,9 +58,10 @@ class AddFilesSheet extends StatefulWidget {
 }
 
 class _AddFilesSheetState extends State<AddFilesSheet> {
-  String _targetSection = 'Notes';
+  late String _targetSection;
   String _mode = 'menu'; // 'menu', 'link', 'text', 'audio', 'drive'
   bool _isBusy = false;
+  bool _onlyTrueMeVault = false;
   String _statusText = '';
   String? _errorText;
 
@@ -70,6 +75,12 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
   List<drive.File> _driveFiles = [];
 
   final List<String> _sections = const ['Syllabus', 'Notes', 'Books', 'Previous papers'];
+
+  @override
+  void initState() {
+    super.initState();
+    _targetSection = _sections.contains(widget.initialSection) ? widget.initialSection : 'Notes';
+  }
 
   @override
   void dispose() {
@@ -91,8 +102,13 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     String? uploadedDriveId = driveFileId;
     if (uploadedDriveId == null && originalFile != null && DriveService.instance.isSignedIn) {
       try {
-        setState(() => _statusText = 'Syncing to Google Drive...');
-        uploadedDriveId = await DriveService.instance.uploadFile(originalFile, customName: fileName);
+        setState(() => _statusText = 'Syncing to True Me / ${widget.subjectName} / $_targetSection...');
+        uploadedDriveId = await DriveService.instance.uploadFile(
+          originalFile,
+          customName: fileName,
+          subject: widget.subjectName,
+          section: _targetSection,
+        );
       } catch (_) {}
     }
 
@@ -299,15 +315,17 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     }
   }
 
-  Future<void> _loadDriveFiles() async {
+  Future<void> _loadDriveFiles({bool? onlyVault}) async {
+    final vaultFilter = onlyVault ?? _onlyTrueMeVault;
     setState(() {
       _mode = 'drive';
+      _onlyTrueMeVault = vaultFilter;
       _isBusy = true;
       _errorText = null;
       _statusText = 'Connecting to Google Drive...';
     });
 
-    final files = await DriveService.instance.listFiles();
+    final files = await DriveService.instance.listFiles(onlyTrueMeVault: vaultFilter);
     if (!mounted) return;
 
     setState(() {
@@ -564,11 +582,29 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   ),
                 ],
               ] else if (_mode == 'drive') ...[
+                Row(
+                  children: [
+                    AppChip(
+                      label: 'All Drive',
+                      isSelected: !_onlyTrueMeVault,
+                      onTap: () => _loadDriveFiles(onlyVault: false),
+                    ),
+                    const SizedBox(width: 8),
+                    AppChip(
+                      label: 'True Me Vault',
+                      isSelected: _onlyTrueMeVault,
+                      onTap: () => _loadDriveFiles(onlyVault: true),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 if (_driveFiles.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Text(
-                      'No compatible PDF or text files found in your Drive.',
+                      _onlyTrueMeVault
+                          ? 'No files inside your Google Drive "True Me" folder yet.'
+                          : 'No compatible PDF or text files found in your Drive.',
                       style: AppTypography.secondary,
                     ),
                   )
