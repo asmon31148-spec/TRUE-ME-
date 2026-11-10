@@ -314,7 +314,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       _driveFiles = files;
       _isBusy = false;
       if (!DriveService.instance.isSignedIn) {
-        _errorText = 'Google Drive sign-in was cancelled or failed.';
+        _errorText = DriveService.instance.lastError ?? 'Google Drive sign-in was cancelled or failed.';
       }
     });
   }

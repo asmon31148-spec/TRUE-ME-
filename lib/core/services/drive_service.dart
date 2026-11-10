@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'offline_cache_service.dart';
@@ -10,20 +9,44 @@ class DriveService {
   factory DriveService() => instance;
   DriveService._internal();
 
+  static const List<String> _driveScopes = [
+    drive.DriveApi.driveFileScope,
+    drive.DriveApi.driveAppdataScope,
+  ];
+
+  // Do NOT pass serverClientId here on Android unless issuing server auth codes
+  // for a Web OAuth client; passing an Android Client ID triggers ApiException 10.
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: dotenv.env['GOOGLE_DRIVE_CLIENT_ID'],
-    scopes: [
-      drive.DriveApi.driveFileScope,
-      drive.DriveApi.driveAppdataScope,
-    ],
+    scopes: _driveScopes,
   );
 
   drive.DriveApi? _driveApi;
   String? _vaultFolderId;
   GoogleSignInAccount? _currentAccount;
+  String? lastError;
 
   bool get isSignedIn => _driveApi != null;
   String? get userEmail => _currentAccount?.email ?? OfflineCacheService.getDriveEmail();
+
+  String _formatSignInError(Object error) {
+    final raw = error.toString();
+    if (raw.contains('ApiException: 10') || raw.contains('DEVELOPER_ERROR')) {
+      return 'Google OAuth config mismatch (Error 10). Register Android package "com.trueme.study.trueme" with release SHA-1 DA:F8:48:4B:5B:07:4F:AF:CF:C4:57:0D:D1:DB:34:FF:B0:FD:61:AB in Google Cloud Console.';
+    }
+    if (raw.contains('ApiException: 12500') || raw.contains('SIGN_IN_FAILED')) {
+      return 'Google Sign-In failed (Error 12500). Configure the OAuth Consent Screen, add your Gmail as a Test User, and enable Google Drive API in Google Cloud Console.';
+    }
+    if (raw.contains('ApiException: 12501') || raw.contains('sign_in_canceled')) {
+      return 'Google Drive sign-in was cancelled.';
+    }
+    if (raw.contains('ApiException: 7') || raw.contains('network_error') || raw.contains('SocketException')) {
+      return 'Network error while connecting to Google Drive. Check your internet connection.';
+    }
+    if (raw.contains('accessNotConfigured') || raw.contains('403')) {
+      return 'Google Drive API is not enabled or access was denied in Google Cloud Console ($raw).';
+    }
+    return 'Google Drive error: $raw';
+  }
 
   /// Attempts silent sign-in on startup/resume if previously connected.
   Future<bool> signInSilently() async {
@@ -34,6 +57,7 @@ class DriveService {
       if (httpClient == null) return false;
       _currentAccount = account;
       _driveApi = drive.DriveApi(httpClient);
+      lastError = null;
       await OfflineCacheService.saveDriveStatus(true, email: account.email);
       return true;
     } catch (_) {
@@ -43,19 +67,31 @@ class DriveService {
 
   /// Signs the user into Google Drive using interactive OAuth.
   Future<bool> signIn() async {
+    lastError = null;
     try {
       final account = await _googleSignIn.signIn();
-      if (account == null) return false;
+      if (account == null) {
+        lastError = 'Google Drive sign-in was cancelled.';
+        return false;
+      }
 
-      final httpClient = await _googleSignIn.authenticatedClient();
-      if (httpClient == null) return false;
+      var httpClient = await _googleSignIn.authenticatedClient();
+      if (httpClient == null) {
+        await _googleSignIn.requestScopes(_driveScopes);
+        httpClient = await _googleSignIn.authenticatedClient();
+      }
+      if (httpClient == null) {
+        lastError = 'Could not obtain Google Drive OAuth permission token.';
+        return false;
+      }
 
       _currentAccount = account;
       _driveApi = drive.DriveApi(httpClient);
       await _ensureVaultFolder();
       await OfflineCacheService.saveDriveStatus(true, email: account.email);
       return true;
-    } catch (_) {
+    } catch (e) {
+      lastError = _formatSignInError(e);
       return false;
     }
   }

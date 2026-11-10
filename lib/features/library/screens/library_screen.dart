@@ -42,15 +42,37 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final ok = await DriveService.instance.signIn();
     if (!mounted) return;
     setState(() => _isConnectingDrive = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? 'Connected Google Drive (${DriveService.instance.userEmail ?? 'Ready'})'
-              : 'Google Drive sign-in cancelled or failed.',
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connected Google Drive (${DriveService.instance.userEmail ?? 'Ready'})'),
         ),
-      ),
-    );
+      );
+    } else {
+      final err = DriveService.instance.lastError ?? 'Google Drive sign-in cancelled or failed.';
+      if (err.contains('cancelled')) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      } else {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ctx.bgColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: ctx.borderColor),
+            ),
+            title: const Text('Google Drive Connection Error', style: AppTypography.sectionHeading),
+            content: SelectableText(err, style: AppTypography.body),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _showAddSubjectDialog() {

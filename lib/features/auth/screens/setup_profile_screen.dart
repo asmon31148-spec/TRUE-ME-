@@ -98,7 +98,12 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       setState(() => _isConnectingDrive = false);
       if (!ok) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not connect Drive right now. Continuing locally — you can connect later in Account.')),
+          SnackBar(
+            content: Text(
+              DriveService.instance.lastError ??
+                  'Could not connect Drive right now. Continuing locally — you can connect later in Account.',
+            ),
+          ),
         );
       }
     }
