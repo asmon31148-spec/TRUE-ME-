@@ -16,18 +16,17 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final badges = AchievementService.getInitialBadges();
     final subjects = OfflineCacheService.getUserSubjects();
-
-    final colors = [AppColors.primary, AppColors.accent, AppColors.secondary, AppColors.success, AppColors.warning];
-    final percentages = [0.85, 0.74, 0.62, 0.90, 0.55];
-    final labels = ['85% (Advanced)', '74% (Proficient)', '62% (Needs Practice)', '90% (Mastered)', '55% (Developing)'];
+    final streak = OfflineCacheService.getCurrentStreak();
+    final weeklyMins = OfflineCacheService.getWeeklyStudyMinutes().map((e) => e.toDouble()).toList();
+    final attempts = OfflineCacheService.getQuizAttempts();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: GlassAppBar(
         title: 'Mastery Dashboard',
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
-          onPressed: () => context.go('/library'),
+          icon: const Icon(Icons.arrow_back, size: 20, color: AppColors.textPrimary),
+          onPressed: () => context.go('/today'),
         ),
       ),
       body: SingleChildScrollView(
@@ -35,27 +34,30 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Streak Card Component
-            const StreakCard(streakDays: 7),
+            StreakCard(streakDays: streak),
             const SizedBox(height: 24),
 
-            // Weekly Velocity Chart Component
-            const MasteryChart(),
+            MasteryChart(weeklyMinutes: weeklyMins),
             const SizedBox(height: 28),
 
-            const Text('Subject Mastery Levels', style: AppTypography.headlineMedium),
+            const Text('Subject Mastery Levels', style: AppTypography.sectionHeading),
             const SizedBox(height: 14),
 
-            ...subjects.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final subj = entry.value;
-              final color = colors[idx % colors.length];
-              final pct = percentages[idx % percentages.length];
-              final label = labels[idx % labels.length];
+            ...subjects.map((subj) {
+              final subAttempts = attempts.where(
+                (a) => (a['subject'] as String? ?? '').toLowerCase() == subj.toLowerCase(),
+              ).toList();
+              final double pct = subAttempts.isEmpty
+                  ? 0.0
+                  : subAttempts
+                          .map((a) => ((a['percentage'] as num? ?? 0) / 100.0))
+                          .reduce((a, b) => a + b) /
+                      subAttempts.length;
+              final label = subAttempts.isEmpty ? 'No quizzes yet' : '${(pct * 100).round()}%';
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _buildMasteryBar(subj, pct, color, label),
+                child: _buildMasteryBar(subj, pct, AppColors.accent, label),
               );
             }),
             const SizedBox(height: 28),

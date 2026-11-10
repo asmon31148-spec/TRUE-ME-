@@ -1,17 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../../core/ai/groq_service.dart';
+import '../../../core/ai/ai_router.dart';
 
 class YoutubeProcessor {
-  final GroqService _groqService;
+  final AiRouter _aiRouter;
 
-  YoutubeProcessor({GroqService? groqService})
-      : _groqService = groqService ?? GroqService();
+  YoutubeProcessor({AiRouter? aiRouter}) : _aiRouter = aiRouter ?? AiRouter();
 
-  /// Extracts the video ID from standard or shortened YouTube URLs.
+  /// Extracts the 11-char video ID from standard, shorts, or youtu.be URLs.
   static String? extractVideoId(String url) {
     final regExp = RegExp(
-      r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+      r'(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})(?:[?&/]|$)',
       caseSensitive: false,
     );
     final match = regExp.firstMatch(url);
@@ -21,7 +20,7 @@ class YoutubeProcessor {
   /// Fetches video metadata via official public oEmbed API.
   static Future<Map<String, String>> fetchVideoMetadata(String url) async {
     try {
-      final oembedUrl = Uri.parse('https://www.youtube.com/oembed?url=$url&format=json');
+      final oembedUrl = Uri.parse('https://www.youtube.com/oembed?url=${Uri.encodeComponent(url)}&format=json');
       final res = await http.get(oembedUrl).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -34,7 +33,61 @@ class YoutubeProcessor {
     return {'title': 'Lecture Video', 'author': 'Educator'};
   }
 
-  /// Processes YouTube link into structured study notes.
+  /// Fetches real closed captions / subtitles from YouTube watch page if available.
+  static Future<String?> fetchCaptions(String videoId) async {
+    try {
+      final watchRes = await http.get(
+        Uri.parse('https://www.youtube.com/watch?v=$videoId'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (watchRes.statusCode != 200) return null;
+      final body = watchRes.body;
+
+      final match = RegExp(r'"captionTracks":(\[.*?\])').firstMatch(body);
+      if (match == null) return null;
+
+      final tracks = jsonDecode(match.group(1)!) as List<dynamic>;
+      if (tracks.isEmpty) return null;
+
+      // Prefer English track if present, otherwise first track
+      Map<String, dynamic> selectedTrack = Map<String, dynamic>.from(tracks.first as Map);
+      for (final t in tracks) {
+        final m = Map<String, dynamic>.from(t as Map);
+        final lang = (m['languageCode'] as String? ?? '').toLowerCase();
+        if (lang.startsWith('en')) {
+          selectedTrack = m;
+          break;
+        }
+      }
+
+      final baseUrl = selectedTrack['baseUrl'] as String?;
+      if (baseUrl == null || baseUrl.isEmpty) return null;
+
+      final capRes = await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 15));
+      if (capRes.statusCode != 200) return null;
+
+      // Strip XML <text> tags and decode basic HTML entities
+      var text = capRes.body.replaceAll(RegExp(r'<[^>]*>'), ' ');
+      text = text
+          .replaceAll('&amp;', '&')
+          .replaceAll('&quot;', '"')
+          .replaceAll('&#39;', "'")
+          .replaceAll('&lt;', '<')
+          .replaceAll('&gt;', '>')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      return text.isNotEmpty ? text : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Processes YouTube link into grounded study notes ONLY when real transcript/captions exist.
   Future<String> summarizeVideoNotes({
     required String videoUrl,
     String? providedTranscript,
@@ -48,25 +101,33 @@ class YoutubeProcessor {
     final videoTitle = meta['title']!;
     final videoAuthor = meta['author']!;
 
-    final transcript = providedTranscript ??
-        'Video Title: "$videoTitle" by $videoAuthor.\nURL: $videoUrl';
+    final transcript = (providedTranscript != null && providedTranscript.trim().isNotEmpty)
+        ? providedTranscript.trim()
+        : await fetchCaptions(videoId);
 
-    final systemPrompt = '''
-You are Sage, an expert academic note taker. Turn this lecture into clean, high-yield study notes.
-Include:
-1. Executive Concept Summary for: $videoTitle
-2. Core Equations or Definitions
-3. Step-by-Step Breakdown
-4. 3 High-Yield Exam Takeaways
-''';
-
-    if (_groqService.isConfigured) {
-      return await _groqService.complete8B(
-        prompt: 'Content details:\n$transcript',
-        systemPrompt: systemPrompt,
-      );
+    if (transcript == null || transcript.isEmpty) {
+      return 'Video: $videoTitle (by $videoAuthor)\nURL: $videoUrl\n\nNo closed captions or transcript tracks are available for this YouTube video. To avoid generating inaccurate or fabricated notes, please paste the lecture transcript or upload slides directly.';
     }
 
-    return '# $videoTitle\nBy $videoAuthor\n\nStudy notes processed for $videoUrl';
+    final trimmedTranscript = transcript.length > 15000 ? transcript.substring(0, 15000) : transcript;
+
+    final systemPrompt = '''
+You are Sage, an academic study assistant. Turn ONLY the provided transcript into structured study notes.
+Do not invent facts not mentioned in the transcript.
+Include:
+1. Summary for: $videoTitle
+2. Key Concepts & Definitions
+3. Important Equations or Steps (if present)
+4. 3 Exam Takeaways
+''';
+
+    try {
+      return await _aiRouter.executeHeavyReasoning(
+        prompt: 'Video Title: $videoTitle by $videoAuthor\n\nTranscript:\n$trimmedTranscript',
+        systemPrompt: systemPrompt,
+      );
+    } catch (_) {
+      return 'Video: $videoTitle (by $videoAuthor)\n\nTranscript Extract:\n$trimmedTranscript';
+    }
   }
 }

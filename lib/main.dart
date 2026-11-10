@@ -39,31 +39,31 @@ void main() async {
     debugPrint('NotificationService init failed: $e');
   }
 
-  // 5. System UI Overlay Style for Liquid Glass theme
+  // 5. System UI Overlay Style for Calm Light Mode
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF070B14),
-      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Color(0xFFFFFFFF),
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 
-  // 6. Prevent Grey Screen of Death in Release Mode
+  // 6. Clean Fallback Error View in Release Mode
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
-      color: const Color(0xFF0B0F19),
+      color: const Color(0xFFFFFFFF),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.auto_awesome, color: Color(0xFF06B6D4), size: 48),
-              const SizedBox(height: 16),
+              const Icon(Icons.error_outline, color: Color(0xFF2563EB), size: 42),
+              const SizedBox(height: 12),
               const Text(
-                'True Me • Loading View',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                'Something went wrong',
+                style: TextStyle(color: Color(0xFF111827), fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
@@ -71,7 +71,7 @@ void main() async {
                 textAlign: TextAlign.center,
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: const TextStyle(color: Color(0xFF5B6472), fontSize: 12),
               ),
             ],
           ),

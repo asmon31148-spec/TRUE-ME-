@@ -28,7 +28,7 @@ class GroqService {
         'Content-Type': 'application/json',
       };
 
-  /// High-volume completion using fast inference model (14,400 free req/day).
+  /// High-volume completion using fast inference model.
   Future<String> complete8B({
     required String prompt,
     String? systemPrompt,
@@ -37,7 +37,7 @@ class GroqService {
   }) async {
     try {
       return await _callChatCompletion(
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-20b',
         rateLimitKey: 'groq_speed',
         prompt: prompt,
         systemPrompt: systemPrompt,
@@ -46,7 +46,7 @@ class GroqService {
       );
     } catch (_) {
       return await _callChatCompletion(
-        model: 'llama-3.3-70b-versatile',
+        model: 'qwen/qwen3.8-27b',
         rateLimitKey: 'groq_heavy',
         prompt: prompt,
         systemPrompt: systemPrompt,
@@ -56,7 +56,7 @@ class GroqService {
     }
   }
 
-  /// Complex reasoning and RAG chat (1,000 free req/day).
+  /// Complex reasoning and RAG chat.
   Future<String> complete70B({
     required String prompt,
     String? systemPrompt,
@@ -65,7 +65,7 @@ class GroqService {
   }) async {
     try {
       return await _callChatCompletion(
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         rateLimitKey: 'groq_heavy',
         prompt: prompt,
         systemPrompt: systemPrompt,
@@ -74,7 +74,7 @@ class GroqService {
       );
     } catch (_) {
       return await _callChatCompletion(
-        model: 'mixtral-8x7b-32768',
+        model: 'qwen/qwen3.8-27b',
         rateLimitKey: 'groq_heavy',
         prompt: prompt,
         systemPrompt: systemPrompt,

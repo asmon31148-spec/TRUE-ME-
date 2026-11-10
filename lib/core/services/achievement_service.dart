@@ -1,3 +1,5 @@
+import 'offline_cache_service.dart';
+
 class AchievementBadge {
   final String id;
   final String title;
@@ -20,41 +22,58 @@ class AchievementService {
   AchievementService._();
 
   static List<AchievementBadge> getInitialBadges() {
+    final streak = OfflineCacheService.getCurrentStreak();
+    final quizzes = OfflineCacheService.getQuizAttempts();
+    final sessions = OfflineCacheService.getRecentPracticeSessions();
+    final decks = OfflineCacheService.getAllCachedDecks();
+
+    int totalReviewedCards = 0;
+    for (final s in sessions.where((e) => e['activity'] == 'flashcards')) {
+      final sub = (s['subtitle'] as String? ?? '');
+      final match = RegExp(r'(\d+)').firstMatch(sub);
+      if (match != null) {
+        totalReviewedCards += int.tryParse(match.group(1) ?? '0') ?? 0;
+      }
+    }
+
+    final hasVoiceSession = sessions.any((e) => e['activity'] == 'voice');
+    final hasPerfectQuiz = quizzes.any((q) => (q['percentage'] as num? ?? 0) >= 100);
+
     return [
-      const AchievementBadge(
+      AchievementBadge(
         id: 'streak_7',
         title: 'Consistent 7',
         description: 'Studied 7 days in a row without breaking streak',
-        icon: '🔥',
-        isUnlocked: true,
+        icon: '7d',
+        isUnlocked: streak >= 7,
       ),
-      const AchievementBadge(
+      AchievementBadge(
         id: 'decay_slayer',
         title: 'Decay Slayer',
         description: 'Reviewed 25 flashcards with SM-2 spaced repetition',
-        icon: '⚡',
-        isUnlocked: true,
+        icon: '25c',
+        isUnlocked: totalReviewedCards >= 25,
       ),
-      const AchievementBadge(
-        id: 'rag_scholar',
-        title: 'RAG Scholar',
-        description: 'Asked Sage 50 questions with verified textbook citations',
-        icon: '📚',
-        isUnlocked: false,
+      AchievementBadge(
+        id: 'deck_builder',
+        title: 'Card Creator',
+        description: 'Created or generated at least 1 flashcard deck',
+        icon: 'Deck',
+        isUnlocked: decks.isNotEmpty,
       ),
-      const AchievementBadge(
+      AchievementBadge(
         id: 'voice_master',
         title: 'Voice Scholar',
-        description: 'Completed a 30-minute interactive voice tutor session',
-        icon: '🎙️',
-        isUnlocked: false,
+        description: 'Completed an interactive voice tutor session',
+        icon: 'Mic',
+        isUnlocked: hasVoiceSession,
       ),
-      const AchievementBadge(
+      AchievementBadge(
         id: 'perfect_quiz',
         title: '100% Mastery',
-        description: 'Scored 100% on an adaptive hard concept quiz',
-        icon: '🏆',
-        isUnlocked: false,
+        description: 'Scored 100% on a practice quiz',
+        icon: '100%',
+        isUnlocked: hasPerfectQuiz,
       ),
     ];
   }

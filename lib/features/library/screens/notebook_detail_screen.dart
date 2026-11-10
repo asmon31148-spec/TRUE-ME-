@@ -275,10 +275,27 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                   color: AppColors.background,
                   border: Border(top: BorderSide(color: AppColors.border, width: 1)),
                 ),
-                child: AppPrimaryButton(
-                  label: 'Add files',
-                  icon: const Icon(Icons.add, size: 20, color: Colors.white),
-                  onPressed: _openAddFiles,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: AppSecondaryButton(
+                        label: 'Write note',
+                        icon: const Icon(Icons.edit_note_outlined, size: 20),
+                        onPressed: () async {
+                          await context.push('/note-editor?notebookId=${widget.notebookId}');
+                          if (mounted) _loadNotebook();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AppPrimaryButton(
+                        label: 'Add files',
+                        icon: const Icon(Icons.add, size: 20, color: Colors.white),
+                        onPressed: _openAddFiles,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -359,6 +376,13 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                 title: 'Mind map',
                 subtitle: 'Generate visual concept hierarchy with AI',
                 onTap: () => context.push('/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: const Icon(Icons.play_circle_outline, size: 22, color: AppColors.textPrimary),
+                title: 'Audio explainer',
+                subtitle: 'Listen to a narrated walkthrough of $title',
+                onTap: () => context.push('/explainer?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(

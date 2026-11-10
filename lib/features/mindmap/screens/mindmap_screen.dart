@@ -23,6 +23,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
   Graph _graph = Graph()..isTree = true;
   late final BuchheimWalkerConfiguration _builder;
   late final TextEditingController _topicCtrl;
+  final Map<String, String> _nodeLabels = {};
   final Map<String, String> _nodeSummaries = {};
   String _currentTopic = '';
   bool _isGenerating = false;
@@ -84,19 +85,25 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
 
       final newGraph = Graph()..isTree = true;
+      _nodeLabels.clear();
       _nodeSummaries.clear();
+      int seq = 0;
 
       final rootTitle = (data['root'] as String? ?? cleanTopic).trim();
-      final rootNode = Node.Id(rootTitle);
-      _nodeSummaries[rootTitle] = 'Core topic: $rootTitle';
+      final rootId = 'node_${seq++}';
+      final rootNode = Node.Id(rootId);
+      _nodeLabels[rootId] = rootTitle;
+      _nodeSummaries[rootId] = 'Core topic: $rootTitle';
 
       final branches = data['branches'] as List<dynamic>? ?? [];
       for (final b in branches) {
         final bMap = Map<String, dynamic>.from(b as Map);
         final bTitle = (bMap['title'] as String? ?? 'Subtopic').trim();
         final bSummary = (bMap['summary'] as String? ?? 'Key branch of $rootTitle').trim();
-        final bNode = Node.Id(bTitle);
-        _nodeSummaries[bTitle] = bSummary;
+        final bId = 'node_${seq++}';
+        final bNode = Node.Id(bId);
+        _nodeLabels[bId] = bTitle;
+        _nodeSummaries[bId] = bSummary;
         newGraph.addEdge(rootNode, bNode);
 
         final children = bMap['children'] as List<dynamic>? ?? [];
@@ -104,8 +111,10 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
           final cMap = Map<String, dynamic>.from(c as Map);
           final cTitle = (cMap['title'] as String? ?? 'Concept').trim();
           final cSummary = (cMap['summary'] as String? ?? 'Supporting detail of $bTitle').trim();
-          final cNode = Node.Id(cTitle);
-          _nodeSummaries[cTitle] = cSummary;
+          final cId = 'node_${seq++}';
+          final cNode = Node.Id(cId);
+          _nodeLabels[cId] = cTitle;
+          _nodeSummaries[cId] = cSummary;
           newGraph.addEdge(bNode, cNode);
         }
       }
@@ -126,8 +135,9 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
     }
   }
 
-  void _showNodeSheet(String title) {
-    final summary = _nodeSummaries[title] ?? 'Concept related to $_currentTopic.';
+  void _showNodeSheet(String nodeId) {
+    final title = _nodeLabels[nodeId] ?? nodeId;
+    final summary = _nodeSummaries[nodeId] ?? 'Concept related to $_currentTopic.';
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.background,
@@ -253,10 +263,11 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                     ..strokeWidth = 1.5
                                     ..style = PaintingStyle.stroke,
                                   builder: (Node node) {
-                                    final label = node.key!.value as String;
-                                    final isRoot = label == _currentTopic;
+                                    final nodeId = node.key!.value as String;
+                                    final label = _nodeLabels[nodeId] ?? nodeId;
+                                    final isRoot = nodeId == 'node_0';
                                     return GestureDetector(
-                                      onTap: () => _showNodeSheet(label),
+                                      onTap: () => _showNodeSheet(nodeId),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                         decoration: BoxDecoration(

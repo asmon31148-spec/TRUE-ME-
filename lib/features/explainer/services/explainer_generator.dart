@@ -33,41 +33,13 @@ Return ONLY valid JSON matching this schema:
 }
 ''';
 
-    try {
-      final jsonString = await _aiRouter.executeHeavyReasoning(
-        prompt: 'Topic: $topic\n\nStudy Notes:\n$notesContent',
-        systemPrompt: systemPrompt,
-        jsonMode: true,
-      );
+    final jsonString = await _aiRouter.executeHeavyReasoning(
+      prompt: 'Topic: $topic\n\nStudy Notes:\n$notesContent',
+      systemPrompt: systemPrompt,
+      jsonMode: true,
+    );
 
-      final Map<String, dynamic> data = jsonDecode(jsonString);
-      return ExplainerScriptModel.fromMap(data);
-    } catch (_) {
-      // Safe fallback default scene script
-      return ExplainerScriptModel(
-        title: 'Mastering $topic',
-        topic: topic,
-        scenes: [
-          ExplainerSceneModel(
-            sceneNumber: 1,
-            title: 'Foundational Intuition',
-            narrationText:
-                'Welcome! Today we are deconstructing $topic. Let us understand the core motivation behind this concept and why it matters in computing.',
-            durationSeconds: 120,
-            animationType: AnimationType.diagram,
-            elements: ['Core Motivation', 'Problem Statement', 'Constraints'],
-          ),
-          ExplainerSceneModel(
-            sceneNumber: 2,
-            title: 'Mechanisms & Equations',
-            narrationText:
-                'Now let us trace the underlying equations and algorithmic transitions step by step.',
-            durationSeconds: 180,
-            animationType: AnimationType.formula,
-            elements: ['Vector Allocation', 'Available Resources', 'Safe Sequence'],
-          ),
-        ],
-      );
-    }
+    final Map<String, dynamic> data = jsonDecode(jsonString);
+    return ExplainerScriptModel.fromMap(data);
   }
 }

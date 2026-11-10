@@ -1,33 +1,28 @@
-import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../utils/rate_limiter.dart';
 
 class GeminiService {
   final String _apiKey;
-  late final GenerativeModel _reasoningModel;
   late final GenerativeModel _embeddingModel;
+
+  static const List<String> _chatModels = [
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+  ];
 
   GeminiService({String? apiKey})
       : _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '' {
-    _reasoningModel = GenerativeModel(
-      model: 'gemini-1.5-flash',
-      apiKey: _apiKey,
-      generationConfig: GenerationConfig(
-        temperature: 0.4,
-        maxOutputTokens: 2048,
-      ),
-    );
-
     _embeddingModel = GenerativeModel(
-      model: 'text-embedding-004',
+      model: 'gemini-embedding-001',
       apiKey: _apiKey,
     );
   }
 
   bool get isConfigured => _apiKey.isNotEmpty;
 
-  /// Generate structured content using Gemini Flash.
+  /// Generate structured content using active Gemini Flash models with fallback.
   Future<String> generateContent(
     String prompt, {
     String? systemInstruction,
@@ -42,30 +37,36 @@ class GeminiService {
       throw StateError('Gemini Flash daily limit reached');
     }
 
-    final model = systemInstruction != null
-        ? GenerativeModel(
-            model: 'gemini-1.5-flash',
-            apiKey: _apiKey,
-            systemInstruction: Content.system(systemInstruction),
-            generationConfig: GenerationConfig(
-              temperature: 0.3,
-              responseMimeType: jsonMode ? 'application/json' : 'text/plain',
-            ),
-          )
-        : _reasoningModel;
+    Object? lastError;
+    for (final modelId in _chatModels) {
+      try {
+        final model = GenerativeModel(
+          model: modelId,
+          apiKey: _apiKey,
+          systemInstruction:
+              systemInstruction != null ? Content.system(systemInstruction) : null,
+          generationConfig: GenerationConfig(
+            temperature: systemInstruction != null ? 0.3 : 0.4,
+            maxOutputTokens: 2048,
+            responseMimeType: jsonMode ? 'application/json' : 'text/plain',
+          ),
+        );
 
-    final response = await model.generateContent([Content.text(prompt)]);
-    await LocalRateLimiter.incrementUsage('gemini_flash');
-
-    final text = response.text;
-    if (text == null || text.isEmpty) {
-      throw StateError('Gemini returned empty response');
+        final response = await model.generateContent([Content.text(prompt)]);
+        final text = response.text;
+        if (text != null && text.isNotEmpty) {
+          await LocalRateLimiter.incrementUsage('gemini_flash');
+          return text;
+        }
+      } catch (e) {
+        lastError = e;
+      }
     }
 
-    return text;
+    throw StateError('All Gemini Flash models failed: $lastError');
   }
 
-  /// Generate 768-dimensional vector embedding for RAG chunks.
+  /// Generate 768-dimensional vector embedding for RAG chunks via gemini-embedding-001.
   Future<List<double>> generateEmbedding(String text) async {
     if (!isConfigured) {
       throw StateError('GEMINI_API_KEY is not configured in .env');
@@ -81,7 +82,6 @@ class GeminiService {
     await LocalRateLimiter.incrementUsage('gemini_embeddings');
 
     final values = response.embedding.values;
-    // Ensure 768 dimensions for Supabase pgvector
     if (values.length > 768) {
       return values.sublist(0, 768).toList();
     }

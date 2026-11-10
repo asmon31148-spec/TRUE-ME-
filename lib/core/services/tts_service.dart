@@ -44,6 +44,11 @@ class TtsService {
     _isSpeaking = false;
   }
 
+  /// Sets speech rate (0.5 is normal conversational rate).
+  Future<void> setSpeechRate(double rate) async {
+    await _flutterTts.setSpeechRate((0.5 * rate).clamp(0.25, 1.0));
+  }
+
   void dispose() {
     _flutterTts.stop();
   }

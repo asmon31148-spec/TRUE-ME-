@@ -6,12 +6,14 @@ import '../../../core/services/offline_cache_service.dart';
 
 class NoteEditorScreen extends StatefulWidget {
   final String? noteId;
+  final String? notebookId;
   final String? initialTitle;
   final String? initialContent;
 
   const NoteEditorScreen({
     super.key,
     this.noteId,
+    this.notebookId,
     this.initialTitle,
     this.initialContent,
   });
@@ -127,19 +129,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 final content = _contentController.text.trim();
                 if (title.isEmpty && content.isEmpty) return;
 
+                final resolvedTitle = title.isNotEmpty ? title : 'Untitled Note';
                 final id = widget.noteId ?? 'note_${DateTime.now().millisecondsSinceEpoch}';
                 await OfflineCacheService.cacheNote(id, {
                   'id': id,
-                  'title': title.isNotEmpty ? title : 'Untitled Note',
+                  'notebookId': widget.notebookId,
+                  'title': resolvedTitle,
                   'content': content,
                   'updatedAt': DateTime.now().toIso8601String(),
                 });
+
+                if (widget.notebookId != null && widget.notebookId!.isNotEmpty) {
+                  await OfflineCacheService.addDocumentToNotebook(widget.notebookId!, {
+                    'id': id,
+                    'fileName': '$resolvedTitle.md',
+                    'section': 'Notes',
+                    'content': content,
+                    'fileType': 'markdown',
+                    'sizeBytes': content.length,
+                  });
+                }
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Note saved')),
                   );
                   if (context.canPop()) {
-                    context.pop();
+                    context.pop(true);
                   } else {
                     context.go('/library');
                   }

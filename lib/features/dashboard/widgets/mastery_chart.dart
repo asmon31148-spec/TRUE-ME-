@@ -8,13 +8,16 @@ class MasteryChart extends StatelessWidget {
 
   const MasteryChart({
     super.key,
-    this.weeklyMinutes = const [35, 50, 40, 65, 80, 55, 90], // Mon to Sun
+    this.weeklyMinutes = const [0, 0, 0, 0, 0, 0, 0], // Mon to Sun
   });
 
   @override
   Widget build(BuildContext context) {
+    final avg = weeklyMinutes.isNotEmpty
+        ? (weeklyMinutes.reduce((a, b) => a + b) / 7).round()
+        : 0;
     return GlassCard(
-      borderRadius: 24,
+      borderRadius: 12,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -27,21 +30,21 @@ class MasteryChart extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.accent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Avg: 59m/day',
-                  style: TextStyle(
+                child: Text(
+                  'Avg: ${avg}m/day',
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primaryLight,
+                    color: AppColors.accent,
                   ),
                 ),
               ),

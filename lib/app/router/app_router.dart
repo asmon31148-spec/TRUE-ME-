@@ -58,7 +58,15 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/note-editor',
-      builder: (context, state) => const NoteEditorScreen(),
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        return NoteEditorScreen(
+          notebookId: qp['notebookId'],
+          noteId: qp['noteId'],
+          initialTitle: qp['title'],
+          initialContent: qp['content'],
+        );
+      },
     ),
     GoRoute(
       path: '/voice-tutor',
@@ -66,7 +74,13 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/explainer',
-      builder: (context, state) => const ExplainerPlayerScreen(),
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        return ExplainerPlayerScreen(
+          notebookId: qp['notebookId'],
+          topic: qp['topic'],
+        );
+      },
     ),
     GoRoute(
       path: '/chat',
