@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/supabase_service.dart';
@@ -131,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -150,9 +151,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border, width: 1),
+                  border: Border.all(color: context.borderColor, width: 1),
                 ),
                 child: Row(
                   children: [
@@ -166,10 +167,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: !_isSignUp ? AppColors.background : Colors.transparent,
+                            color: !_isSignUp ? context.bgColor : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: !_isSignUp
-                                ? Border.all(color: AppColors.border, width: 1)
+                                ? Border.all(color: context.borderColor, width: 1)
                                 : null,
                           ),
                           alignment: Alignment.center,
@@ -178,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: !_isSignUp ? FontWeight.w600 : FontWeight.w400,
-                              color: AppColors.textPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ),
@@ -194,10 +195,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: _isSignUp ? AppColors.background : Colors.transparent,
+                            color: _isSignUp ? context.bgColor : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: _isSignUp
-                                ? Border.all(color: AppColors.border, width: 1)
+                                ? Border.all(color: context.borderColor, width: 1)
                                 : null,
                           ),
                           alignment: Alignment.center,
@@ -206,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: _isSignUp ? FontWeight.w600 : FontWeight.w400,
-                              color: AppColors.textPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ),
@@ -222,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.error, width: 1),
                   ),
@@ -260,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   icon: Icon(
                     _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     size: 20,
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                   ),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),

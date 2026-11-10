@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -69,7 +70,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -121,15 +122,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border, width: 1),
+                    border: Border.all(color: context.borderColor, width: 1),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: selectedSubject,
                       isExpanded: true,
-                      dropdownColor: AppColors.surface,
+                      dropdownColor: context.surfaceColor,
                       items: subOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                       onChanged: (v) {
                         if (v != null) setSheetState(() => selectedSubject = v);
@@ -157,15 +158,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
+                              color: context.surfaceColor,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.border, width: 1),
+                              border: Border.all(color: context.borderColor, width: 1),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 value: selectedType,
                                 isExpanded: true,
-                                dropdownColor: AppColors.surface,
+                                dropdownColor: context.surfaceColor,
                                 items: const [
                                   DropdownMenuItem(value: 'quiz', child: Text('Quiz')),
                                   DropdownMenuItem(value: 'flashcard', child: Text('Flashcards')),
@@ -219,7 +220,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Schedule', style: AppTypography.screenTitle),
         actions: [
@@ -260,9 +261,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.surfaceColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border, width: 1),
+              border: Border.all(color: context.borderColor, width: 1),
             ),
             child: const Text('No tasks scheduled', style: AppTypography.secondary),
           )
@@ -270,9 +271,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.surfaceColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border, width: 1),
+              border: Border.all(color: context.borderColor, width: 1),
             ),
             child: Column(
               children: List.generate(tasks.length, (i) {
@@ -295,7 +296,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           else
                             Checkbox(
                               value: isDone,
-                              activeColor: AppColors.accent,
+                              activeColor: context.accentColor,
                               onChanged: (v) async {
                                 setState(() => t['completed'] = v == true);
                                 await _savePlans();
@@ -311,7 +312,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
-                                    color: isDone ? AppColors.textMuted : AppColors.textPrimary,
+                                    color: isDone ? context.textSecondary : context.textPrimary,
                                     decoration: isDone ? TextDecoration.lineThrough : null,
                                   ),
                                 ),
@@ -323,7 +324,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         ],
                       ),
                     ),
-                    if (i < tasks.length - 1) const Divider(color: AppColors.border, height: 1),
+                    if (i < tasks.length - 1) Divider(color: context.borderColor, height: 1),
                   ],
                 );
               }),

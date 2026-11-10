@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 
@@ -75,13 +75,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 22),
+          icon: Icon(Icons.arrow_back, color: context.textPrimary, size: 22),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -92,15 +92,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ),
         title: TextField(
           controller: _titleController,
-          style: AppTypography.screenTitle,
-          decoration: const InputDecoration(
+          style: AppTypography.screenTitle.copyWith(color: context.textPrimary),
+          decoration: InputDecoration(
             hintText: 'Untitled note',
             hintStyle: TextStyle(
-              color: AppColors.textMuted,
+              color: context.textSecondary,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
             border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            filled: false,
             isDense: true,
             contentPadding: EdgeInsets.zero,
           ),
@@ -114,8 +117,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             },
             child: Text(
               _previewMode ? 'Edit' : 'Preview',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.textSecondary,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -161,10 +164,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   }
                 }
               },
-              child: const Text(
+              child: Text(
                 'Save',
                 style: TextStyle(
-                  color: AppColors.accent,
+                  color: context.accentColor,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -174,7 +177,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: AppColors.border, height: 1),
+          child: Container(color: context.borderColor, height: 1),
         ),
       ),
       body: SafeArea(
@@ -190,11 +193,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           _contentController.text.isEmpty
                               ? 'Nothing to preview.'
                               : _contentController.text,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 14,
                             height: 1.6,
-                            color: AppColors.textPrimary,
+                            color: context.textPrimary,
                           ),
                         ),
                       ),
@@ -205,12 +208,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       maxLines: null,
                       expands: true,
                       textAlignVertical: TextAlignVertical.top,
-                      style: AppTypography.bodyMedium.copyWith(height: 1.6),
-                      decoration: const InputDecoration(
+                      style: AppTypography.bodyMedium.copyWith(height: 1.6, color: context.textPrimary),
+                      decoration: InputDecoration(
                         hintText: 'Start writing your note...',
-                        hintStyle: TextStyle(color: AppColors.textMuted),
+                        hintStyle: TextStyle(color: context.textSecondary),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.all(20),
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: const EdgeInsets.all(20),
                       ),
                     ),
             ),
@@ -218,10 +224,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             // Single horizontal formatting row just above the keyboard
             if (!_previewMode)
               Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.surface,
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
                   border: Border(
-                    top: BorderSide(color: AppColors.border, width: 1),
+                    top: BorderSide(color: context.borderColor, width: 1),
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -309,14 +315,14 @@ class _FormatButton extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: context.bgColor,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.border, width: 1),
+              border: Border.all(color: context.borderColor, width: 1),
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: AppColors.textPrimary,
+                color: context.textPrimary,
                 fontSize: 13,
                 fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
                 fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,

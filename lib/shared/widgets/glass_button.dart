@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
 
 class GlassButton extends StatelessWidget {
@@ -41,7 +41,7 @@ class GlassButton extends StatelessWidget {
         height: height,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: surfaceColor ?? AppColors.accent,
+            backgroundColor: surfaceColor ?? context.accentColor,
             foregroundColor: Colors.white,
             elevation: 0,
             padding: padding,
@@ -73,11 +73,11 @@ class GlassButton extends StatelessWidget {
       height: height,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: surfaceColor ?? AppColors.surface,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: surfaceColor ?? context.surfaceColor,
+          foregroundColor: context.textPrimary,
           elevation: 0,
           padding: padding,
-          side: BorderSide(color: borderColor ?? AppColors.border, width: 1.0),
+          side: BorderSide(color: borderColor ?? context.borderColor, width: 1.0),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
         ),
         onPressed: onPressed,
@@ -87,10 +87,10 @@ class GlassButton extends StatelessWidget {
           children: [
             if (icon != null) ...[icon!, const SizedBox(width: 8)],
             DefaultTextStyle(
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
+                color: context.textPrimary,
                 fontFamily: AppTypography.fontFamily,
               ),
               child: effectiveChild,

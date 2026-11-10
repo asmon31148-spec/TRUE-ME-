@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
-class AccountCenterScreen extends StatefulWidget {
+class AccountCenterScreen extends ConsumerStatefulWidget {
   const AccountCenterScreen({super.key});
 
   @override
-  State<AccountCenterScreen> createState() => _AccountCenterScreenState();
+  ConsumerState<AccountCenterScreen> createState() => _AccountCenterScreenState();
 }
 
-class _AccountCenterScreenState extends State<AccountCenterScreen> {
+class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
   late String _userName;
   late String _userEmail;
   late List<String> _userSubjects;
   late String _learningStyle;
   late DateTime _targetExamDate;
-  late String _selectedTheme;
   String _appVersion = '...';
   bool _isConnectingDrive = false;
 
@@ -51,7 +52,6 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
       _userSubjects = OfflineCacheService.getUserSubjects();
       _learningStyle = profile['learningStyle'] ?? 'Visual & Practice';
       _targetExamDate = OfflineCacheService.getTargetExamDate();
-      _selectedTheme = OfflineCacheService.getThemeMode();
     });
   }
 
@@ -60,11 +60,6 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.background,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: const Text('Edit name', style: AppTypography.sectionHeading),
         content: AppInput(
           controller: controller,
@@ -78,7 +73,7 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
+              backgroundColor: context.accentColor,
               foregroundColor: Colors.white,
               minimumSize: const Size(80, 40),
             ),
@@ -120,11 +115,6 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.background,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border),
-        ),
         title: Text(
           deleteAll ? 'Delete everything' : 'Remove from app',
           style: AppTypography.sectionHeading.copyWith(color: AppColors.error),
@@ -137,7 +127,7 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
               deleteAll
                   ? 'This will delete all local data AND your True Me folder in Google Drive. Type "DELETE" below to confirm.'
                   : 'This will reset local data on this phone. Your Google Drive files will remain safe.',
-              style: AppTypography.bodySmall,
+              style: AppTypography.bodySmall.copyWith(color: context.textSecondary),
             ),
             if (deleteAll) ...[
               const SizedBox(height: 12),
@@ -189,17 +179,20 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
     final daysRemaining = _targetExamDate.difference(DateTime.now()).inDays.clamp(0, 999);
     final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
     final driveEmail = DriveService.instance.userEmail;
+    final currentThemeMode = ref.watch(themeModeProvider);
+    final selectedTheme = currentThemeMode == ThemeMode.dark
+        ? 'Dark'
+        : (currentThemeMode == ThemeMode.light ? 'Light' : 'System');
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Account', style: AppTypography.screenTitle),
         centerTitle: false,
-        backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 22),
+          icon: Icon(Icons.arrow_back, color: context.textPrimary, size: 22),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -210,7 +203,7 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: AppColors.border, height: 1),
+          child: Container(color: context.borderColor, height: 1),
         ),
       ),
       body: SingleChildScrollView(
@@ -228,13 +221,14 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                   AppListRow(
                     title: _userName,
                     subtitle: 'Name',
-                    trailing: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+                    trailing: Icon(Icons.edit_outlined, size: 18, color: context.textSecondary),
                     onTap: _showEditNameDialog,
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   AppListRow(
                     title: _userEmail,
                     subtitle: 'Email',
+                    trailing: const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -251,7 +245,7 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                   AppListRow(
                     title: '${_targetExamDate.day}/${_targetExamDate.month}/${_targetExamDate.year}',
                     subtitle: 'Target exam deadline ($daysRemaining days left)',
-                    trailing: const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.textSecondary),
+                    trailing: Icon(Icons.calendar_today_outlined, size: 18, color: context.textSecondary),
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
@@ -265,17 +259,18 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                       }
                     },
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   AppListRow(
                     title: _userSubjects.isNotEmpty ? _userSubjects.join(', ') : 'No subjects added yet',
                     subtitle: 'Active subjects (${_userSubjects.length})',
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                    trailing: Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
                     onTap: () => context.push('/setup-profile'),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   AppListRow(
                     title: _learningStyle,
                     subtitle: 'Learning style',
+                    trailing: const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -300,20 +295,21 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                             onPressed: _connectDrive,
                             child: Text(
                               driveConnected ? 'Reconnect' : 'Connect',
-                              style: const TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w600),
+                              style: TextStyle(color: context.accentColor, fontSize: 13, fontWeight: FontWeight.w600),
                             ),
                           ),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   const AppListRow(
                     title: 'True Me',
                     subtitle: 'Google Drive folder location',
+                    trailing: SizedBox.shrink(),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   AppListRow(
                     title: 'Clear local cache',
                     subtitle: 'Clears locally stored quizzes, cards, and study logs',
-                    trailing: const Icon(Icons.delete_outline, size: 18, color: AppColors.textSecondary),
+                    trailing: Icon(Icons.delete_outline, size: 18, color: context.textSecondary),
                     onTap: () async {
                       await OfflineCacheService.clearAllCache();
                       if (mounted) {
@@ -336,35 +332,32 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
               child: Column(
                 children: [
                   AppListRow(
-                    title: _selectedTheme,
+                    title: selectedTheme,
                     subtitle: 'Theme',
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: ['System', 'Light', 'Dark'].map((theme) {
-                        final isSelected = _selectedTheme == theme;
+                        final isSelected = selectedTheme == theme;
                         return Padding(
                           padding: const EdgeInsets.only(left: 4),
                           child: InkWell(
-                            onTap: () async {
-                              await OfflineCacheService.saveThemeMode(theme);
-                              setState(() => _selectedTheme = theme);
-                            },
+                            onTap: () => ref.read(themeModeProvider.notifier).setTheme(theme),
                             borderRadius: BorderRadius.circular(6),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.accent : AppColors.surface,
+                                color: isSelected ? context.accentColor : context.bgColor,
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                  color: isSelected ? AppColors.accent : AppColors.border,
+                                  color: isSelected ? context.accentColor : context.borderColor,
                                 ),
                               ),
                               child: Text(
                                 theme,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected ? Colors.white : context.textPrimary,
                                 ),
                               ),
                             ),
@@ -373,11 +366,11 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                       }).toList(),
                     ),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   AppListRow(
                     title: 'Check for updates',
                     subtitle: 'Installed version: $_appVersion',
-                    trailing: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
+                    trailing: Icon(Icons.refresh, size: 18, color: context.textSecondary),
                     onTap: () async {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -413,10 +406,10 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                   AppListRow(
                     title: 'Remove from app',
                     subtitle: 'Clears local data, leaves Drive files intact',
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                    trailing: Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
                     onTap: () => _showConfirmDeleteDialog(deleteAll: false),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.border),
+                  Divider(height: 1, thickness: 1, color: context.borderColor),
                   AppListRow(
                     title: 'Delete everything',
                     subtitle: 'Permanently deletes Drive files and local data',

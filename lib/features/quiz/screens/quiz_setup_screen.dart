@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -162,7 +163,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
     // 1. Loading / Generating state
     if (_isPlaying && quizState.isGenerating) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close),
@@ -176,7 +177,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(color: AppColors.accent),
+                CircularProgressIndicator(color: context.accentColor),
                 const SizedBox(height: 20),
                 Text(
                   'Sage is building your $_questionCount-question $_selectedDifficulty quiz...',
@@ -202,7 +203,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
     if (_reviewingMissed && _missedQuestions.isNotEmpty) {
       final q = _missedQuestions[_reviewIdx];
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close),
@@ -216,7 +217,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(q.question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(q.question, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: context.textPrimary)),
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
@@ -240,14 +241,14 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Explanation', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                      Text('Explanation', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.textSecondary)),
                       const SizedBox(height: 4),
                       Text(q.explanation, style: AppTypography.body),
                     ],
@@ -279,7 +280,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
       final pct = total > 0 ? ((_score / total) * 100).round() : 0;
 
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         appBar: AppBar(
           title: const Text('Result', style: AppTypography.screenTitle),
           leading: IconButton(
@@ -296,7 +297,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                 const SizedBox(height: 12),
                 Text(
                   '$_score / $total',
-                  style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: context.textPrimary),
                 ),
                 Text(
                   '$pct% • ${quiz.subject}',
@@ -368,7 +369,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
       final letters = ['A', 'B', 'C', 'D'];
 
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close, size: 24),
@@ -376,7 +377,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
           ),
           title: Text(
             'Question ${_currentIdx + 1} of $total',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: context.textPrimary),
           ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(6),
@@ -394,10 +395,10 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                     children: [
                       Text(
                         q.question,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: context.textPrimary,
                           height: 1.4,
                         ),
                       ),
@@ -407,20 +408,20 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                         final isSelected = _selectedOptionIdx == i;
                         final isCorrectOption = i == q.correctOptionIndex;
 
-                        Color borderColor = AppColors.border;
-                        Color bgColor = AppColors.surface;
+                        Color borderColor = context.borderColor;
+                        Color bgColor = context.surfaceColor;
 
                         if (_hasChecked) {
                           if (isCorrectOption) {
                             borderColor = AppColors.success;
-                            bgColor = AppColors.success.withOpacity(0.06);
+                            bgColor = AppColors.success.withOpacity(0.1);
                           } else if (isSelected) {
                             borderColor = AppColors.error;
-                            bgColor = AppColors.error.withOpacity(0.06);
+                            bgColor = AppColors.error.withOpacity(0.1);
                           }
                         } else if (isSelected) {
-                          borderColor = AppColors.accent;
-                          bgColor = AppColors.accent.withOpacity(0.06);
+                          borderColor = context.accentColor;
+                          bgColor = context.accentTint;
                         }
 
                         return Padding(
@@ -446,14 +447,14 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
-                                      color: isSelected ? AppColors.accent : AppColors.textSecondary,
+                                      color: isSelected ? context.accentColor : context.textSecondary,
                                     ),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: Text(
                                       q.options[i],
-                                      style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                                      style: TextStyle(fontSize: 15, color: context.textPrimary),
                                     ),
                                   ),
                                 ],
@@ -469,9 +470,9 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: AppColors.surface,
+                            color: context.surfaceColor,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border, width: 1),
+                            border: Border.all(color: context.borderColor, width: 1),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,9 +500,9 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: AppColors.background,
-                  border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+                decoration: BoxDecoration(
+                  color: context.bgColor,
+                  border: Border(top: BorderSide(color: context.borderColor, width: 1)),
                 ),
                 child: AppPrimaryButton(
                   label: !_hasChecked
@@ -520,7 +521,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
     // 5. Quiz Setup Screen
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Quiz', style: AppTypography.screenTitle),
       ),
@@ -539,15 +540,15 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border, width: 1),
+                          border: Border.all(color: context.borderColor, width: 1),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String?>(
                             value: _selectedNotebookId,
                             isExpanded: true,
-                            dropdownColor: AppColors.surface,
+                            dropdownColor: context.surfaceColor,
                             items: [
                               ..._notebooks.map((n) {
                                 final id = n['id'] as String;
@@ -623,9 +624,9 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: AppColors.background,
-                border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+              decoration: BoxDecoration(
+                color: context.bgColor,
+                border: Border(top: BorderSide(color: context.borderColor, width: 1)),
               ),
               child: AppPrimaryButton(
                 label: 'Start quiz',

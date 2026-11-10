@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 
 class AppScaffoldShell extends StatelessWidget {
   final Widget child;
@@ -48,14 +48,14 @@ class AppScaffoldShell extends StatelessWidget {
     final selectedIdx = _calculateSelectedIndex(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       body: child,
       bottomNavigationBar: showBar
           ? Container(
-              decoration: const BoxDecoration(
-                color: AppColors.background,
+              decoration: BoxDecoration(
+                color: context.bgColor,
                 border: Border(
-                  top: BorderSide(color: AppColors.border, width: 1.0),
+                  top: BorderSide(color: context.borderColor, width: 1.0),
                 ),
               ),
               child: SafeArea(
@@ -119,7 +119,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.accent : AppColors.textSecondary;
+    final color = isSelected ? context.accentColor : context.textSecondary;
 
     return Expanded(
       child: InkWell(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
@@ -119,7 +120,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         : (subjects.isNotEmpty ? 'All subjects (${subjects.length})' : 'General study');
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, size: 22),
@@ -231,18 +232,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                     decoration: BoxDecoration(
-                                      color: msg.isUser ? AppColors.accent : AppColors.surface,
+                                      color: msg.isUser ? context.accentColor : context.surfaceColor,
                                       borderRadius: BorderRadius.circular(14),
                                       border: msg.isUser
                                           ? null
-                                          : Border.all(color: AppColors.border, width: 1),
+                                          : Border.all(color: context.borderColor, width: 1),
                                     ),
                                     child: SelectableText(
                                       msg.text,
                                       style: TextStyle(
                                         fontSize: 15,
                                         height: 1.45,
-                                        color: msg.isUser ? Colors.white : AppColors.textPrimary,
+                                        color: msg.isUser ? Colors.white : context.textPrimary,
                                       ),
                                     ),
                                   ),
@@ -253,9 +254,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       if (!msg.isUser && msg.citation != null) ...[
                                         Text(
                                           msg.citation!,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 11,
-                                            color: AppColors.accent,
+                                            color: context.accentColor,
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
@@ -276,9 +277,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             // Pinned Bottom Input Bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: const BoxDecoration(
-                color: AppColors.background,
-                border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+              decoration: BoxDecoration(
+                color: context.bgColor,
+                border: Border(top: BorderSide(color: context.borderColor, width: 1)),
               ),
               child: Row(
                 children: [
@@ -289,23 +290,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       maxLines: 4,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _sendMessage(),
+                      style: TextStyle(color: context.textPrimary, fontSize: 15),
                       decoration: InputDecoration(
                         hintText: _isListening ? 'Listening...' : 'Ask Sage...',
-                        hintStyle: const TextStyle(color: AppColors.textMuted),
+                        hintStyle: TextStyle(color: context.textSecondary),
                         filled: true,
-                        fillColor: AppColors.surface,
+                        fillColor: context.surfaceColor,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.border, width: 1),
+                          borderSide: BorderSide(color: context.borderColor, width: 1),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.border, width: 1),
+                          borderSide: BorderSide(color: context.borderColor, width: 1),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+                          borderSide: BorderSide(color: context.accentColor, width: 1.5),
                         ),
                       ),
                     ),
@@ -315,13 +317,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     icon: Icon(
                       _isListening ? Icons.mic : Icons.mic_none_outlined,
                       size: 22,
-                      color: _isListening ? AppColors.error : AppColors.textSecondary,
+                      color: _isListening ? AppColors.error : context.textSecondary,
                     ),
                     tooltip: 'Voice input',
                     onPressed: _toggleVoiceInput,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.send_rounded, size: 22, color: AppColors.accent),
+                    icon: Icon(Icons.send_rounded, size: 22, color: context.accentColor),
                     onPressed: chatState.isThinking ? null : () => _sendMessage(),
                   ),
                 ],
@@ -343,19 +345,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.surfaceColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border, width: 1),
+            border: Border.all(color: context.borderColor, width: 1),
           ),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   text,
-                  style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                  style: TextStyle(fontSize: 15, color: context.textPrimary),
                 ),
               ),
-              const Icon(Icons.arrow_forward, size: 16, color: AppColors.textSecondary),
+              Icon(Icons.arrow_forward, size: 16, color: context.textSecondary),
             ],
           ),
         ),

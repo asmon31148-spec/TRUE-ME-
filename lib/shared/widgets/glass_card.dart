@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 
 class GlassCard extends StatelessWidget {
   final Widget child;
@@ -37,10 +37,10 @@ class GlassCard extends StatelessWidget {
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: surfaceColor ?? AppColors.surface,
+        color: surfaceColor ?? context.surfaceColor,
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: borderColor ?? AppColors.border,
+          color: borderColor ?? context.borderColor,
           width: 1.0,
         ),
       ),
@@ -54,7 +54,6 @@ class GlassCard extends StatelessWidget {
         child: content,
       );
     }
-
     return content;
   }
 }

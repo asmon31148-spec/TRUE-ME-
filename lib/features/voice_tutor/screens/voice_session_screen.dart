@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -38,7 +39,7 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -111,7 +112,7 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
     if (isSpeaking) statusLabel = 'Sage is speaking (tap to interrupt)';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Voice tutor', style: AppTypography.screenTitle),
         actions: [
@@ -150,7 +151,7 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
                 width: isListening || isSpeaking ? 136 : 112,
                 height: isListening || isSpeaking ? 136 : 112,
                 decoration: BoxDecoration(
-                  color: isListening ? AppColors.error : AppColors.accent,
+                  color: isListening ? AppColors.error : context.accentColor,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -178,9 +179,9 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
                   constraints: const BoxConstraints(maxHeight: 160),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: SingleChildScrollView(
                     child: Column(

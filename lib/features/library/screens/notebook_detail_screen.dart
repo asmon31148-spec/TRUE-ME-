@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -59,10 +60,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.background,
+        backgroundColor: ctx.bgColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: ctx.borderColor),
         ),
         title: const Text('Rename subject', style: AppTypography.sectionHeading),
         content: AppInput(controller: ctrl, autofocus: true, hintText: 'Subject name'),
@@ -70,7 +71,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
+              backgroundColor: ctx.accentColor,
               foregroundColor: Colors.white,
               minimumSize: const Size(80, 40),
             ),
@@ -96,7 +97,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -135,7 +136,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                   ),
                 ],
               ),
-              const Divider(color: AppColors.border, height: 24),
+              Divider(color: ctx.borderColor, height: 24),
               Expanded(
                 child: SingleChildScrollView(
                   controller: scrollCtrl,
@@ -211,7 +212,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     final totalDocs = syllabusFiles.length + notesFiles.length + booksFiles.length + paperFiles.length;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: Text(title, style: AppTypography.screenTitle),
         actions: [
@@ -237,9 +238,9 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.accent,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.accent,
+          labelColor: context.accentColor,
+          unselectedLabelColor: context.textSecondary,
+          indicatorColor: context.accentColor,
           indicatorSize: TabBarIndicatorSize.tab,
           tabs: const [
             Tab(text: 'Sources'),
@@ -271,9 +272,9 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: AppColors.background,
-                  border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+                decoration: BoxDecoration(
+                  color: context.bgColor,
+                  border: Border(top: BorderSide(color: context.borderColor, width: 1)),
                 ),
                 child: Row(
                   children: [
@@ -319,7 +320,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                 const Text('Quick actions', style: AppTypography.smallLabel),
                 const SizedBox(height: 8),
                 AppListRow(
-                  leading: const Icon(Icons.summarize_outlined, size: 20, color: AppColors.accent),
+                  leading: Icon(Icons.summarize_outlined, size: 20, color: context.accentColor),
                   title: 'Summarize my $title sources',
                   onTap: () => context.push(
                     '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Summarize the key concepts from my $title notes.')}',
@@ -327,7 +328,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                 ),
                 const SizedBox(height: 8),
                 AppListRow(
-                  leading: const Icon(Icons.lightbulb_outline, size: 20, color: AppColors.accent),
+                  leading: Icon(Icons.lightbulb_outline, size: 20, color: context.accentColor),
                   title: 'Explain important exam topics',
                   onTap: () => context.push(
                     '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('What are the most important exam topics in $title?')}',
@@ -349,7 +350,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
               AppListRow(
-                leading: const Icon(Icons.summarize_outlined, size: 22, color: AppColors.textPrimary),
+                leading: Icon(Icons.summarize_outlined, size: 22, color: context.textPrimary),
                 title: 'Summary',
                 subtitle: 'Ask Sage to summarize all uploaded sources',
                 onTap: () => context.push(
@@ -358,28 +359,28 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: const Icon(Icons.style_outlined, size: 22, color: AppColors.textPrimary),
+                leading: Icon(Icons.style_outlined, size: 22, color: context.textPrimary),
                 title: 'Flashcards',
                 subtitle: 'Review or generate AI cards from $title',
                 onTap: () => context.push('/flashcards?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: const Icon(Icons.quiz_outlined, size: 22, color: AppColors.textPrimary),
+                leading: Icon(Icons.quiz_outlined, size: 22, color: context.textPrimary),
                 title: 'Quiz',
                 subtitle: 'Test yourself on your $title notes',
                 onTap: () => context.push('/quiz?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: const Icon(Icons.account_tree_outlined, size: 22, color: AppColors.textPrimary),
+                leading: Icon(Icons.account_tree_outlined, size: 22, color: context.textPrimary),
                 title: 'Mind map',
                 subtitle: 'Generate visual concept hierarchy with AI',
                 onTap: () => context.push('/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: const Icon(Icons.play_circle_outline, size: 22, color: AppColors.textPrimary),
+                leading: Icon(Icons.play_circle_outline, size: 22, color: context.textPrimary),
                 title: 'Audio explainer',
                 subtitle: 'Listen to a narrated walkthrough of $title',
                 onTap: () => context.push('/explainer?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
@@ -388,7 +389,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               AppListRow(
                 leading: _isGeneratingPdf
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.picture_as_pdf_outlined, size: 22, color: AppColors.textPrimary),
+                    : Icon(Icons.picture_as_pdf_outlined, size: 22, color: context.textPrimary),
                 title: _isGeneratingPdf ? 'Generating PDF...' : 'Make a PDF study sheet',
                 subtitle: 'Synthesize sources into a shareable PDF guide',
                 onTap: _isGeneratingPdf ? null : _exportRealPdf,
@@ -405,16 +406,16 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border, width: 1),
+        border: Border.all(color: context.borderColor, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '$sectionName (${files.length})',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.textPrimary),
           ),
           const SizedBox(height: 10),
           if (files.isEmpty)
@@ -430,23 +431,23 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.accent),
+                      Icon(Icons.insert_drive_file_outlined, size: 18, color: context.accentColor),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           fName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                          style: TextStyle(fontSize: 14, color: context.textPrimary),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         hasDrive ? 'Drive' : 'Saved',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(fontSize: 12, color: context.textSecondary),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right, size: 16, color: AppColors.textSecondary),
+                      Icon(Icons.chevron_right, size: 16, color: context.textSecondary),
                     ],
                   ),
                 ),

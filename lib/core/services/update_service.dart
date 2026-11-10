@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 import '../../shared/widgets/glass_button.dart';
 import '../../shared/widgets/glass_card.dart';
 
@@ -320,14 +321,14 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
               decoration: BoxDecoration(
                 color: _isDownloaded
                     ? AppColors.success.withOpacity(0.18)
-                    : AppColors.accentCyan.withOpacity(0.15),
+                    : context.accentTint,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 _isDownloaded
                     ? Icons.check_circle_rounded
                     : Icons.system_update_rounded,
-                color: _isDownloaded ? AppColors.success : AppColors.accentCyan,
+                color: _isDownloaded ? AppColors.success : context.accentColor,
                 size: 38,
               ),
             ),
@@ -336,16 +337,16 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
               _isDownloaded
                   ? 'Update Downloaded!'
                   : 'True Me Update Available',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: context.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               'Version v${widget.info.latestVersion}',
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
             const SizedBox(height: 12),
 
@@ -354,15 +355,16 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                 constraints: const BoxConstraints(maxHeight: 120),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: context.bgColor,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.borderColor),
                 ),
                 child: SingleChildScrollView(
                   child: Text(
                     widget.info.releaseNotes,
                     style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textPrimary.withOpacity(0.9),
+                      color: context.textPrimary,
                       height: 1.4,
                     ),
                   ),
@@ -378,8 +380,8 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
                   value: _progress > 0 ? _progress : null,
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accentCyan),
+                  backgroundColor: context.borderColor,
+                  valueColor: AlwaysStoppedAnimation<Color>(context.accentColor),
                   minHeight: 8,
                 ),
               ),
@@ -388,7 +390,7 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                 _progressLabel.isNotEmpty
                     ? _progressLabel
                     : 'Connecting to GitHub server...',
-                style: const TextStyle(fontSize: 12, color: AppColors.accentCyan, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 12, color: context.accentColor, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 16),
             ],
@@ -410,7 +412,7 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                     Expanded(
                       child: Text(
                         _statusError!,
-                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                        style: TextStyle(fontSize: 12, color: context.textPrimary),
                       ),
                     ),
                   ],
@@ -428,7 +430,7 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                         UpdateService.markUpdateDismissed(widget.info.latestVersion);
                         Navigator.of(widget.dialogCtx).pop();
                       },
-                      child: const Text('Later', style: TextStyle(color: Colors.white60)),
+                      child: Text('Later', style: TextStyle(color: context.textSecondary)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -444,10 +446,10 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
             ],
 
             if (_isDownloaded) ...[
-              const Text(
+              Text(
                 'Ready to install. If the Android installer did not open automatically, tap "Install Now".',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.white70),
+                style: TextStyle(fontSize: 12, color: context.textSecondary),
               ),
               const SizedBox(height: 16),
               GlassButton(
@@ -477,8 +479,8 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                 children: [
                   Expanded(
                     child: TextButton.icon(
-                      icon: const Icon(Icons.open_in_browser, size: 16, color: AppColors.accentCyan),
-                      label: const Text('Browser Download', style: TextStyle(color: AppColors.accentCyan, fontSize: 12)),
+                      icon: Icon(Icons.open_in_browser, size: 16, color: context.accentColor),
+                      label: Text('Browser Download', style: TextStyle(color: context.accentColor, fontSize: 12)),
                       onPressed: () => UpdateService.launchBrowserDownload(widget.info.apkDownloadUrl),
                     ),
                   ),
@@ -488,7 +490,7 @@ class _UpdateDialogWidgetState extends State<_UpdateDialogWidget> {
                         UpdateService.markUpdateDismissed(widget.info.latestVersion);
                         Navigator.of(widget.dialogCtx).pop();
                       },
-                      child: const Text('Close', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      child: Text('Close', style: TextStyle(color: context.textSecondary, fontSize: 12)),
                     ),
                   ),
                 ],

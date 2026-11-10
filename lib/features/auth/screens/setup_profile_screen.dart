@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -42,10 +42,10 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.background,
+        backgroundColor: ctx.bgColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          side: BorderSide(color: ctx.borderColor, width: 1),
         ),
         title: const Text('Add subject', style: AppTypography.sectionHeading),
         content: AppInput(
@@ -59,7 +59,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
+              backgroundColor: ctx.accentColor,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -84,18 +84,6 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       initialDate: _deadline,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.accent,
-              onPrimary: Colors.white,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() => _deadline = picked);
@@ -142,7 +130,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
     final daysLeft = _deadline.difference(DateTime.now()).inDays.clamp(0, 999);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -152,7 +140,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
               // Step Counter
               Text(
                 'Step $_currentStep of 2',
-                style: AppTypography.smallLabel.copyWith(color: AppColors.accent),
+                style: AppTypography.smallLabel.copyWith(color: context.accentColor),
               ),
               const SizedBox(height: 8),
 
@@ -167,12 +155,12 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                const Text(
+                Text(
                   'Subjects',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -185,18 +173,18 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                       (sub) => Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border, width: 1),
+                          border: Border.all(color: context.borderColor, width: 1),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(sub, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                            Text(sub, style: TextStyle(fontSize: 14, color: context.textPrimary)),
                             const SizedBox(width: 6),
                             GestureDetector(
                               onTap: () => setState(() => _subjects.remove(sub)),
-                              child: const Icon(Icons.close, size: 16, color: AppColors.textSecondary),
+                              child: Icon(Icons.close, size: 16, color: context.textSecondary),
                             ),
                           ],
                         ),
@@ -208,16 +196,16 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.accent, width: 1),
+                          border: Border.all(color: context.accentColor, width: 1),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.add, size: 16, color: AppColors.accent),
-                            SizedBox(width: 4),
-                            Text('Add subject', style: TextStyle(fontSize: 14, color: AppColors.accent, fontWeight: FontWeight.w500)),
+                            Icon(Icons.add, size: 16, color: context.accentColor),
+                            const SizedBox(width: 4),
+                            Text('Add subject', style: TextStyle(fontSize: 14, color: context.accentColor, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ),
@@ -226,12 +214,12 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                const Text(
+                Text(
                   'Exam or syllabus deadline',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -242,18 +230,18 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border, width: 1),
+                      border: Border.all(color: context.borderColor, width: 1),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           '${_deadline.day}/${_deadline.month}/${_deadline.year}',
-                          style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                          style: TextStyle(fontSize: 16, color: context.textPrimary),
                         ),
-                        const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.textSecondary),
+                        Icon(Icons.calendar_today_outlined, size: 20, color: context.textSecondary),
                       ],
                     ),
                   ),
@@ -282,21 +270,21 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border, width: 1),
+                    border: Border.all(color: context.borderColor, width: 1),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.folder_shared_outlined, size: 28, color: AppColors.accent),
-                      SizedBox(width: 14),
+                      Icon(Icons.folder_shared_outlined, size: 28, color: context.accentColor),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('True Me / [Subject]', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
-                            SizedBox(height: 2),
-                            Text('Syllabus, Notes, Books, Previous papers', style: AppTypography.secondary),
+                            Text('True Me / [Subject]', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: context.textPrimary)),
+                            const SizedBox(height: 2),
+                            const Text('Syllabus, Notes, Books, Previous papers', style: AppTypography.secondary),
                           ],
                         ),
                       ),

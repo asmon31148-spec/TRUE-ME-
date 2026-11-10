@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -57,10 +58,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.background,
+        backgroundColor: ctx.bgColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          side: BorderSide(color: ctx.borderColor, width: 1),
         ),
         title: const Text('Add subject', style: AppTypography.sectionHeading),
         content: AppInput(
@@ -75,7 +76,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
+              backgroundColor: ctx.accentColor,
               foregroundColor: Colors.white,
               elevation: 0,
               minimumSize: const Size(80, 40),
@@ -111,7 +112,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Library', style: AppTypography.screenTitle),
         actions: [
@@ -131,7 +132,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             AppInput(
               controller: _searchCtrl,
               hintText: 'Search subjects and uploaded files',
-              prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+              prefixIcon: Icon(Icons.search, size: 20, color: context.textSecondary),
               onChanged: (val) => setState(() => _filter = val),
             ),
             const SizedBox(height: 14),
@@ -147,7 +148,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     Icon(
                       driveConnected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
                       size: 16,
-                      color: driveConnected ? AppColors.success : AppColors.textSecondary,
+                      color: driveConnected ? AppColors.success : context.textSecondary,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -158,7 +159,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 ? 'Google Drive connected (${DriveService.instance.userEmail ?? 'True Me'})'
                                 : 'Saved on device • Tap to connect Google Drive'),
                         style: AppTypography.smallLabel.copyWith(
-                          color: driveConnected ? AppColors.success : AppColors.textSecondary,
+                          color: driveConnected ? AppColors.success : context.textSecondary,
                         ),
                       ),
                     ),

@@ -6,31 +6,28 @@ class AppTypography {
 
   static const String fontFamily = 'Inter';
 
-  // Screen Title: 24 px, Semibold (w600)
+  // Screen Title: 24 px, Semibold (w600) — inherits Theme onSurface automatically
   static const TextStyle screenTitle = TextStyle(
     fontFamily: fontFamily,
     fontSize: 24,
     fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
     letterSpacing: -0.4,
   );
 
-  // Section Heading: 18 px, Semibold (w600)
+  // Section Heading: 18 px, Semibold (w600) — inherits Theme onSurface automatically
   static const TextStyle sectionHeading = TextStyle(
     fontFamily: fontFamily,
     fontSize: 18,
     fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
     letterSpacing: -0.2,
   );
 
-  // Body: 16 px, Regular (w400)
+  // Body: 16 px, Regular (w400) — inherits Theme onSurface automatically
   static const TextStyle body = TextStyle(
     fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w400,
     height: 1.45,
-    color: AppColors.textPrimary,
   );
 
   // Secondary text and captions: 14 px, Regular (w400)
@@ -39,7 +36,7 @@ class AppTypography {
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.4,
-    color: AppColors.textSecondary,
+    color: Color(0xFF6B7280),
   );
 
   // Small label: 12 px, Medium (w500)
@@ -47,7 +44,7 @@ class AppTypography {
     fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w500,
-    color: AppColors.textSecondary,
+    color: Color(0xFF6B7280),
   );
 
   // Aliases for backwards compatibility

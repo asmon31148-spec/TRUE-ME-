@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:graphview/GraphView.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -140,7 +141,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
     final summary = _nodeSummaries[nodeId] ?? 'Concept related to $_currentTopic.';
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -177,7 +178,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Mind map', style: AppTypography.screenTitle),
       ),
@@ -187,8 +188,8 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
             // Top input row
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: context.borderColor, width: 1)),
               ),
               child: Row(
                 children: [
@@ -204,7 +205,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                     height: 52,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
+                        backgroundColor: context.accentColor,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -220,13 +221,13 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
             // Canvas or empty/loading state
             Expanded(
               child: _isGenerating
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircularProgressIndicator(color: AppColors.accent),
-                          SizedBox(height: 16),
-                          Text('Mapping concept hierarchy with AI...', style: AppTypography.secondary),
+                          CircularProgressIndicator(color: context.accentColor),
+                          const SizedBox(height: 16),
+                          const Text('Mapping concept hierarchy with AI...', style: AppTypography.secondary),
                         ],
                       ),
                     )
@@ -259,7 +260,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                   graph: _graph,
                                   algorithm: BuchheimWalkerAlgorithm(_builder, TreeEdgeRenderer(_builder)),
                                   paint: Paint()
-                                    ..color = AppColors.border
+                                    ..color = context.borderColor
                                     ..strokeWidth = 1.5
                                     ..style = PaintingStyle.stroke,
                                   builder: (Node node) {
@@ -271,10 +272,10 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                         decoration: BoxDecoration(
-                                          color: AppColors.surface,
+                                          color: context.surfaceColor,
                                           borderRadius: BorderRadius.circular(10),
                                           border: Border.all(
-                                            color: isRoot ? AppColors.accent : AppColors.border,
+                                            color: isRoot ? context.accentColor : context.borderColor,
                                             width: isRoot ? 1.5 : 1.0,
                                           ),
                                         ),
@@ -283,7 +284,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: isRoot ? FontWeight.w600 : FontWeight.w500,
-                                            color: isRoot ? AppColors.accent : AppColors.textPrimary,
+                                            color: isRoot ? context.accentColor : context.textPrimary,
                                           ),
                                         ),
                                       ),

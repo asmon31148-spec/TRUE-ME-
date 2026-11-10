@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -63,7 +63,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final todayWeekday = DateTime.now().weekday; // 1=Mon .. 7=Sun
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Progress', style: AppTypography.screenTitle),
         actions: [
@@ -88,9 +88,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border, width: 1),
+                border: Border.all(color: context.borderColor, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,16 +102,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         _planProgress >= 1.0
                             ? "Today's plan complete"
                             : (_totalWeeklyMinutes > 0 ? 'Active study' : 'Ready to start'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: context.textPrimary,
                         ),
                       ),
                       Text(
                         '${(_planProgress * 100).toInt()}%',
                         style: AppTypography.smallLabel.copyWith(
-                          color: AppColors.accent,
+                          color: context.accentColor,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -133,9 +133,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border, width: 1),
+                border: Border.all(color: context.borderColor, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +158,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         children: [
                           _buildWeakTopicRow(context, topic, score),
                           if (i < _weakTopics.length - 1)
-                            const Divider(color: AppColors.border, height: 16),
+                            Divider(color: context.borderColor, height: 16),
                         ],
                       );
                     }),
@@ -174,16 +174,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border, width: 1),
+                      border: Border.all(color: context.borderColor, width: 1),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           '$_streak ${_streak == 1 ? 'day' : 'days'}',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.textPrimary),
                         ),
                         const SizedBox(height: 2),
                         const Text('Streak', style: AppTypography.secondary),
@@ -196,16 +196,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border, width: 1),
+                      border: Border.all(color: context.borderColor, width: 1),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           _formatDuration(_totalWeeklyMinutes),
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.textPrimary),
                         ),
                         const SizedBox(height: 2),
                         const Text('This week', style: AppTypography.secondary),
@@ -221,9 +221,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.surfaceColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border, width: 1),
+                border: Border.all(color: context.borderColor, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,6 +237,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: List.generate(7, (i) {
                         return _buildBar(
+                          context,
                           days[i],
                           _weeklyBars[i],
                           maxBarVal,
@@ -262,12 +263,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
           Expanded(
             child: Text(
               topic,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: context.textPrimary),
             ),
           ),
           Text(
             score,
-            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 14, color: context.textSecondary, fontWeight: FontWeight.w500),
           ),
           const SizedBox(width: 12),
           TextButton(
@@ -287,7 +288,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  Widget _buildBar(String day, int minutes, int maxVal, {bool isToday = false}) {
+  Widget _buildBar(BuildContext context, String day, int minutes, int maxVal, {bool isToday = false}) {
     final ratio = maxVal > 0 ? (minutes / maxVal).clamp(0.0, 1.0) : 0.0;
     final barHeight = minutes > 0 ? (ratio * 84).clamp(6.0, 84.0) : 4.0;
 
@@ -297,13 +298,13 @@ class _ProgressScreenState extends State<ProgressScreen> {
         if (minutes > 0)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text('${minutes}m', style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+            child: Text('${minutes}m', style: TextStyle(fontSize: 10, color: context.textSecondary)),
           ),
         Container(
           width: 24,
           height: barHeight,
           decoration: BoxDecoration(
-            color: minutes > 0 ? AppColors.accent : AppColors.border,
+            color: minutes > 0 ? context.accentColor : context.borderColor,
             borderRadius: BorderRadius.circular(4),
           ),
         ),
@@ -312,7 +313,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           day,
           style: AppTypography.smallLabel.copyWith(
             fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
-            color: isToday ? AppColors.accent : AppColors.textSecondary,
+            color: isToday ? context.accentColor : context.textSecondary,
           ),
         ),
       ],

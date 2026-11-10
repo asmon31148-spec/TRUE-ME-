@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/theme/colors.dart';
-import '../../app/theme/typography.dart';
+import '../../app/theme/theme_provider.dart';
 
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -24,24 +23,24 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
+          color: context.textPrimary,
           letterSpacing: -0.2,
         ),
       ),
       leading: leading,
       actions: actions,
       bottom: bottom,
-      shape: const Border(
-        bottom: BorderSide(color: AppColors.border, width: 1),
+      shape: Border(
+        bottom: BorderSide(color: context.borderColor, width: 1),
       ),
     );
   }

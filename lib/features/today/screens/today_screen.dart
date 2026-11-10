@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -293,10 +294,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final initialLetter = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'S';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppColors.accent,
+          color: context.accentColor,
           onRefresh: () async {
             await OfflineCacheService.syncFromCloud();
             if (mounted) _loadData();
@@ -316,19 +317,19 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           'Hi, $_userName',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                            color: context.textPrimary,
                             letterSpacing: -0.4,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           _formattedDate(),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.textSecondary,
+                            color: context.textSecondary,
                           ),
                         ),
                       ],
@@ -341,9 +342,9 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
+                        color: context.surfaceColor,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.border, width: 1),
+                        border: Border.all(color: context.borderColor, width: 1),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -356,10 +357,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           const SizedBox(width: 4),
                           Text(
                             '$_streak',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ],
@@ -377,17 +378,17 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     child: Container(
                       width: 38,
                       height: 38,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEFF6FF),
+                      decoration: BoxDecoration(
+                        color: context.accentTint,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         initialLetter,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
+                          color: context.accentColor,
                         ),
                       ),
                     ),
@@ -530,25 +531,25 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border, width: 1),
+                    border: Border.all(color: context.borderColor, width: 1),
                   ),
                   child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
+                          Text(
                             'Exam countdown',
-                            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                            style: TextStyle(fontSize: 14, color: context.textSecondary),
                           ),
                           Text(
                             _daysLeft == 0 ? 'Today!' : '$_daysLeft ${_daysLeft == 1 ? 'day' : 'days'} left',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ],
@@ -562,7 +563,9 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               height: 6,
                               margin: EdgeInsets.only(right: i < 9 ? 4 : 0),
                               decoration: BoxDecoration(
-                                color: isFilled ? AppColors.accent : const Color(0xFFE5E7EB),
+                                color: isFilled
+                                    ? context.accentColor
+                                    : (context.isDarkMode ? const Color(0xFF262B33) : const Color(0xFFE5E7EB)),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -579,12 +582,12 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     "Today's tasks",
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimary,
                     ),
                   ),
                   Row(
@@ -597,9 +600,9 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text(
+                          child: Text(
                             'Refresh AI',
-                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                            style: TextStyle(fontSize: 13, color: context.textSecondary),
                           ),
                         ),
                       const SizedBox(width: 4),
@@ -613,12 +616,12 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: const Text(
+                        child: Text(
                           'See schedule',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.accent,
+                            color: context.accentColor,
                           ),
                         ),
                       ),
@@ -633,21 +636,21 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border, width: 1),
+                    border: Border.all(color: context.borderColor, width: 1),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'No tasks added for today yet.',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.textPrimary),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         'Tap "Generate plan with Sage" above or add custom tasks in your schedule.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        style: TextStyle(fontSize: 13, color: context.textSecondary),
                       ),
                       const SizedBox(height: 12),
                       AppSecondaryButton(
@@ -678,10 +681,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: AppColors.background,
+                          color: context.bgColor,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: isUpNext ? AppColors.accent : AppColors.border,
+                            color: isUpNext ? context.accentColor : context.borderColor,
                             width: isUpNext ? 1.5 : 1.0,
                           ),
                         ),
@@ -692,14 +695,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: isDone ? AppColors.surface : const Color(0xFFEFF6FF),
+                                color: isDone ? context.surfaceColor : context.accentTint,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               alignment: Alignment.center,
                               child: Icon(
                                 _taskIcon(type),
                                 size: 20,
-                                color: isDone ? AppColors.textSecondary : AppColors.accent,
+                                color: isDone ? context.textSecondary : context.accentColor,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -716,7 +719,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
-                                      color: isDone ? AppColors.textMuted : AppColors.textPrimary,
+                                      color: isDone ? context.textSecondary : context.textPrimary,
                                       decoration: isDone ? TextDecoration.lineThrough : null,
                                     ),
                                   ),
@@ -725,9 +728,9 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                     '$subject · $mins min',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 13,
-                                      color: AppColors.textSecondary,
+                                      color: context.textSecondary,
                                     ),
                                   ),
                                 ],
@@ -739,15 +742,15 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEFF6FF),
+                                  color: context.accentTint,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Up next',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.accent,
+                                    color: context.accentColor,
                                   ),
                                 ),
                               ),
@@ -761,17 +764,20 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               child: Padding(
                                 padding: const EdgeInsets.all(2),
                                 child: isDone
-                                    ? const Icon(
+                                    ? Icon(
                                         Icons.check_circle,
                                         size: 24,
-                                        color: AppColors.accent,
+                                        color: context.accentColor,
                                       )
                                     : Container(
                                         width: 22,
                                         height: 22,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          border: Border.all(color: const Color(0xFFD1D5DB), width: 1.8),
+                                          border: Border.all(
+                                            color: context.isDarkMode ? const Color(0xFF4B5563) : const Color(0xFFD1D5DB),
+                                            width: 1.8,
+                                          ),
                                         ),
                                       ),
                               ),
@@ -789,9 +795,9 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border, width: 1),
+                  border: Border.all(color: context.borderColor, width: 1),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -799,8 +805,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     Container(
                       width: 34,
                       height: 34,
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
+                      decoration: BoxDecoration(
+                        color: context.accentColor,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -820,10 +826,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                         children: [
                           Text(
                             _insightText,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               height: 1.4,
-                              color: AppColors.textPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -833,10 +839,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               _insightRoute == '/library'
                                   ? 'Go to Library'
                                   : (_insightRoute == '/flashcards' ? 'Review flashcards' : 'Ask Sage'),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.accent,
+                                color: context.accentColor,
                               ),
                             ),
                           ),

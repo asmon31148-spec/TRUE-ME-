@@ -5,6 +5,7 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/ocr_service.dart';
@@ -36,7 +37,7 @@ class AddFilesSheet extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -425,7 +426,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Column(
                     children: [
-                      const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+                      Center(child: CircularProgressIndicator(color: context.accentColor)),
                       const SizedBox(height: 16),
                       Text(_statusText, style: AppTypography.secondary, textAlign: TextAlign.center),
                     ],
@@ -528,16 +529,16 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.borderColor),
                   ),
                   child: Column(
                     children: [
                       Icon(
                         _isRecording ? Icons.graphic_eq : Icons.mic_none,
                         size: 40,
-                        color: _isRecording ? AppColors.error : AppColors.accent,
+                        color: _isRecording ? AppColors.error : context.accentColor,
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -550,7 +551,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                 const SizedBox(height: 16),
                 AppPrimaryButton(
                   label: _isRecording ? 'Stop & Transcribe' : 'Start Recording',
-                  backgroundColor: _isRecording ? AppColors.error : AppColors.accent,
+                  backgroundColor: _isRecording ? AppColors.error : context.accentColor,
                   onPressed: _toggleAudioRecording,
                 ),
                 if (!_isRecording) ...[
@@ -577,14 +578,14 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: _driveFiles.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+                      separatorBuilder: (_, __) => Divider(height: 1, color: context.borderColor),
                       itemBuilder: (ctx, i) {
                         final f = _driveFiles[i];
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.insert_drive_file_outlined, color: AppColors.accent),
+                          leading: Icon(Icons.insert_drive_file_outlined, color: context.accentColor),
                           title: Text(f.name ?? 'Untitled', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          trailing: const Text('Import', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w600)),
+                          trailing: Text('Import', style: TextStyle(color: context.accentColor, fontWeight: FontWeight.w600)),
                           onTap: () => _importDriveFile(f),
                         );
                       },
@@ -618,18 +619,18 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: AppColors.textPrimary),
+            Icon(icon, size: 22, color: context.textPrimary),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                  Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: context.textPrimary)),
                   Text(subtitle, style: AppTypography.smallLabel),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+            Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
           ],
         ),
       ),

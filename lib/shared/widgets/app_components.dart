@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
 
-/// Primary Button: Full width, 52 px high, accent fill (#2563EB), white text.
+/// Primary Button: Full width, 52 px high, accent fill, white text.
 class AppPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -27,7 +27,7 @@ class AppPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = backgroundColor ?? AppColors.accent;
+    final bg = backgroundColor ?? context.accentColor;
     final fg = foregroundColor ?? Colors.white;
 
     return SizedBox(
@@ -67,7 +67,7 @@ class AppPrimaryButton extends StatelessWidget {
   }
 }
 
-/// Secondary Button: Same size 52 px, surface fill (#F6F7F9) with 1 px border, primary text.
+/// Secondary Button: Same size 52 px, theme surface fill with 1 px border, theme primary text.
 class AppSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -91,10 +91,10 @@ class AppSecondaryButton extends StatelessWidget {
       height: height ?? 52,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: context.surfaceColor,
+          foregroundColor: context.textPrimary,
           elevation: 0,
-          side: const BorderSide(color: AppColors.border, width: 1),
+          side: BorderSide(color: context.borderColor, width: 1),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: onPressed,
@@ -104,10 +104,10 @@ class AppSecondaryButton extends StatelessWidget {
             if (icon != null) ...[icon!, const SizedBox(width: 8)],
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: context.textPrimary,
               ),
             ),
           ],
@@ -117,7 +117,7 @@ class AppSecondaryButton extends StatelessWidget {
   }
 }
 
-/// Card: Surface fill, 1 px border, radius 12, padding 16.
+/// Card: Theme surface fill, 1 px border, radius 12, padding 16.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -140,16 +140,16 @@ class AppCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.surface,
+        color: backgroundColor ?? context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border, width: 1),
+        border: Border.all(color: context.borderColor, width: 1),
       ),
       child: showChevron
           ? Row(
               children: [
                 Expanded(child: child),
                 const SizedBox(width: 8),
-                const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
+                Icon(Icons.chevron_right, size: 20, color: context.textSecondary),
               ],
             )
           : child,
@@ -192,9 +192,9 @@ class AppListRow extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 56),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border, width: 1),
+          border: Border.all(color: context.borderColor, width: 1),
         ),
         child: Row(
           children: [
@@ -209,23 +209,23 @@ class AppListRow extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimary,
                     ),
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      style: AppTypography.secondary,
+                      style: AppTypography.secondary.copyWith(color: context.textSecondary),
                     ),
                   ],
                 ],
               ),
             ),
-            trailing ?? const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
+            trailing ?? Icon(Icons.chevron_right, size: 20, color: context.textSecondary),
           ],
         ),
       ),
@@ -233,7 +233,7 @@ class AppListRow extends StatelessWidget {
   }
 }
 
-/// Input: Label above (not floating), surface fill, 1 px border, radius 12, error text below.
+/// Input: Label above (not floating), theme surface fill, 1 px border, radius 12, error text below.
 class AppInput extends StatelessWidget {
   final String? label;
   final String? hintText;
@@ -268,10 +268,10 @@ class AppInput extends StatelessWidget {
         if (label != null) ...[
           Text(
             label!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary,
+              color: context.textPrimary,
             ),
           ),
           const SizedBox(height: 6),
@@ -282,7 +282,7 @@ class AppInput extends StatelessWidget {
           autofocus: autofocus,
           keyboardType: keyboardType,
           onChanged: onChanged,
-          style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 16, color: context.textPrimary),
           decoration: InputDecoration(
             hintText: hintText,
             prefixIcon: prefixIcon,
@@ -310,16 +310,17 @@ class AppChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = context.accentColor;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.accent.withOpacity(0.08) : AppColors.surface,
+          color: isSelected ? accent.withOpacity(0.12) : context.surfaceColor,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? AppColors.accent : AppColors.border,
+            color: isSelected ? accent : context.borderColor,
             width: 1,
           ),
         ),
@@ -328,7 +329,7 @@ class AppChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            color: isSelected ? AppColors.accent : AppColors.textPrimary,
+            color: isSelected ? accent : context.textPrimary,
           ),
         ),
       ),
@@ -336,7 +337,7 @@ class AppChip extends StatelessWidget {
   }
 }
 
-/// Progress Bar: 6 px high, border-colored track, accent fill.
+/// Progress Bar: 6 px high, theme border track, accent fill.
 class AppProgressBar extends StatelessWidget {
   final double value; // 0.0 to 1.0
 
@@ -350,8 +351,8 @@ class AppProgressBar extends StatelessWidget {
         height: 6,
         child: LinearProgressIndicator(
           value: value.clamp(0.0, 1.0),
-          backgroundColor: AppColors.border,
-          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
+          backgroundColor: context.borderColor,
+          valueColor: AlwaysStoppedAnimation<Color>(context.accentColor),
         ),
       ),
     );
@@ -381,12 +382,12 @@ class AppEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: AppColors.textSecondary),
+            Icon(icon, size: 48, color: context.textSecondary),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: AppTypography.secondary,
+              style: AppTypography.secondary.copyWith(color: context.textSecondary),
             ),
             const SizedBox(height: 20),
             SizedBox(

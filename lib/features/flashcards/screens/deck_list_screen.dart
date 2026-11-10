@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -109,7 +109,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -141,15 +141,15 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.surfaceColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border, width: 1),
+                      border: Border.all(color: context.borderColor, width: 1),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String?>(
                         value: selectedNbId,
                         isExpanded: true,
-                        dropdownColor: AppColors.surface,
+                        dropdownColor: context.surfaceColor,
                         items: [
                           ...notebooks.map((n) {
                             return DropdownMenuItem<String?>(
@@ -240,7 +240,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -311,7 +311,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
       final total = _sessionCards.length;
 
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.bgColor,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close, size: 24),
@@ -319,7 +319,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
           ),
           title: Text(
             'Card ${_cardIndex + 1} of $total',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: context.textPrimary),
           ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(6),
@@ -338,9 +338,9 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: context.surfaceColor,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.border, width: 1),
+                        border: Border.all(color: context.borderColor, width: 1),
                       ),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
@@ -353,7 +353,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                               style: AppTypography.smallLabel.copyWith(
                                 letterSpacing: 1.0,
                                 fontWeight: FontWeight.w600,
-                                color: _isFlipped ? AppColors.accent : AppColors.textSecondary,
+                                color: _isFlipped ? context.accentColor : context.textSecondary,
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -364,7 +364,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                                 style: TextStyle(
                                   fontSize: _isFlipped ? 17 : 20,
                                   fontWeight: _isFlipped ? FontWeight.w400 : FontWeight.w600,
-                                  color: AppColors.textPrimary,
+                                  color: context.textPrimary,
                                   height: 1.45,
                                 ),
                               ),
@@ -382,9 +382,9 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                decoration: const BoxDecoration(
-                  color: AppColors.background,
-                  border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+                decoration: BoxDecoration(
+                  color: context.bgColor,
+                  border: Border(top: BorderSide(color: context.borderColor, width: 1)),
                 ),
                 child: !_isFlipped
                     ? AppPrimaryButton(
@@ -417,7 +417,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Flashcards', style: AppTypography.screenTitle),
         actions: [
@@ -438,15 +438,15 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.accent),
+                  border: Border.all(color: context.accentColor),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
-                    SizedBox(width: 14),
-                    Expanded(
+                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: context.accentColor)),
+                    const SizedBox(width: 14),
+                    const Expanded(
                       child: Text(
                         'Sage is generating flashcards from your notes...',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
@@ -472,9 +472,9 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border, width: 1),
+                  border: Border.all(color: context.borderColor, width: 1),
                 ),
                 child: Row(
                   children: [
@@ -520,10 +520,10 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textSecondary),
+                          icon: Icon(Icons.delete_outline, size: 18, color: context.textSecondary),
                           onPressed: () => ref.read(flashcardProvider.notifier).deleteDeck(deck.id),
                         ),
-                        const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                        Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
                       ],
                     ),
                     onTap: () => _startDeck(deck),
@@ -552,15 +552,15 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.surfaceColor,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border, width: 1),
+            border: Border.all(color: context.borderColor, width: 1),
           ),
           child: Column(
             children: [
-              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.textPrimary)),
               const SizedBox(height: 2),
-              Text(interval, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              Text(interval, style: TextStyle(fontSize: 11, color: context.textSecondary)),
             ],
           ),
         ),

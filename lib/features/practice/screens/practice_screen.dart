@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -40,7 +40,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Practice', style: AppTypography.screenTitle),
       ),
@@ -55,11 +55,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/quiz');
                 if (mounted) _loadRecent();
               },
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.quiz_outlined, size: 28, color: AppColors.textPrimary),
-                  SizedBox(width: 16),
-                  Expanded(
+                  Icon(Icons.quiz_outlined, size: 28, color: context.textPrimary),
+                  const SizedBox(width: 16),
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -81,11 +81,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/flashcards');
                 if (mounted) _loadRecent();
               },
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.style_outlined, size: 28, color: AppColors.textPrimary),
-                  SizedBox(width: 16),
-                  Expanded(
+                  Icon(Icons.style_outlined, size: 28, color: context.textPrimary),
+                  const SizedBox(width: 16),
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -107,11 +107,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/voice-tutor');
                 if (mounted) _loadRecent();
               },
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.mic_none_outlined, size: 28, color: AppColors.textPrimary),
-                  SizedBox(width: 16),
-                  Expanded(
+                  Icon(Icons.mic_none_outlined, size: 28, color: context.textPrimary),
+                  const SizedBox(width: 16),
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -133,11 +133,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/mindmap');
                 if (mounted) _loadRecent();
               },
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.account_tree_outlined, size: 28, color: AppColors.textPrimary),
-                  SizedBox(width: 16),
-                  Expanded(
+                  Icon(Icons.account_tree_outlined, size: 28, color: context.textPrimary),
+                  const SizedBox(width: 16),
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -160,9 +160,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border, width: 1),
+                  border: Border.all(color: context.borderColor, width: 1),
                 ),
                 child: const Text(
                   'No practice history yet. Start a quiz, flashcard deck, or voice session above.',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -161,7 +162,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
     final progress = scenes.isNotEmpty ? (_sceneIndex + 1) / scenes.length : 0.0;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       appBar: AppBar(
         title: const Text('Audio Explainer', style: AppTypography.screenTitle),
         leading: IconButton(
@@ -206,7 +207,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                     height: 52,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
+                        backgroundColor: context.accentColor,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -222,13 +223,13 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
               // Stage
               Expanded(
                 child: _isGenerating
-                    ? const Center(
+                    ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircularProgressIndicator(color: AppColors.accent),
-                            SizedBox(height: 16),
-                            Text('Creating structured walkthrough from your notes...', style: AppTypography.secondary),
+                            CircularProgressIndicator(color: context.accentColor),
+                            const SizedBox(height: 16),
+                            const Text('Creating structured walkthrough from your notes...', style: AppTypography.secondary),
                           ],
                         ),
                       )
@@ -248,9 +249,9 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surface,
+                                  color: context.surfaceColor,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.border, width: 1),
+                                  border: Border.all(color: context.borderColor, width: 1),
                                 ),
                                 child: SingleChildScrollView(
                                   child: Column(
@@ -259,7 +260,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                       Text(
                                         'SCENE ${_sceneIndex + 1} OF ${scenes.length}',
                                         style: AppTypography.smallLabel.copyWith(
-                                          color: AppColors.accent,
+                                          color: context.accentColor,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -274,9 +275,9 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                             return Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                               decoration: BoxDecoration(
-                                                color: AppColors.background,
+                                                color: context.bgColor,
                                                 borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: AppColors.border),
+                                                border: Border.all(color: context.borderColor),
                                               ),
                                               child: Text(el, style: AppTypography.smallLabel),
                                             );
@@ -309,9 +310,9 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.borderColor),
                         ),
                         child: Text('${_playbackSpeed}x', style: AppTypography.smallLabel),
                       ),
@@ -342,7 +343,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                           height: 56,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.accent,
+                              backgroundColor: context.accentColor,
                               foregroundColor: Colors.white,
                               padding: EdgeInsets.zero,
                               shape: const CircleBorder(),

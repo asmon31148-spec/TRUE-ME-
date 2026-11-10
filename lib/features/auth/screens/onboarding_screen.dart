@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -44,7 +44,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final isLast = _pageIndex == _slides.length - 1;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.bgColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -63,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Icon(
                           slide['icon'] as IconData,
                           size: 96,
-                          color: AppColors.textPrimary,
+                          color: context.textPrimary,
                         ),
                         const SizedBox(height: 32),
                         Text(
@@ -77,7 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           child: Text(
                             slide['body'] as String,
                             textAlign: TextAlign.center,
-                            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+                            style: AppTypography.body.copyWith(color: context.textSecondary),
                           ),
                         ),
                       ],
@@ -97,7 +97,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _pageIndex == i ? AppColors.accent : AppColors.border,
+                      color: _pageIndex == i ? context.accentColor : context.borderColor,
                     ),
                   ),
                 ),

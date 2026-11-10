@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
 
 class AiThinkingIndicator extends StatelessWidget {
@@ -16,28 +16,28 @@ class AiThinkingIndicator extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: AppColors.surface,
+        color: context.surfaceColor,
         border: Border.all(
-          color: AppColors.border,
+          color: context.borderColor,
           width: 1.0,
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 12,
             height: 12,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
+              valueColor: AlwaysStoppedAnimation<Color>(context.accentColor),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             label,
             style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
               fontWeight: FontWeight.w500,
             ),
           ),
