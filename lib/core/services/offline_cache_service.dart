@@ -1,8 +1,8 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'supabase_service.dart';
 
-/// Offline Cache Service powered by Hive.
-/// Persists real student profiles, notebooks, uploaded document text, quizzes,
-/// flashcards, study plans, and study analytics locally.
+/// Offline-first Persistence & Cloud Sync Service powered by Hive + Supabase.
+/// All writes happen instantly to Hive and synchronize asynchronously to Supabase.
 class OfflineCacheService {
   static const String flashcardsBox = 'offline_flashcards';
   static const String studyPlanBox = 'offline_study_plan';
@@ -14,7 +14,6 @@ class OfflineCacheService {
 
   static bool _isInitialized = false;
 
-  /// Initializes Hive storage boxes for offline study.
   static Future<void> initialize() async {
     if (_isInitialized) return;
     await Hive.initFlutter();
@@ -29,9 +28,22 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
-  // USER PROFILE & AUTH CACHING
+  // USER PROFILE, ID & AUTH CACHING
   // ---------------------------------------------------------------------------
+  static String getUserId() {
+    final authUid = SupabaseService.instance.authUserId;
+    if (authUid != null && authUid.isNotEmpty) return authUid;
+
+    final profile = getUserProfile();
+    final savedId = profile['userId'] as String?;
+    if (savedId != null && savedId.isNotEmpty) return savedId;
+
+    final email = (profile['email'] as String? ?? 'guest@trueme.app').toLowerCase().trim();
+    return 'usr_${email.hashCode.abs()}';
+  }
+
   static Future<void> saveUserProfile({
+    String? userId,
     required String name,
     required String email,
     List<String>? subjects,
@@ -42,21 +54,53 @@ class OfflineCacheService {
   }) async {
     final box = Hive.box(userProfileBox);
     final current = getUserProfile();
+    final resolvedEmail = email.trim().isEmpty ? 'student@trueme.app' : email.trim();
+    final resolvedUserId = userId ??
+        SupabaseService.instance.authUserId ??
+        (current['userId'] as String?) ??
+        'usr_${resolvedEmail.toLowerCase().hashCode.abs()}';
+
+    final resolvedDeadline = targetExamDate ??
+        DateTime.tryParse(current['targetExamDate']?.toString() ?? '') ??
+        DateTime.now().add(const Duration(days: 30));
+
+    final existingSetupDate = DateTime.tryParse(current['examSetupDate']?.toString() ?? '');
+    final setupDate = (targetExamDate != null || existingSetupDate == null)
+        ? DateTime.now()
+        : existingSetupDate;
+
+    final resolvedSubjects = subjects ??
+        (current['subjects'] is List
+            ? List<String>.from((current['subjects'] as List).map((e) => e.toString()))
+            : <String>[]);
+    final resolvedName = name.trim().isEmpty ? 'Student' : name.trim();
+    final resolvedStyle = learningStyle ?? (current['learningStyle'] as String?) ?? 'Visual & Practice';
+
     final updated = {
       ...current,
-      'name': name.trim().isEmpty ? 'Student' : name.trim(),
-      'email': email.trim().isEmpty ? 'student@trueme.app' : email.trim(),
-      'subjects': subjects ?? current['subjects'] ?? <String>[],
-      'learningStyle': learningStyle ?? current['learningStyle'] ?? 'Visual & Practice',
-      'targetExamDate': (targetExamDate ??
-              DateTime.tryParse(current['targetExamDate']?.toString() ?? '') ??
-              DateTime.now().add(const Duration(days: 30)))
-          .toIso8601String(),
+      'userId': resolvedUserId,
+      'name': resolvedName,
+      'email': resolvedEmail,
+      'subjects': resolvedSubjects,
+      'learningStyle': resolvedStyle,
+      'targetExamDate': resolvedDeadline.toIso8601String(),
+      'examSetupDate': setupDate.toIso8601String(),
       'isLoggedIn': isLoggedIn,
       'hasCompletedOnboarding': hasCompletedOnboarding,
       'updatedAt': DateTime.now().toIso8601String(),
     };
     await box.put('current_user', updated);
+
+    // Sync to Supabase asynchronously
+    SupabaseService.instance.upsertProfile(
+      userId: resolvedUserId,
+      name: resolvedName,
+      email: resolvedEmail,
+      subjects: resolvedSubjects,
+      learningStyle: resolvedStyle,
+      targetExamDate: resolvedDeadline,
+      setupStartedAt: setupDate,
+    );
   }
 
   static Map<String, dynamic> getUserProfile() {
@@ -66,11 +110,13 @@ class OfflineCacheService {
       if (data is Map) return Map<String, dynamic>.from(data);
     } catch (_) {}
     return {
+      'userId': 'usr_guest',
       'name': 'Student',
       'email': 'student@trueme.app',
       'subjects': <String>[],
       'learningStyle': 'Visual & Practice',
       'targetExamDate': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+      'examSetupDate': DateTime.now().toIso8601String(),
       'isLoggedIn': false,
       'hasCompletedOnboarding': false,
     };
@@ -129,6 +175,16 @@ class OfflineCacheService {
     return DateTime.now().add(const Duration(days: 30));
   }
 
+  static DateTime getExamSetupDate() {
+    final profile = getUserProfile();
+    final d = profile['examSetupDate'] as String?;
+    if (d != null) {
+      final parsed = DateTime.tryParse(d);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
+  }
+
   static Future<void> saveTargetExamDate(DateTime date) async {
     final profile = getUserProfile();
     await saveUserProfile(
@@ -178,10 +234,127 @@ class OfflineCacheService {
   }
 
   static Future<void> logout() async {
+    await SupabaseService.instance.signOut();
     final box = Hive.box(userProfileBox);
     final profile = getUserProfile();
     profile['isLoggedIn'] = false;
     await box.put('current_user', profile);
+  }
+
+  // ---------------------------------------------------------------------------
+  // CLOUD SYNC (SUPABASE -> HIVE)
+  // ---------------------------------------------------------------------------
+  static Future<void> syncFromCloud() async {
+    if (!SupabaseService.instance.isReady) return;
+    final userId = getUserId();
+    final sb = SupabaseService.instance;
+
+    try {
+      // 1. Pull Profile
+      final remoteProfile = await sb.fetchProfile(userId);
+      if (remoteProfile != null) {
+        final box = Hive.box(userProfileBox);
+        final current = getUserProfile();
+        final merged = {
+          ...current,
+          'userId': userId,
+          if ((remoteProfile['name'] as String? ?? '').isNotEmpty) 'name': remoteProfile['name'],
+          if ((remoteProfile['email'] as String? ?? '').isNotEmpty) 'email': remoteProfile['email'],
+          if (remoteProfile['subjects'] is List && (remoteProfile['subjects'] as List).isNotEmpty)
+            'subjects': List<String>.from(remoteProfile['subjects'] as List),
+          if (remoteProfile['target_exam_date'] != null)
+            'targetExamDate': remoteProfile['target_exam_date'],
+          if (remoteProfile['setup_started_at'] != null)
+            'examSetupDate': remoteProfile['setup_started_at'],
+        };
+        await box.put('current_user', merged);
+      }
+
+      // 2. Pull Notebooks
+      final remoteNotebooks = await sb.fetchNotebooks(userId);
+      if (remoteNotebooks.isNotEmpty) {
+        final nbBox = Hive.box(notebooksBox);
+        for (final rn in remoteNotebooks) {
+          final id = rn['id'] as String?;
+          if (id == null) continue;
+          final docs = (rn['documents'] as List? ?? [])
+              .map((d) => Map<String, dynamic>.from(d as Map))
+              .toList();
+          await nbBox.put(id, {
+            'id': id,
+            'userId': userId,
+            'title': rn['title'],
+            'subject': rn['subject'],
+            'documents': docs,
+            'fileRefs': docs.map((d) => d['fileName']?.toString() ?? '').where((s) => s.isNotEmpty).toList(),
+            'createdAt': rn['created_at'] ?? DateTime.now().toIso8601String(),
+            'lastModified': rn['updated_at'] ?? DateTime.now().toIso8601String(),
+          });
+        }
+      }
+
+      // 3. Pull Today's & Tomorrow's Tasks
+      final now = DateTime.now();
+      for (final dKey in [dateKey(now), dateKey(now.add(const Duration(days: 1)))]) {
+        final remoteTasks = await sb.fetchStudyTasksForDate(userId: userId, planDate: dKey);
+        if (remoteTasks != null && remoteTasks.isNotEmpty) {
+          await Hive.box(studyPlanBox).put(dKey, {
+            'sessions': remoteTasks,
+            'updatedAt': DateTime.now().toIso8601String(),
+          });
+        }
+      }
+
+      // 4. Pull Quiz Attempts
+      final remoteQuizzes = await sb.fetchQuizAttempts(userId);
+      if (remoteQuizzes.isNotEmpty) {
+        final aBox = Hive.box(analyticsBox);
+        final mapped = remoteQuizzes.map((q) => {
+              'id': q['id'],
+              'subject': q['subject'],
+              'topic': q['topic'],
+              'score': q['score'],
+              'total': q['total'],
+              'percentage': q['percentage'],
+              'missedTopics': List<String>.from(q['missed_topics'] ?? []),
+              'timestamp': q['created_at'] ?? DateTime.now().toIso8601String(),
+            }).toList();
+        await aBox.put('quiz_attempts', mapped);
+      }
+
+      // 5. Pull Study Sessions for streak & weekly time if local is empty
+      final remoteSessions = await sb.fetchStudySessions(userId);
+      if (remoteSessions.isNotEmpty) {
+        final aBox = Hive.box(analyticsBox);
+        final localDaily = aBox.get('daily_minutes') as Map? ?? {};
+        if (localDaily.isEmpty) {
+          final Map<String, int> daily = {};
+          final List<Map<String, dynamic>> recent = [];
+          for (final s in remoteSessions) {
+            final createdStr = s['created_at'] as String?;
+            final dt = createdStr != null ? DateTime.tryParse(createdStr) : null;
+            final mins = (s['duration_min'] as num? ?? 0).toInt();
+            if (dt != null && mins > 0) {
+              final k = dateKey(dt.toLocal());
+              daily[k] = (daily[k] ?? 0) + mins;
+            }
+            if ((s['session_type'] as String? ?? '') != 'task' && recent.length < 20) {
+              recent.add({
+                'activity': s['session_type'] ?? 'quiz',
+                'subject': s['subject'] ?? 'General',
+                'title': s['topic'] ?? 'Study session',
+                'subtitle': '$mins min',
+                'timestamp': createdStr ?? DateTime.now().toIso8601String(),
+              });
+            }
+          }
+          await aBox.put('daily_minutes', daily);
+          if (recent.isNotEmpty) {
+            await aBox.put('recent_sessions', recent);
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -190,6 +363,17 @@ class OfflineCacheService {
   static Future<void> cacheNotebook(String notebookId, Map<String, dynamic> notebookMap) async {
     final box = Hive.box(notebooksBox);
     await box.put(notebookId, notebookMap);
+
+    final docs = (notebookMap['documents'] as List? ?? [])
+        .map((d) => Map<String, dynamic>.from(d as Map))
+        .toList();
+    SupabaseService.instance.upsertNotebook(
+      id: notebookId,
+      userId: getUserId(),
+      title: notebookMap['title'] as String? ?? 'Subject',
+      subject: notebookMap['subject'] as String? ?? 'Subject',
+      documents: docs,
+    );
   }
 
   static Map<String, dynamic>? getCachedNotebook(String notebookId) {
@@ -202,16 +386,16 @@ class OfflineCacheService {
   static Future<void> deleteNotebook(String notebookId) async {
     final box = Hive.box(notebooksBox);
     await box.delete(notebookId);
+    SupabaseService.instance.deleteNotebook(notebookId);
   }
 
   static Future<void> renameNotebook(String notebookId, String newTitle) async {
-    final box = Hive.box(notebooksBox);
     final nb = getCachedNotebook(notebookId);
     if (nb != null && newTitle.trim().isNotEmpty) {
       nb['title'] = newTitle.trim();
       nb['subject'] = newTitle.trim();
       nb['lastModified'] = DateTime.now().toIso8601String();
-      await box.put(notebookId, nb);
+      await cacheNotebook(notebookId, nb);
     }
   }
 
@@ -221,8 +405,6 @@ class OfflineCacheService {
     List<String>? tags,
     int? colorValue,
   }) async {
-    final box = Hive.box(notebooksBox);
-    // Avoid duplicates with the same title
     final existing = getAllCachedNotebooks().where(
       (n) => (n['title'] as String? ?? '').toLowerCase() == title.trim().toLowerCase(),
     );
@@ -230,10 +412,11 @@ class OfflineCacheService {
       return existing.first;
     }
 
+    final userId = getUserId();
     final id = 'nb_${DateTime.now().millisecondsSinceEpoch}_${title.hashCode.abs()}';
     final nb = {
       'id': id,
-      'userId': 'current_user',
+      'userId': userId,
       'title': title.trim(),
       'subject': subject.trim(),
       'colorValue': colorValue ?? 0xFF2563EB,
@@ -243,9 +426,8 @@ class OfflineCacheService {
       'createdAt': DateTime.now().toIso8601String(),
       'lastModified': DateTime.now().toIso8601String(),
     };
-    await box.put(id, nb);
+    await cacheNotebook(id, nb);
 
-    // Ensure subject is also in user subjects list
     final currentSubs = getUserSubjects();
     if (!currentSubs.any((s) => s.toLowerCase() == subject.trim().toLowerCase())) {
       currentSubs.add(subject.trim());
@@ -260,7 +442,6 @@ class OfflineCacheService {
   }
 
   static Future<void> addDocumentToNotebook(String notebookId, Map<String, dynamic> doc) async {
-    final box = Hive.box(notebooksBox);
     final nb = getCachedNotebook(notebookId);
     if (nb != null) {
       final rawDocs = nb['documents'] as List? ?? [];
@@ -277,12 +458,21 @@ class OfflineCacheService {
       nb['documents'] = docs;
       nb['fileRefs'] = refs;
       nb['lastModified'] = DateTime.now().toIso8601String();
-      await box.put(notebookId, nb);
+      await cacheNotebook(notebookId, nb);
+
+      SupabaseService.instance.registerUserFile(
+        userId: getUserId(),
+        notebookId: notebookId,
+        fileName: fName.isNotEmpty ? fName : 'Source',
+        fileType: docMap['fileType'] as String? ?? 'text',
+        driveFileId: docMap['driveFileId'] as String? ?? '',
+        sizeBytes: (docMap['sizeBytes'] as num? ?? 0).toInt(),
+        chunkCount: 1,
+      );
     }
   }
 
   static Future<void> removeDocumentFromNotebook(String notebookId, String docId) async {
-    final box = Hive.box(notebooksBox);
     final nb = getCachedNotebook(notebookId);
     if (nb != null) {
       final rawDocs = nb['documents'] as List? ?? [];
@@ -291,7 +481,7 @@ class OfflineCacheService {
       nb['documents'] = docs;
       nb['fileRefs'] = docs.map((d) => (d['fileName'] as String? ?? '')).where((s) => s.isNotEmpty).toList();
       nb['lastModified'] = DateTime.now().toIso8601String();
-      await box.put(notebookId, nb);
+      await cacheNotebook(notebookId, nb);
     }
   }
 
@@ -320,7 +510,6 @@ class OfflineCacheService {
       }
     }
 
-    // Also include notes linked to this notebook
     final notes = getAllCachedNotes().where((n) => n['notebookId'] == notebookId);
     for (final n in notes) {
       final title = n['title'] ?? 'Note';
@@ -348,7 +537,7 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
-  // DAILY STUDY PLAN CACHING
+  // DAILY STUDY PLAN CACHING + SUPABASE SYNC
   // ---------------------------------------------------------------------------
   static String dateKey(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
@@ -356,6 +545,15 @@ class OfflineCacheService {
   static Future<void> cacheStudyPlan(String date, Map<String, dynamic> planMap) async {
     final box = Hive.box(studyPlanBox);
     await box.put(date, planMap);
+
+    final sessions = (planMap['sessions'] as List? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    SupabaseService.instance.syncStudyTasksForDate(
+      userId: getUserId(),
+      planDate: date,
+      tasks: sessions,
+    );
   }
 
   static Map<String, dynamic>? getCachedStudyPlan(String date) {
@@ -366,11 +564,12 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
-  // FLASHCARD DECK CACHING
+  // FLASHCARD DECK CACHING + SUPABASE SYNC
   // ---------------------------------------------------------------------------
   static Future<void> cacheDeck(String deckId, Map<String, dynamic> deckMap) async {
     final box = Hive.box(flashcardsBox);
     await box.put(deckId, deckMap);
+    SupabaseService.instance.upsertFlashcardDeck(getUserId(), deckMap);
   }
 
   static Map<String, dynamic>? getCachedDeck(String deckId) {
@@ -383,6 +582,7 @@ class OfflineCacheService {
   static Future<void> deleteDeck(String deckId) async {
     final box = Hive.box(flashcardsBox);
     await box.delete(deckId);
+    SupabaseService.instance.deleteFlashcardDeck(deckId);
   }
 
   static List<Map<String, dynamic>> getAllCachedDecks() {
@@ -394,7 +594,7 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
-  // QUIZ CACHING & RESULTS ANALYTICS
+  // QUIZ CACHING & RESULTS ANALYTICS + SUPABASE SYNC
   // ---------------------------------------------------------------------------
   static Future<void> cacheQuiz(String quizId, Map<String, dynamic> quizMap) async {
     final box = Hive.box(quizzesBox);
@@ -419,20 +619,33 @@ class OfflineCacheService {
     final box = Hive.box(analyticsBox);
     final raw = box.get('quiz_attempts') as List? ?? [];
     final attempts = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final pct = total > 0 ? ((score / total) * 100).round() : 0;
+    final resolvedTopic = topic.isNotEmpty ? topic : subject;
 
     attempts.insert(0, {
       'id': id,
       'subject': subject,
-      'topic': topic.isNotEmpty ? topic : subject,
+      'topic': resolvedTopic,
       'score': score,
       'total': total,
-      'percentage': total > 0 ? ((score / total) * 100).round() : 0,
+      'percentage': pct,
       'missedTopics': missedTopics,
       'timestamp': DateTime.now().toIso8601String(),
     });
 
     if (attempts.length > 50) attempts.removeRange(50, attempts.length);
     await box.put('quiz_attempts', attempts);
+
+    SupabaseService.instance.insertQuizAttempt(
+      id: id,
+      userId: getUserId(),
+      subject: subject,
+      topic: resolvedTopic,
+      score: score,
+      total: total,
+      percentage: pct,
+      missedTopics: missedTopics,
+    );
 
     await logStudySession(
       activity: 'quiz',
@@ -477,10 +690,10 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
-  // STUDY ACTIVITY, STREAK & RECENT SESSIONS
+  // STUDY ACTIVITY, STREAK & RECENT SESSIONS + SUPABASE SYNC
   // ---------------------------------------------------------------------------
   static Future<void> logStudySession({
-    required String activity, // 'quiz', 'flashcards', 'voice', 'task'
+    required String activity,
     required String subject,
     required String title,
     String? subtitle,
@@ -489,7 +702,6 @@ class OfflineCacheService {
     final box = Hive.box(analyticsBox);
     final todayStr = dateKey(DateTime.now());
 
-    // 1. Add minutes to today's log
     final rawDaily = box.get('daily_minutes') as Map? ?? {};
     final daily = Map<String, int>.from(
       rawDaily.map((k, v) => MapEntry(k.toString(), (v as num).toInt())),
@@ -497,7 +709,6 @@ class OfflineCacheService {
     daily[todayStr] = (daily[todayStr] ?? 0) + minutes;
     await box.put('daily_minutes', daily);
 
-    // 2. Add to recent practice sessions (unless it's just a task checkbox)
     if (activity != 'task') {
       final rawRecent = box.get('recent_sessions') as List? ?? [];
       final recent = rawRecent.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -511,15 +722,21 @@ class OfflineCacheService {
       if (recent.length > 20) recent.removeRange(20, recent.length);
       await box.put('recent_sessions', recent);
     }
+
+    SupabaseService.instance.insertStudySession(
+      userId: getUserId(),
+      subject: subject,
+      topic: title,
+      sessionType: activity,
+      durationMin: minutes,
+    );
   }
 
-  /// Returns Mon..Sun minutes for the current week.
   static List<int> getWeeklyStudyMinutes() {
     try {
       final box = Hive.box(analyticsBox);
       final rawDaily = box.get('daily_minutes') as Map? ?? {};
       final now = DateTime.now();
-      // Monday = 1, Sunday = 7
       final monday = now.subtract(Duration(days: now.weekday - 1));
       final List<int> week = [];
       for (int i = 0; i < 7; i++) {
@@ -546,7 +763,6 @@ class OfflineCacheService {
 
       int streak = 0;
       DateTime checkDay = DateTime.now();
-      // If nothing logged today yet, check starting from yesterday
       if ((rawDaily[dateKey(checkDay)] as num? ?? 0) == 0) {
         checkDay = checkDay.subtract(const Duration(days: 1));
       }

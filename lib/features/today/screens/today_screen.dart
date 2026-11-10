@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
-import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -19,9 +18,16 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   late String _todayKey;
   late String _tomorrowKey;
   List<Map<String, dynamic>> _tasks = [];
-  late DateTime _deadline;
+  DateTime _deadline = DateTime.now().add(const Duration(days: 30));
   int _daysLeft = 30;
+  int _totalExamSpanDays = 30;
+  int _streak = 0;
+  String _userName = 'Student';
   bool _isGeneratingPlan = false;
+
+  // Dynamic real insight state (never hardcoded)
+  String _insightText = '';
+  String _insightRoute = '/chat';
 
   @override
   void initState() {
@@ -29,22 +35,94 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final now = DateTime.now();
     _todayKey = OfflineCacheService.dateKey(now);
     _tomorrowKey = OfflineCacheService.dateKey(now.add(const Duration(days: 1)));
-    _loadPlan();
+    _loadData();
+    _syncCloudInBackground();
   }
 
-  void _loadPlan() {
+  Future<void> _syncCloudInBackground() async {
+    await OfflineCacheService.syncFromCloud();
+    if (mounted) _loadData();
+  }
+
+  void _loadData() {
     final now = DateTime.now();
+    _userName = OfflineCacheService.getUserName();
     _deadline = OfflineCacheService.getTargetExamDate();
+    final setupDate = OfflineCacheService.getExamSetupDate();
+
     _daysLeft = _deadline.difference(now).inDays.clamp(0, 999);
+    _totalExamSpanDays = _deadline.difference(setupDate).inDays.clamp(1, 999);
+    _streak = OfflineCacheService.getCurrentStreak();
 
     final cached = OfflineCacheService.getCachedStudyPlan(_todayKey);
     if (cached != null && cached['sessions'] is List) {
-      final list = cached['sessions'] as List;
-      _tasks = list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+      _tasks = (cached['sessions'] as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
     } else {
       _tasks = [];
     }
+
+    _computeRealInsight();
     setState(() {});
+  }
+
+  void _computeRealInsight() {
+    final weakTopics = OfflineCacheService.getWeakTopics();
+    if (weakTopics.isNotEmpty) {
+      final topWeak = weakTopics.first;
+      final topic = topWeak['topic'] as String;
+      final score = topWeak['score'] as int;
+      _insightText =
+          'You averaged $score% on "$topic" in your recent quizzes. Worth spending extra time on it today.';
+      _insightRoute = '/chat?prompt=${Uri.encodeComponent('Help me strengthen my understanding of $topic')}';
+      return;
+    }
+
+    final decks = OfflineCacheService.getAllCachedDecks();
+    final nowPlus = DateTime.now().add(const Duration(minutes: 5));
+    int dueCards = 0;
+    String? dueSubject;
+    for (final d in decks) {
+      final cards = d['cards'] as List? ?? [];
+      for (final c in cards) {
+        final nextStr = (c as Map)['nextReviewDate'] as String?;
+        final nextDt = nextStr != null ? DateTime.tryParse(nextStr) : null;
+        if (nextDt == null || nextDt.isBefore(nowPlus)) {
+          dueCards++;
+          dueSubject ??= d['subject'] as String?;
+        }
+      }
+    }
+    if (dueCards > 0) {
+      _insightText =
+          'You have $dueCards spaced-repetition ${dueCards == 1 ? 'card' : 'cards'} due today${dueSubject != null ? ' in $dueSubject' : ''}. Reviewing them now prevents memory decay.';
+      _insightRoute = '/flashcards';
+      return;
+    }
+
+    final notebooks = OfflineCacheService.getAllCachedNotebooks();
+    if (notebooks.isNotEmpty) {
+      int totalFiles = 0;
+      for (final nb in notebooks) {
+        totalFiles += (nb['documents'] as List? ?? []).length;
+      }
+      if (totalFiles > 0) {
+        _insightText =
+            'You have $totalFiles uploaded ${totalFiles == 1 ? 'source' : 'sources'} across ${notebooks.length} ${notebooks.length == 1 ? 'subject' : 'subjects'}. Ask Sage to summarize or quiz you directly from them.';
+        _insightRoute = '/chat';
+      } else {
+        final firstSub = notebooks.first['title'] ?? 'your subjects';
+        _insightText =
+            'Upload syllabus or lecture notes into $firstSub in Library so Sage can personalize your daily sessions.';
+        _insightRoute = '/library';
+      }
+      return;
+    }
+
+    _insightText =
+        'Add your subjects in Library and upload study materials to get personalized guidance from Sage.';
+    _insightRoute = '/library';
   }
 
   Future<void> _savePlan() async {
@@ -111,6 +189,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
           'updatedAt': DateTime.now().toIso8601String(),
         });
       }
+      if (mounted) _loadData();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -139,26 +218,61 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
         title: title,
         minutes: mins,
       );
+      if (mounted) {
+        setState(() => _streak = OfflineCacheService.getCurrentStreak());
+      }
     }
   }
 
-  void _startNextTask() {
-    if (_tasks.isEmpty) return;
-    final firstUnfinished = _tasks.firstWhere(
-      (t) => t['completed'] != true,
-      orElse: () => _tasks.first,
-    );
-
-    final type = (firstUnfinished['type'] as String? ?? 'reading').toLowerCase();
-    final subject = Uri.encodeComponent(firstUnfinished['subject'] as String? ?? '');
-    final topic = Uri.encodeComponent(firstUnfinished['title'] as String? ?? '');
+  void _launchTask(Map<String, dynamic> task) {
+    final type = (task['type'] as String? ?? 'reading').toLowerCase();
+    final subject = Uri.encodeComponent(task['subject'] as String? ?? '');
+    final topic = Uri.encodeComponent(task['title'] as String? ?? '');
 
     if (type == 'quiz') {
       context.push('/quiz?subject=$subject&topic=$topic');
     } else if (type == 'flashcard') {
       context.push('/flashcards?subject=$subject');
     } else {
-      context.push('/chat?scope=$subject&prompt=${Uri.encodeComponent('Help me study: ${firstUnfinished['title']} ($subject)')}');
+      context.push(
+        '/chat?scope=$subject&prompt=${Uri.encodeComponent('Help me study: ${task['title']} ($subject)')}',
+      );
+    }
+  }
+
+  Future<void> _pickExamDeadline() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _deadline.isAfter(DateTime.now()) ? _deadline : DateTime.now().add(const Duration(days: 14)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (picked != null) {
+      await OfflineCacheService.saveTargetExamDate(picked);
+      if (mounted) _loadData();
+    }
+  }
+
+  String _formattedDate() {
+    final now = DateTime.now();
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
+  }
+
+  IconData _taskIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'flashcard':
+        return Icons.style_outlined;
+      case 'quiz':
+        return Icons.checklist_outlined;
+      case 'practice':
+        return Icons.description_outlined;
+      default:
+        return Icons.menu_book_outlined;
     }
   }
 
@@ -166,217 +280,574 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   Widget build(BuildContext context) {
     final totalMinutes = _tasks.fold<int>(0, (sum, t) => sum + ((t['duration'] as num? ?? 20).toInt()));
     final completedCount = _tasks.where((t) => t['completed'] == true).length;
-    final progress = _tasks.isNotEmpty ? completedCount / _tasks.length : 0.0;
-    final userName = OfflineCacheService.getUserName();
+    final double planProgress = _tasks.isNotEmpty ? completedCount / _tasks.length : 0.0;
+
+    final int upNextIdx = _tasks.indexWhere((t) => t['completed'] != true);
+    final Map<String, dynamic>? upNextTask = upNextIdx >= 0 ? _tasks[upNextIdx] : null;
+
+    final double examElapsedRatio = _totalExamSpanDays > 0
+        ? ((_totalExamSpanDays - _daysLeft) / _totalExamSpanDays).clamp(0.08, 1.0)
+        : 0.1;
+    final int filledSegments = (examElapsedRatio * 10).round().clamp(1, 10);
+
+    final initialLetter = _userName.isNotEmpty ? _userName[0].toUpperCase() : 'S';
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(userName != 'Student' ? 'Today • $userName' : 'Today', style: AppTypography.screenTitle),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, size: 22),
-            tooltip: 'Ask Sage',
-            onPressed: () => context.push('/chat'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline, size: 24),
-            tooltip: 'Account',
-            onPressed: () async {
-              await context.push('/account');
-              if (mounted) _loadPlan();
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Deadline Strip
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: RefreshIndicator(
+          color: AppColors.accent,
+          onRefresh: () async {
+            await OfflineCacheService.syncFromCloud();
+            if (mounted) _loadData();
+          },
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              // 1. Custom Clean Greeting Header + Streak Pill + Avatar
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Exam deadline: $_daysLeft ${_daysLeft == 1 ? 'day' : 'days'} left',
-                          style: AppTypography.secondary,
-                        ),
-                        if (_tasks.isNotEmpty)
-                          Text(
-                            '${(progress * 100).toInt()}%',
-                            style: AppTypography.smallLabel.copyWith(color: AppColors.accent, fontWeight: FontWeight.w600),
+                          'Hi, $_userName',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.4,
                           ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formattedDate(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    AppProgressBar(value: progress),
-                    const SizedBox(height: 20),
+                  ),
+                  // Streak Pill
+                  InkWell(
+                    onTap: () => context.go('/progress'),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.border, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 16,
+                            color: Color(0xFFEA580C),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_streak',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // User Avatar -> Account
+                  InkWell(
+                    onTap: () async {
+                      await context.push('/account');
+                      if (mounted) _loadData();
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEFF6FF),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initialLetter,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
 
-                    if (_isGeneratingPlan) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Column(
-                          children: [
-                            CircularProgressIndicator(color: AppColors.accent),
-                            SizedBox(height: 16),
-                            Text('Sage is creating your study plan from your subjects & notes...', textAlign: TextAlign.center, style: AppTypography.secondary),
-                          ],
-                        ),
-                      ),
-                    ] else if (_tasks.isEmpty) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border, width: 1),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('No study tasks for today yet', style: AppTypography.sectionHeading),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Generate an AI study plan from your subjects and uploaded syllabus, or add your own tasks.',
-                              style: AppTypography.secondary,
-                            ),
-                            const SizedBox(height: 16),
-                            AppPrimaryButton(
-                              label: 'Generate plan with Sage',
-                              icon: const Icon(Icons.auto_awesome_outlined, size: 18, color: Colors.white),
-                              onPressed: _generateAiPlan,
-                            ),
-                            const SizedBox(height: 10),
-                            AppSecondaryButton(
-                              label: 'Add task manually',
-                              onPressed: () async {
-                                await context.push('/schedule');
-                                if (mounted) _loadPlan();
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else ...[
-                      // Today's Plan Card
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border, width: 1),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text("Today's plan, $totalMinutes min", style: AppTypography.sectionHeading),
-                                IconButton(
-                                  icon: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
-                                  tooltip: 'Regenerate with Sage',
-                                  onPressed: _generateAiPlan,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            ...List.generate(_tasks.length, (i) {
-                              final t = _tasks[i];
-                              final isDone = t['completed'] == true;
-                              return InkWell(
-                                onTap: () => _toggleTask(i),
-                                borderRadius: BorderRadius.circular(8),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: Checkbox(
-                                          value: isDone,
-                                          onChanged: (_) => _toggleTask(i),
-                                          activeColor: AppColors.accent,
-                                          side: const BorderSide(color: AppColors.border, width: 1.5),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              t['title'] as String? ?? 'Task',
-                                              style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w500,
-                                                color: isDone ? AppColors.textMuted : AppColors.textPrimary,
-                                                decoration: isDone ? TextDecoration.lineThrough : null,
-                                              ),
-                                            ),
-                                            Text(
-                                              t['subject'] as String? ?? 'General',
-                                              style: AppTypography.smallLabel,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text('${t['duration'] ?? 20} min', style: AppTypography.smallLabel),
-                                    ],
+              // 2. Royal Blue Hero Card
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        // Circular Progress Indicator Ring
+                        SizedBox(
+                          width: 62,
+                          height: 62,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              CircularProgressIndicator(
+                                value: _tasks.isEmpty ? 0.0 : planProgress,
+                                strokeWidth: 5.5,
+                                backgroundColor: Colors.white.withOpacity(0.22),
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                              Center(
+                                child: Text(
+                                  '$completedCount/${_tasks.length}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              );
-                            }),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          onPressed: () async {
-                            await context.push('/schedule');
-                            if (mounted) _loadPlan();
-                          },
-                          child: const Text('See full schedule'),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Today's plan",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.85),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _tasks.isNotEmpty
+                                    ? '$totalMinutes min, ${_tasks.length} ${_tasks.length == 1 ? 'task' : 'tasks'}'
+                                    : 'No tasks scheduled',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _tasks.isEmpty
+                                    ? 'Let Sage build your study plan'
+                                    : (upNextTask != null
+                                        ? 'Up next: ${upNextTask['title']}'
+                                        : 'All tasks complete today!'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Inner Full-Width White CTA Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.accent,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _isGeneratingPlan
+                            ? null
+                            : () {
+                                if (upNextTask != null) {
+                                  _launchTask(upNextTask);
+                                } else if (_tasks.isNotEmpty) {
+                                  context.go('/practice');
+                                } else {
+                                  _generateAiPlan();
+                                }
+                              },
+                        child: _isGeneratingPlan
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                              )
+                            : Text(
+                                upNextTask != null
+                                    ? 'Start ${upNextTask['duration'] ?? 20} min session'
+                                    : (_tasks.isNotEmpty ? 'Explore more practice' : 'Generate plan with Sage'),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.accent,
+                                ),
+                              ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
-            ),
+              const SizedBox(height: 14),
 
-            if (_tasks.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  color: AppColors.background,
-                  border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-                ),
-                child: AppPrimaryButton(
-                  label: completedCount == _tasks.length ? 'All tasks done • Practice more' : 'Start next task',
-                  onPressed: _startNextTask,
+              // 3. Exam Countdown Segmented Card (tappable to change date)
+              InkWell(
+                onTap: _pickExamDeadline,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border, width: 1),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Exam countdown',
+                            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                          Text(
+                            _daysLeft == 0 ? 'Today!' : '$_daysLeft ${_daysLeft == 1 ? 'day' : 'days'} left',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: List.generate(10, (i) {
+                          final isFilled = i < filledSegments;
+                          return Expanded(
+                            child: Container(
+                              height: 6,
+                              margin: EdgeInsets.only(right: i < 9 ? 4 : 0),
+                              decoration: BoxDecoration(
+                                color: isFilled ? AppColors.accent : const Color(0xFFE5E7EB),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-          ],
+              const SizedBox(height: 20),
+
+              // 4. Today's Tasks Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Today's tasks",
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      if (_tasks.isNotEmpty)
+                        TextButton(
+                          onPressed: _isGeneratingPlan ? null : _generateAiPlan,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Refresh AI',
+                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        onPressed: () async {
+                          await context.push('/schedule');
+                          if (mounted) _loadData();
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'See schedule',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Task Cards List or Clean Empty Card
+              if (_tasks.isEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'No tasks added for today yet.',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Tap "Generate plan with Sage" above or add custom tasks in your schedule.',
+                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 12),
+                      AppSecondaryButton(
+                        label: 'Add task manually',
+                        height: 44,
+                        onPressed: () async {
+                          await context.push('/schedule');
+                          if (mounted) _loadData();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                ...List.generate(_tasks.length, (i) {
+                  final t = _tasks[i];
+                  final isDone = t['completed'] == true;
+                  final isUpNext = i == upNextIdx;
+                  final type = t['type'] as String? ?? 'reading';
+                  final subject = t['subject'] as String? ?? 'Study';
+                  final mins = (t['duration'] as num? ?? 20).toInt();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: InkWell(
+                      onTap: () => _launchTask(t),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isUpNext ? AppColors.accent : AppColors.border,
+                            width: isUpNext ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Left Icon Container
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: isDone ? AppColors.surface : const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                _taskIcon(type),
+                                size: 20,
+                                color: isDone ? AppColors.textSecondary : AppColors.accent,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // Title + Metadata
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    t['title'] as String? ?? 'Task',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDone ? AppColors.textMuted : AppColors.textPrimary,
+                                      decoration: isDone ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$subject · $mins min',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            if (isUpNext) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'Up next',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+
+                            // Circular Check Button
+                            InkWell(
+                              onTap: () => _toggleTask(i),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: isDone
+                                    ? const Icon(
+                                        Icons.check_circle,
+                                        size: 24,
+                                        color: AppColors.accent,
+                                      )
+                                    : Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: const Color(0xFFD1D5DB), width: 1.8),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+              const SizedBox(height: 10),
+
+              // 5. Sage Dynamic Insight Card (Real backend state — ZERO fake text)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border, width: 1),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        color: AppColors.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'S',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _insightText,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: () => context.push(_insightRoute),
+                            child: Text(
+                              _insightRoute == '/library'
+                                  ? 'Go to Library'
+                                  : (_insightRoute == '/flashcards' ? 'Review flashcards' : 'Ask Sage'),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

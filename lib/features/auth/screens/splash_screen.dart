@@ -26,6 +26,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (OfflineCacheService.isLoggedIn()) {
+      OfflineCacheService.syncFromCloud();
       context.go('/today');
     } else if (OfflineCacheService.hasCompletedOnboarding()) {
       context.go('/login');

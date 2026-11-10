@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -46,20 +47,63 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    if (password.length < 4) {
-      setState(() => _errorText = 'Password must be at least 4 characters');
+    if (password.length < 6) {
+      setState(() => _errorText = 'Password must be at least 6 characters');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
+      String? cloudUid;
+      String resolvedName = _isSignUp ? name : (name.isNotEmpty ? name : email.split('@').first);
+
+      if (SupabaseService.instance.isReady) {
+        try {
+          if (_isSignUp) {
+            final res = await SupabaseService.instance.signUp(
+              email: email,
+              password: password,
+              name: name,
+            );
+            cloudUid = res?.user?.id;
+          } else {
+            final res = await SupabaseService.instance.signIn(
+              email: email,
+              password: password,
+            );
+            cloudUid = res?.user?.id;
+            final metaName = res?.user?.userMetadata?['full_name'] as String?;
+            if (metaName != null && metaName.trim().isNotEmpty) {
+              resolvedName = metaName.trim();
+            }
+          }
+        } catch (authErr) {
+          final msg = authErr.toString();
+          if (msg.contains('Invalid login credentials')) {
+            if (mounted) {
+              setState(() {
+                _errorText = 'Incorrect email or password.';
+                _isLoading = false;
+              });
+            }
+            return;
+          }
+          // Otherwise continue gracefully offline / unconfirmed email
+        }
+      }
+
       await OfflineCacheService.saveUserProfile(
-        name: _isSignUp ? name : (name.isNotEmpty ? name : email.split('@').first),
+        userId: cloudUid,
+        name: resolvedName,
         email: email,
         isLoggedIn: true,
         hasCompletedOnboarding: true,
       );
+
+      if (!_isSignUp) {
+        await OfflineCacheService.syncFromCloud();
+      }
 
       if (!mounted) return;
       if (_isSignUp) {
