@@ -41,7 +41,9 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
     try {
       final cached = OfflineCacheService.getAllCachedDecks();
       if (cached.isNotEmpty) {
-        return cached.map((m) => FlashcardDeckModel.fromMap(m)).toList();
+        return cached
+            .map((m) => FlashcardDeckModel.fromMap(m, m['id']?.toString() ?? 'deck'))
+            .toList();
       }
     } catch (_) {}
     return [];

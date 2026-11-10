@@ -395,7 +395,9 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   return AppChip(
                     label: sec,
                     isSelected: _targetSection == sec,
-                    onTap: _isBusy ? null : () => setState(() => _targetSection = sec),
+                    onTap: () {
+                      if (!_isBusy) setState(() => _targetSection = sec);
+                    },
                   );
                 }).toList(),
               ),
