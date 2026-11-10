@@ -44,48 +44,7 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         return cached.map((m) => FlashcardDeckModel.fromMap(m)).toList();
       }
     } catch (_) {}
-
-    // Seed dynamic decks matching student's enrolled subjects
-    final subjects = OfflineCacheService.getUserSubjects();
-    final List<FlashcardDeckModel> seeds = [];
-
-    for (int i = 0; i < subjects.length; i++) {
-      final sub = subjects[i];
-      final deckId = 'deck_${DateTime.now().millisecondsSinceEpoch}_$i';
-      final deck = FlashcardDeckModel(
-        id: deckId,
-        notebookId: 'nb_$i',
-        subject: sub,
-        topic: '$sub High-Yield Review',
-        createdAt: DateTime.now(),
-        cards: [
-          FlashcardModel(
-            id: 'c_${deckId}_1',
-            front: 'What is the fundamental theorem or core principle of $sub?',
-            back: 'A foundational axiom in $sub that governs system behavior and analytical solutions.',
-            easeFactor: 2.5,
-            interval: 1,
-            repetitions: 1,
-            nextReviewDate: DateTime.now(),
-          ),
-          FlashcardModel(
-            id: 'c_${deckId}_2',
-            front: 'Name 3 critical components or problem-solving steps in $sub.',
-            back: '1. Problem definition & assumptions\n2. Analytical formulation & equations\n3. Verification & edge-case testing',
-            easeFactor: 2.5,
-            interval: 2,
-            repetitions: 1,
-            nextReviewDate: DateTime.now().add(const Duration(days: 1)),
-          ),
-        ],
-      );
-      seeds.add(deck);
-      try {
-        OfflineCacheService.cacheDeck(deck.id, deck.toMap());
-      } catch (_) {}
-    }
-
-    return seeds;
+    return [];
   }
 
   /// Generates a brand new high-yield deck on any topic using Gemini/Groq AI.

@@ -1,30 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../features/export/pdf_exporter.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../upload/widgets/add_files_sheet.dart';
 
-class NotebookDetailScreen extends StatefulWidget {
+class NotebookDetailScreen extends ConsumerStatefulWidget {
   final String notebookId;
 
   const NotebookDetailScreen({super.key, required this.notebookId});
 
   @override
-  State<NotebookDetailScreen> createState() => _NotebookDetailScreenState();
+  ConsumerState<NotebookDetailScreen> createState() => _NotebookDetailScreenState();
 }
 
-class _NotebookDetailScreenState extends State<NotebookDetailScreen>
+class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   Map<String, dynamic>? _notebook;
-
-  // 4 Standard sections in fixed order
-  final List<String> _syllabusFiles = ['Microbiology_syllabus.pdf'];
-  final List<String> _notesFiles = ['Lecture_01_intro.pdf', 'Gram_stain_notes.pdf'];
-  final List<String> _booksFiles = ['Prescott_Microbiology.pdf', 'Jawetz_Microbiology.pdf'];
-  final List<String> _paperFiles = ['Microbio_2023_QP.pdf', 'Microbio_2022_QP.pdf'];
+  bool _isGeneratingPdf = false;
 
   @override
   void initState() {
@@ -48,21 +47,168 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
     final title = _notebook?['title'] as String? ?? 'Subject';
     AddFilesSheet.show(
       context,
+      notebookId: widget.notebookId,
       subjectName: title,
-      onFileAdded: (fileName, section) {
-        setState(() {
-          if (section == 'Syllabus') _syllabusFiles.add(fileName);
-          if (section == 'Notes') _notesFiles.add(fileName);
-          if (section == 'Books') _booksFiles.add(fileName);
-          if (section == 'Previous papers') _paperFiles.add(fileName);
-        });
-      },
+      onFileAdded: _loadNotebook,
     );
+  }
+
+  void _showRenameDialog() {
+    final title = _notebook?['title'] as String? ?? '';
+    final ctrl = TextEditingController(text: title);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text('Rename subject', style: AppTypography.sectionHeading),
+        content: AppInput(controller: ctrl, autofocus: true, hintText: 'Subject name'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(80, 40),
+            ),
+            onPressed: () async {
+              await OfflineCacheService.renameNotebook(widget.notebookId, ctrl.text);
+              _loadNotebook();
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDocumentViewer(Map<String, dynamic> doc) {
+    final fileName = doc['fileName'] as String? ?? 'Document';
+    final section = doc['section'] as String? ?? 'Notes';
+    final content = doc['content'] as String? ?? '';
+    final docId = doc['id'] as String? ?? '';
+    final title = _notebook?['title'] as String? ?? 'Subject';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        maxChildSize: 0.92,
+        builder: (_, scrollCtrl) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(fileName, style: AppTypography.sectionHeading, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text('$section • ${content.length} characters', style: AppTypography.smallLabel),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                    tooltip: 'Remove file',
+                    onPressed: () async {
+                      await OfflineCacheService.removeDocumentFromNotebook(widget.notebookId, docId);
+                      _loadNotebook();
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const Divider(color: AppColors.border, height: 24),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollCtrl,
+                  child: SelectableText(
+                    content.isNotEmpty ? content : 'No extracted text available.',
+                    style: AppTypography.body.copyWith(height: 1.6),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              AppPrimaryButton(
+                label: 'Ask Sage about this file',
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  final q = Uri.encodeComponent('Explain the key points from "$fileName"');
+                  context.push('/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=$q');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportRealPdf() async {
+    final title = _notebook?['title'] as String? ?? 'Study Guide';
+    final combinedText = OfflineCacheService.getNotebookCombinedText(widget.notebookId);
+    if (combinedText.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one file or note before exporting a PDF.')),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingPdf = true);
+    try {
+      final aiRouter = ref.read(aiRouterProvider);
+      final synthesized = await aiRouter.executeHeavyReasoning(
+        prompt: 'Create a structured, high-yield exam study guide summarizing these notes for "$title". Use clear sections and bullet points.\n\nNotes:\n$combinedText',
+      );
+
+      final pdfBytes = await PdfExporter.generateStudyGuidePdf(
+        title: '$title Study Guide',
+        subject: title,
+        content: synthesized,
+      );
+
+      if (mounted) {
+        await Printing.sharePdf(
+          bytes: pdfBytes,
+          filename: '${title.replaceAll(' ', '_')}_Study_Guide.pdf',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF generation failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = _notebook?['title'] as String? ?? 'Microbiology';
+    final title = _notebook?['title'] as String? ?? 'Subject';
+    final syllabusFiles = OfflineCacheService.getNotebookDocuments(widget.notebookId, section: 'Syllabus');
+    final notesFiles = OfflineCacheService.getNotebookDocuments(widget.notebookId, section: 'Notes');
+    final booksFiles = OfflineCacheService.getNotebookDocuments(widget.notebookId, section: 'Books');
+    final paperFiles = OfflineCacheService.getNotebookDocuments(widget.notebookId, section: 'Previous papers');
+    final totalDocs = syllabusFiles.length + notesFiles.length + booksFiles.length + paperFiles.length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -71,18 +217,19 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, size: 22),
-            onSelected: (val) {
-              if (val == 'delete') {
-                OfflineCacheService.deleteNotebook(widget.notebookId);
-                context.pop();
+            onSelected: (val) async {
+              if (val == 'rename') {
+                _showRenameDialog();
+              } else if (val == 'delete') {
+                await OfflineCacheService.deleteNotebook(widget.notebookId);
+                if (mounted) context.pop();
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'rename', child: Text('Rename')),
-              const PopupMenuItem(value: 'remove', child: Text('Remove from app')),
-              const PopupMenuItem(
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'rename', child: Text('Rename')),
+              PopupMenuItem(
                 value: 'delete',
-                child: Text('Delete from app and Drive', style: TextStyle(color: AppColors.error)),
+                child: Text('Delete subject', style: TextStyle(color: AppColors.error)),
               ),
             ],
           ),
@@ -111,19 +258,17 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   children: [
-                    _buildSectionCard('Syllabus', _syllabusFiles),
+                    _buildSectionCard('Syllabus', syllabusFiles),
                     const SizedBox(height: 12),
-                    _buildSectionCard('Notes', _notesFiles),
+                    _buildSectionCard('Notes', notesFiles),
                     const SizedBox(height: 12),
-                    _buildSectionCard('Books', _booksFiles),
+                    _buildSectionCard('Books', booksFiles),
                     const SizedBox(height: 12),
-                    _buildSectionCard('Previous papers', _paperFiles),
+                    _buildSectionCard('Previous papers', paperFiles),
                     const SizedBox(height: 16),
                   ],
                 ),
               ),
-
-              // Pinned Primary "Add files" Button
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: const BoxDecoration(
@@ -132,41 +277,53 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
                 ),
                 child: AppPrimaryButton(
                   label: 'Add files',
+                  icon: const Icon(Icons.add, size: 20, color: Colors.white),
                   onPressed: _openAddFiles,
                 ),
               ),
             ],
           ),
 
-          // 2. Chat Tab (Limited to this subject)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.chat_bubble_outline, size: 48, color: AppColors.textSecondary),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Ask Sage about $title',
-                    style: AppTypography.sectionHeading,
+          // 2. Chat Tab (Grounded directly in this subject's uploaded sources)
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ask Sage about $title', style: AppTypography.sectionHeading),
+                const SizedBox(height: 6),
+                Text(
+                  totalDocs > 0
+                      ? 'Grounded in your $totalDocs uploaded source${totalDocs == 1 ? '' : 's'}.'
+                      : 'Add files in Sources so Sage can cite your syllabus and notes directly.',
+                  style: AppTypography.secondary,
+                ),
+                const SizedBox(height: 20),
+                const Text('Quick actions', style: AppTypography.smallLabel),
+                const SizedBox(height: 8),
+                AppListRow(
+                  leading: const Icon(Icons.summarize_outlined, size: 20, color: AppColors.accent),
+                  title: 'Summarize my $title sources',
+                  onTap: () => context.push(
+                    '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Summarize the key concepts from my $title notes.')}',
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Answers are grounded directly in your syllabus and notes.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.secondary,
+                ),
+                const SizedBox(height: 8),
+                AppListRow(
+                  leading: const Icon(Icons.lightbulb_outline, size: 20, color: AppColors.accent),
+                  title: 'Explain important exam topics',
+                  onTap: () => context.push(
+                    '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('What are the most important exam topics in $title?')}',
                   ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: 160,
-                    child: AppPrimaryButton(
-                      label: 'Open Chat',
-                      onPressed: () => context.push('/chat?subject=$title'),
-                    ),
+                ),
+                const Spacer(),
+                AppPrimaryButton(
+                  label: 'Open Sage Chat',
+                  onPressed: () => context.push(
+                    '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}',
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
@@ -177,40 +334,40 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
               AppListRow(
                 leading: const Icon(Icons.summarize_outlined, size: 22, color: AppColors.textPrimary),
                 title: 'Summary',
-                subtitle: 'Key concepts across all sources',
-                onTap: () => context.push('/chat?prompt=Summarize%20$title'),
+                subtitle: 'Ask Sage to summarize all uploaded sources',
+                onTap: () => context.push(
+                  '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Create a comprehensive summary of all my $title sources.')}',
+                ),
               ),
               const SizedBox(height: 10),
               AppListRow(
                 leading: const Icon(Icons.style_outlined, size: 22, color: AppColors.textPrimary),
                 title: 'Flashcards',
-                subtitle: 'Active recall for $title',
-                onTap: () => context.push('/flashcards'),
+                subtitle: 'Review or generate AI cards from $title',
+                onTap: () => context.push('/flashcards?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
                 leading: const Icon(Icons.quiz_outlined, size: 22, color: AppColors.textPrimary),
                 title: 'Quiz',
-                subtitle: 'Practice questions from your notes',
-                onTap: () => context.push('/quiz'),
+                subtitle: 'Test yourself on your $title notes',
+                onTap: () => context.push('/quiz?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
                 leading: const Icon(Icons.account_tree_outlined, size: 22, color: AppColors.textPrimary),
                 title: 'Mind map',
-                subtitle: 'Visual concept hierarchy',
-                onTap: () => context.push('/mindmap'),
+                subtitle: 'Generate visual concept hierarchy with AI',
+                onTap: () => context.push('/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: const Icon(Icons.picture_as_pdf_outlined, size: 22, color: AppColors.textPrimary),
-                title: 'Make a PDF',
-                subtitle: 'Export formatted study sheet',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Study sheet PDF generated in True Me folder.')),
-                  );
-                },
+                leading: _isGeneratingPdf
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.picture_as_pdf_outlined, size: 22, color: AppColors.textPrimary),
+                title: _isGeneratingPdf ? 'Generating PDF...' : 'Make a PDF study sheet',
+                subtitle: 'Synthesize sources into a shareable PDF guide',
+                onTap: _isGeneratingPdf ? null : _exportRealPdf,
               ),
             ],
           ),
@@ -219,7 +376,7 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
     );
   }
 
-  Widget _buildSectionCard(String sectionName, List<String> files) {
+  Widget _buildSectionCard(String sectionName, List<Map<String, dynamic>> files) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -231,43 +388,46 @@ class _NotebookDetailScreenState extends State<NotebookDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$sectionName (${files.length} ${files.length == 1 ? 'file' : 'files'})',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-              ),
-              if (files.length > 3)
-                Text('See all', style: AppTypography.smallLabel.copyWith(color: AppColors.accent)),
-            ],
+          Text(
+            '$sectionName (${files.length})',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 10),
           if (files.isEmpty)
-            const Text('No files yet', style: AppTypography.secondary)
+            const Text('No files added yet', style: AppTypography.secondary)
           else
-            ...files.take(3).map((f) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+            ...files.map((doc) {
+              final fName = doc['fileName'] as String? ?? 'Document';
+              final hasDrive = doc['driveFileId'] != null;
+              return InkWell(
+                onTap: () => _showDocumentViewer(doc),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.textSecondary),
+                      const Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.accent),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          f,
+                          fName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Synced',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      Text(
+                        hasDrive ? 'Drive' : 'Saved',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                       ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right, size: 16, color: AppColors.textSecondary),
                     ],
                   ),
-                )),
+                ),
+              );
+            }),
         ],
       ),
     );

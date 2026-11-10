@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -19,26 +21,37 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
   late List<String> _userSubjects;
   late String _learningStyle;
   late DateTime _targetExamDate;
-  String _selectedTheme = 'Light';
+  late String _selectedTheme;
+  String _appVersion = '...';
+  bool _isConnectingDrive = false;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() => _appVersion = 'v${info.version}');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _appVersion = 'v1.0');
+    }
   }
 
   void _loadProfile() {
     final profile = OfflineCacheService.getUserProfile();
     setState(() {
-      _userName = (profile['name'] as String?)?.trim().isNotEmpty == true
-          ? profile['name']
-          : 'Asmon';
-      _userEmail = profile['email'] ?? 'asmon@trueme.ai';
-      _userSubjects = List<String>.from(
-        profile['subjects'] ?? ['Microbiology', 'Biochemistry', 'Immunology'],
-      );
-      _learningStyle = profile['learningStyle'] ?? 'Visual (Diagrams & Notes)';
+      _userName = OfflineCacheService.getUserName();
+      _userEmail = OfflineCacheService.getUserEmail();
+      _userSubjects = OfflineCacheService.getUserSubjects();
+      _learningStyle = profile['learningStyle'] ?? 'Visual & Practice';
       _targetExamDate = OfflineCacheService.getTargetExamDate();
+      _selectedTheme = OfflineCacheService.getThemeMode();
     });
   }
 
@@ -59,15 +72,16 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
           autofocus: true,
         ),
         actions: [
-          AppSecondaryButton(
-            label: 'Cancel',
-            height: 40,
+          TextButton(
             onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(width: 8),
-          AppPrimaryButton(
-            label: 'Save',
-            height: 40,
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(80, 40),
+            ),
             onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty) {
@@ -78,12 +92,25 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                   learningStyle: _learningStyle,
                   targetExamDate: _targetExamDate,
                 );
-                setState(() => _userName = newName);
+                _loadProfile();
               }
-              if (mounted) Navigator.pop(ctx);
+              if (ctx.mounted) Navigator.pop(ctx);
             },
+            child: const Text('Save'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _connectDrive() async {
+    setState(() => _isConnectingDrive = true);
+    final ok = await DriveService.instance.signIn();
+    if (!mounted) return;
+    setState(() => _isConnectingDrive = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Google Drive connected.' : 'Google Drive sign-in cancelled or failed.'),
       ),
     );
   }
@@ -108,7 +135,7 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
           children: [
             Text(
               deleteAll
-                  ? 'This will delete all local data AND files in Google Drive. Type "DELETE" below to confirm.'
+                  ? 'This will delete all local data AND your True Me folder in Google Drive. Type "DELETE" below to confirm.'
                   : 'This will reset local data on this phone. Your Google Drive files will remain safe.',
               style: AppTypography.bodySmall,
             ),
@@ -122,16 +149,16 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
           ],
         ),
         actions: [
-          AppSecondaryButton(
-            label: 'Cancel',
-            height: 40,
+          TextButton(
             onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(width: 8),
-          AppPrimaryButton(
-            label: deleteAll ? 'Delete all' : 'Remove',
-            height: 40,
-            backgroundColor: AppColors.error,
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(90, 40),
+            ),
             onPressed: () async {
               if (deleteAll && confirmationController.text.trim() != 'DELETE') {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -139,13 +166,18 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                 );
                 return;
               }
+              if (deleteAll) {
+                await DriveService.instance.deleteVaultFolder();
+                await DriveService.instance.signOut();
+              }
               await OfflineCacheService.clearAllCache();
               await OfflineCacheService.logout();
-              if (mounted) {
+              if (ctx.mounted) {
                 Navigator.pop(ctx);
                 context.go('/login');
               }
             },
+            child: Text(deleteAll ? 'Delete all' : 'Remove'),
           ),
         ],
       ),
@@ -154,7 +186,9 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final daysRemaining = _targetExamDate.difference(DateTime.now()).inDays;
+    final daysRemaining = _targetExamDate.difference(DateTime.now()).inDays.clamp(0, 999);
+    final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
+    final driveEmail = DriveService.instance.userEmail;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -227,13 +261,13 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                       );
                       if (picked != null) {
                         await OfflineCacheService.saveTargetExamDate(picked);
-                        setState(() => _targetExamDate = picked);
+                        _loadProfile();
                       }
                     },
                   ),
                   const Divider(height: 1, thickness: 1, color: AppColors.border),
                   AppListRow(
-                    title: _userSubjects.join(', '),
+                    title: _userSubjects.isNotEmpty ? _userSubjects.join(', ') : 'No subjects added yet',
                     subtitle: 'Active subjects (${_userSubjects.length})',
                     trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
                     onTap: () => context.push('/setup-profile'),
@@ -256,26 +290,29 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
               child: Column(
                 children: [
                   AppListRow(
-                    title: 'Connected',
-                    subtitle: 'Google Drive status',
-                    trailing: TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Google Drive is synced.')),
-                        );
-                      },
-                      child: const Text('Reconnect', style: TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
+                    title: driveConnected ? 'Connected' : 'Not connected',
+                    subtitle: driveConnected
+                        ? (driveEmail != null ? 'Google Drive ($driveEmail)' : 'Google Drive linked')
+                        : 'Files are currently stored only on this phone',
+                    trailing: _isConnectingDrive
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : TextButton(
+                            onPressed: _connectDrive,
+                            child: Text(
+                              driveConnected ? 'Reconnect' : 'Connect',
+                              style: const TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
                   ),
                   const Divider(height: 1, thickness: 1, color: AppColors.border),
                   const AppListRow(
                     title: 'True Me',
-                    subtitle: 'Folder location',
+                    subtitle: 'Google Drive folder location',
                   ),
                   const Divider(height: 1, thickness: 1, color: AppColors.border),
                   AppListRow(
                     title: 'Clear local cache',
-                    subtitle: 'Frees temporary files stored on phone',
+                    subtitle: 'Clears locally stored quizzes, cards, and study logs',
                     trailing: const Icon(Icons.delete_outline, size: 18, color: AppColors.textSecondary),
                     onTap: () async {
                       await OfflineCacheService.clearAllCache();
@@ -308,7 +345,10 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                         return Padding(
                           padding: const EdgeInsets.only(left: 4),
                           child: InkWell(
-                            onTap: () => setState(() => _selectedTheme = theme),
+                            onTap: () async {
+                              await OfflineCacheService.saveThemeMode(theme);
+                              setState(() => _selectedTheme = theme);
+                            },
                             borderRadius: BorderRadius.circular(6),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -336,23 +376,23 @@ class _AccountCenterScreenState extends State<AccountCenterScreen> {
                   const Divider(height: 1, thickness: 1, color: AppColors.border),
                   AppListRow(
                     title: 'Check for updates',
-                    subtitle: 'Current version: v1.0.32',
+                    subtitle: 'Installed version: $_appVersion',
                     trailing: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
                     onTap: () async {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Checking for updates...'),
+                          content: Text('Checking GitHub Releases for updates...'),
                           duration: Duration(seconds: 1),
                         ),
                       );
-                      final info = await UpdateService().checkForUpdate();
+                      final info = await UpdateService().checkForUpdate(force: true);
                       if (!mounted) return;
                       if (info != null && info.hasUpdate) {
                         UpdateService.showUpdateDialog(context: context, info: info);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('True Me is up to date (v1.0.32)'),
+                          SnackBar(
+                            content: Text('True Me is up to date ($_appVersion)'),
                           ),
                         );
                       }

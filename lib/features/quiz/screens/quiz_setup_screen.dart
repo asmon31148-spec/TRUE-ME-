@@ -1,99 +1,283 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../providers/quiz_provider.dart';
 
-class QuizSetupScreen extends StatefulWidget {
-  const QuizSetupScreen({super.key});
+class QuizSetupScreen extends ConsumerStatefulWidget {
+  final String? notebookId;
+  final String? initialSubject;
+  final String? initialTopic;
+
+  const QuizSetupScreen({
+    super.key,
+    this.notebookId,
+    this.initialSubject,
+    this.initialTopic,
+  });
 
   @override
-  State<QuizSetupScreen> createState() => _QuizSetupScreenState();
+  ConsumerState<QuizSetupScreen> createState() => _QuizSetupScreenState();
 }
 
-class _QuizSetupScreenState extends State<QuizSetupScreen> {
+class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
   bool _isPlaying = false;
   bool _isFinished = false;
+  bool _reviewingMissed = false;
+  int _reviewIdx = 0;
 
   // Setup options
-  late String _selectedSubject;
+  List<Map<String, dynamic>> _notebooks = [];
+  String? _selectedNotebookId;
+  final TextEditingController _customSubjectCtrl = TextEditingController();
   final TextEditingController _topicCtrl = TextEditingController();
-  String _selectedSource = 'All sources';
   String _selectedDifficulty = 'Medium';
-  int _questionCount = 10;
+  int _questionCount = 5;
 
   // Active Quiz State
-  int _currentIdx = 2; // 0-indexed for "Question 3 of 10" like in design
-  int? _selectedOptionIdx = 1; // "Flagellum" pre-selected as in wireframe
+  int _currentIdx = 0;
+  int? _selectedOptionIdx;
   bool _hasChecked = false;
-  int _score = 8;
-
-  final List<Map<String, dynamic>> _sampleQuestions = [
-    {
-      'question': 'What is the primary function of peptidoglycan in bacterial cell walls?',
-      'options': ['Energy storage', 'Structural rigidity & osmotic protection', 'Protein synthesis', 'Lipid secretion'],
-      'correct': 1,
-      'explanation': 'Peptidoglycan provides mechanical strength to resist internal osmotic pressure.',
-    },
-    {
-      'question': 'Which phase of microbial growth shows exponential cellular division?',
-      'options': ['Lag phase', 'Log (exponential) phase', 'Stationary phase', 'Death phase'],
-      'correct': 1,
-      'explanation': 'During log phase, cells divide at a constant, maximal rate under the given conditions.',
-    },
-    {
-      'question': 'Which structure is primarily responsible for bacterial movement?',
-      'options': ['Capsule', 'Flagellum', 'Pili', 'Ribosome'],
-      'correct': 1,
-      'explanation': 'Flagella are helical protein filaments that rotate to drive bacterial chemotaxis and motility.',
-    },
-    {
-      'question': 'Autoclaving achieves sterilization primarily by using:',
-      'options': ['Dry heat at 100°C', 'Steam under pressure at 121°C', 'Gamma radiation', 'Filtration through 0.45μm pores'],
-      'correct': 1,
-      'explanation': 'Pressurized saturated steam at 121°C denatures microbial proteins and destroys bacterial endospores.',
-    },
-    {
-      'question': 'Gram-positive bacteria retain which dye after ethanol decolorization?',
-      'options': ['Safranin', 'Crystal violet', 'Methylene blue', 'Carbolfuchsin'],
-      'correct': 1,
-      'explanation': 'The thick peptidoglycan layer dehydrates and traps the crystal violet-iodine complex.',
-    },
-  ];
+  int _score = 0;
+  final List<QuizQuestionModel> _missedQuestions = [];
 
   @override
   void initState() {
     super.initState();
-    final subs = OfflineCacheService.getUserSubjects();
-    _selectedSubject = subs.isNotEmpty ? subs.first : 'Microbiology';
+    _notebooks = OfflineCacheService.getAllCachedNotebooks();
+
+    if (widget.notebookId != null && _notebooks.any((n) => n['id'] == widget.notebookId)) {
+      _selectedNotebookId = widget.notebookId;
+    } else if (widget.initialSubject != null) {
+      final match = _notebooks.where(
+        (n) => (n['title'] as String? ?? '').toLowerCase() == widget.initialSubject!.toLowerCase(),
+      );
+      if (match.isNotEmpty) {
+        _selectedNotebookId = match.first['id'] as String?;
+      } else {
+        _customSubjectCtrl.text = widget.initialSubject!;
+      }
+    } else if (_notebooks.isNotEmpty) {
+      _selectedNotebookId = _notebooks.first['id'] as String?;
+    }
+
+    if (widget.initialTopic != null) {
+      _topicCtrl.text = widget.initialTopic!;
+    }
   }
 
   @override
   void dispose() {
+    _customSubjectCtrl.dispose();
     _topicCtrl.dispose();
     super.dispose();
   }
 
-  void _onCheck() {
-    setState(() => _hasChecked = true);
+  String get _effectiveSubject {
+    if (_selectedNotebookId != null) {
+      final nb = _notebooks.firstWhere(
+        (n) => n['id'] == _selectedNotebookId,
+        orElse: () => {},
+      );
+      final title = nb['title'] as String?;
+      if (title != null && title.isNotEmpty) return title;
+    }
+    final custom = _customSubjectCtrl.text.trim();
+    return custom.isNotEmpty ? custom : 'General Study';
   }
 
-  void _onNext() {
-    if (_currentIdx < _sampleQuestions.length - 1) {
+  Future<void> _startQuiz() async {
+    final subject = _effectiveSubject;
+    final topic = _topicCtrl.text.trim().isNotEmpty ? _topicCtrl.text.trim() : subject;
+    final nbId = _selectedNotebookId ?? '';
+    final sourceContent = nbId.isNotEmpty
+        ? OfflineCacheService.getNotebookCombinedText(nbId, maxChars: 16000)
+        : '';
+
+    setState(() {
+      _isPlaying = true;
+      _isFinished = false;
+      _reviewingMissed = false;
+      _currentIdx = 0;
+      _selectedOptionIdx = null;
+      _hasChecked = false;
+      _score = 0;
+      _missedQuestions.clear();
+    });
+
+    await ref.read(quizProvider.notifier).generateQuiz(
+          notebookId: nbId.isNotEmpty ? nbId : 'general',
+          subject: subject,
+          topic: topic,
+          content: sourceContent,
+          difficulty: _selectedDifficulty.toLowerCase(),
+          count: _questionCount,
+        );
+  }
+
+  void _onCheck(QuizQuestionModel q) {
+    if (_selectedOptionIdx == null || _hasChecked) return;
+    final isCorrect = _selectedOptionIdx == q.correctOptionIndex;
+    setState(() {
+      _hasChecked = true;
+      if (isCorrect) {
+        _score++;
+      } else {
+        _missedQuestions.add(q);
+      }
+    });
+  }
+
+  Future<void> _onNext(QuizModel quiz) async {
+    if (_currentIdx < quiz.questions.length - 1) {
       setState(() {
         _currentIdx++;
         _selectedOptionIdx = null;
         _hasChecked = false;
       });
     } else {
-      setState(() => _isFinished = true);
+      await OfflineCacheService.saveQuizAttempt(
+        id: quiz.id,
+        subject: quiz.subject,
+        topic: quiz.topic,
+        score: _score,
+        total: quiz.questions.length,
+        missedTopics: _missedQuestions.map((q) => q.question).toList(),
+      );
+      if (mounted) {
+        setState(() => _isFinished = true);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isFinished) {
+    final quizState = ref.watch(quizProvider);
+    final quiz = quizState.currentQuiz;
+
+    // 1. Loading / Generating state
+    if (_isPlaying && quizState.isGenerating) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => setState(() => _isPlaying = false),
+          ),
+          title: const Text('Creating Quiz', style: AppTypography.sectionHeading),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(color: AppColors.accent),
+                const SizedBox(height: 20),
+                Text(
+                  'Sage is building your $_questionCount-question $_selectedDifficulty quiz...',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.sectionHeading,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _selectedNotebookId != null
+                      ? 'Using your $_effectiveSubject notes and syllabus'
+                      : 'Topic: ${_topicCtrl.text.trim().isNotEmpty ? _topicCtrl.text.trim() : _effectiveSubject}',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.secondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 2. Reviewing Missed Questions
+    if (_reviewingMissed && _missedQuestions.isNotEmpty) {
+      final q = _missedQuestions[_reviewIdx];
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => setState(() => _reviewingMissed = false),
+          ),
+          title: Text('Missed ${_reviewIdx + 1} of ${_missedQuestions.length}', style: AppTypography.sectionHeading),
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(q.question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.success),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Correct answer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success)),
+                      const SizedBox(height: 4),
+                      Text(q.options[q.correctOptionIndex], style: AppTypography.body),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Explanation', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Text(q.explanation, style: AppTypography.body),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                AppPrimaryButton(
+                  label: _reviewIdx < _missedQuestions.length - 1 ? 'Next missed question' : 'Back to results',
+                  onPressed: () {
+                    setState(() {
+                      if (_reviewIdx < _missedQuestions.length - 1) {
+                        _reviewIdx++;
+                      } else {
+                        _reviewingMissed = false;
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 3. Result Screen
+    if (_isFinished && quiz != null) {
+      final total = quiz.questions.length;
+      final pct = total > 0 ? ((_score / total) * 100).round() : 0;
+
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
@@ -105,49 +289,67 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
         ),
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 Text(
-                  '$_score / 10',
+                  '$_score / $total',
                   style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Good understanding of bacterial structure and staining.',
+                Text(
+                  '$pct% • ${quiz.subject}',
+                  style: AppTypography.secondary.copyWith(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  pct >= 80
+                      ? 'Strong grasp of ${quiz.topic}.'
+                      : (pct >= 50
+                          ? 'Good progress — review the missed concepts below.'
+                          : 'Keep practicing — focus on the missed topics below.'),
                   textAlign: TextAlign.center,
                   style: AppTypography.body,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Topics to review', style: AppTypography.sectionHeading),
-                ),
-                const SizedBox(height: 12),
-                AppListRow(
-                  title: 'Sterilization methods',
-                  subtitle: 'Missed Question 4',
-                ),
-                const SizedBox(height: 8),
-                AppListRow(
-                  title: 'Gram staining mechanisms',
-                  subtitle: 'Missed Question 5',
-                ),
+                if (_missedQuestions.isNotEmpty) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Missed questions (${_missedQuestions.length})', style: AppTypography.sectionHeading),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _missedQuestions.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, i) {
+                        final mq = _missedQuestions[i];
+                        return AppListRow(
+                          title: mq.question,
+                          subtitle: 'Correct: ${mq.options[mq.correctOptionIndex]}',
+                          onTap: () => setState(() {
+                            _reviewIdx = i;
+                            _reviewingMissed = true;
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  AppPrimaryButton(
+                    label: 'Review missed questions',
+                    onPressed: () => setState(() {
+                      _reviewIdx = 0;
+                      _reviewingMissed = true;
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                ] else ...[
+                  const Spacer(),
+                ],
 
-                const Spacer(),
-                AppPrimaryButton(
-                  label: 'Review missed questions',
-                  onPressed: () => setState(() {
-                    _isFinished = false;
-                    _currentIdx = 3;
-                    _hasChecked = false;
-                    _selectedOptionIdx = null;
-                  }),
-                ),
-                const SizedBox(height: 12),
                 AppSecondaryButton(
                   label: 'Done',
                   onPressed: () => context.pop(),
@@ -159,9 +361,11 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
       );
     }
 
-    if (_isPlaying) {
-      final q = _sampleQuestions[_currentIdx.clamp(0, _sampleQuestions.length - 1)];
-      final isLast = _currentIdx == _sampleQuestions.length - 1;
+    // 4. Active Quiz Question View
+    if (_isPlaying && quiz != null && quiz.questions.isNotEmpty) {
+      final q = quiz.questions[_currentIdx.clamp(0, quiz.questions.length - 1)];
+      final total = quiz.questions.length;
+      final letters = ['A', 'B', 'C', 'D'];
 
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -171,12 +375,12 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
             onPressed: () => setState(() => _isPlaying = false),
           ),
           title: Text(
-            'Question ${_currentIdx + 1} of 10',
+            'Question ${_currentIdx + 1} of $total',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
           ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(6),
-            child: AppProgressBar(value: (_currentIdx + 1) / 10.0),
+            child: AppProgressBar(value: (_currentIdx + 1) / total),
           ),
         ),
         body: SafeArea(
@@ -189,7 +393,7 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        q['question'] as String,
+                        q.question,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -197,29 +401,26 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                           height: 1.4,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Option Rows
-                      ...List.generate(4, (i) {
-                        final options = q['options'] as List<String>;
-                        final optionText = options[i];
-                        final letter = String.fromCharCode(65 + i); // A, B, C, D
+                      ...List.generate(q.options.length, (i) {
                         final isSelected = _selectedOptionIdx == i;
-                        final isCorrect = i == q['correct'];
+                        final isCorrectOption = i == q.correctOptionIndex;
 
                         Color borderColor = AppColors.border;
-                        Widget? trailingIcon;
+                        Color bgColor = AppColors.surface;
 
                         if (_hasChecked) {
-                          if (isCorrect) {
+                          if (isCorrectOption) {
                             borderColor = AppColors.success;
-                            trailingIcon = const Icon(Icons.check, size: 20, color: AppColors.success);
-                          } else if (isSelected && !isCorrect) {
+                            bgColor = AppColors.success.withOpacity(0.06);
+                          } else if (isSelected) {
                             borderColor = AppColors.error;
-                            trailingIcon = const Icon(Icons.close, size: 20, color: AppColors.error);
+                            bgColor = AppColors.error.withOpacity(0.06);
                           }
                         } else if (isSelected) {
                           borderColor = AppColors.accent;
+                          bgColor = AppColors.accent.withOpacity(0.06);
                         }
 
                         return Padding(
@@ -228,43 +429,45 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                             onTap: _hasChecked ? null : () => setState(() => _selectedOptionIdx = i),
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
+                              width: double.infinity,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                               decoration: BoxDecoration(
-                                color: AppColors.surface,
+                                color: bgColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: borderColor, width: isSelected || _hasChecked ? 1.5 : 1.0),
+                                border: Border.all(
+                                  color: borderColor,
+                                  width: isSelected || (_hasChecked && isCorrectOption) ? 1.5 : 1,
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   Text(
-                                    letter,
+                                    i < letters.length ? letters[i] : '${i + 1}',
                                     style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
                                       color: isSelected ? AppColors.accent : AppColors.textSecondary,
                                     ),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: Text(
-                                      optionText,
-                                      style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                                      q.options[i],
+                                      style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
                                     ),
                                   ),
-                                  if (trailingIcon != null) trailingIcon,
                                 ],
                               ),
                             ),
                           ),
                         );
                       }),
-                      const SizedBox(height: 16),
 
-                      // Explanation Card
                       if (_hasChecked) ...[
+                        const SizedBox(height: 8),
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(12),
@@ -273,20 +476,27 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Explanation', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              Text(
+                                _selectedOptionIdx == q.correctOptionIndex ? 'Correct' : 'Incorrect',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _selectedOptionIdx == q.correctOptionIndex
+                                      ? AppColors.success
+                                      : AppColors.error,
+                                ),
+                              ),
                               const SizedBox(height: 4),
-                              Text(q['explanation'] as String, style: AppTypography.secondary),
+                              Text(q.explanation, style: AppTypography.body),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
                       ],
                     ],
                   ),
                 ),
               ),
 
-              // Pinned Button: "Check", "Next", or "Finish"
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: const BoxDecoration(
@@ -294,10 +504,12 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
                   border: Border(top: BorderSide(color: AppColors.border, width: 1)),
                 ),
                 child: AppPrimaryButton(
-                  label: !_hasChecked ? 'Check' : (isLast ? 'Finish' : 'Next'),
+                  label: !_hasChecked
+                      ? 'Check'
+                      : (_currentIdx < total - 1 ? 'Next' : 'Finish'),
                   onPressed: _selectedOptionIdx == null
                       ? null
-                      : (!_hasChecked ? _onCheck : _onNext),
+                      : (!_hasChecked ? () => _onCheck(q) : () => _onNext(quiz)),
                 ),
               ),
             ],
@@ -306,120 +518,121 @@ class _QuizSetupScreenState extends State<QuizSetupScreen> {
       );
     }
 
-    // Setup Screen
-    final subjects = OfflineCacheService.getUserSubjects();
-
+    // 5. Quiz Setup Screen
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Quiz', style: AppTypography.screenTitle),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Subject', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border, width: 1),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedSubject,
-                    isExpanded: true,
-                    dropdownColor: AppColors.surface,
-                    items: subjects.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                    onChanged: (v) {
-                      if (v != null) setState(() => _selectedSubject = v);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_notebooks.isNotEmpty) ...[
+                      const Text('Subject / Notebook', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border, width: 1),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _selectedNotebookId,
+                            isExpanded: true,
+                            dropdownColor: AppColors.surface,
+                            items: [
+                              ..._notebooks.map((n) {
+                                final id = n['id'] as String;
+                                final title = n['title'] as String? ?? 'Subject';
+                                final docCount = (n['documents'] as List? ?? []).length;
+                                return DropdownMenuItem<String?>(
+                                  value: id,
+                                  child: Text('$title ($docCount files)'),
+                                );
+                              }),
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Custom topic (no notebook)'),
+                              ),
+                            ],
+                            onChanged: (v) => setState(() => _selectedNotebookId = v),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
-              AppInput(
-                label: 'Topic (optional)',
-                hintText: 'e.g. Bacterial cell structure',
-                controller: _topicCtrl,
-              ),
-              const SizedBox(height: 16),
+                    if (_selectedNotebookId == null) ...[
+                      AppInput(
+                        label: 'Subject',
+                        hintText: 'e.g. Organic Chemistry, Economics...',
+                        controller: _customSubjectCtrl,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
-              const Text('Source', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border, width: 1),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedSource,
-                    isExpanded: true,
-                    dropdownColor: AppColors.surface,
-                    items: ['All sources', 'Previous papers only']
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) setState(() => _selectedSource = v);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              const Text('Difficulty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              Row(
-                children: ['Easy', 'Medium', 'Hard'].map((d) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: AppChip(
-                      label: d,
-                      isSelected: _selectedDifficulty == d,
-                      onTap: () => setState(() => _selectedDifficulty = d),
+                    AppInput(
+                      label: 'Topic (optional)',
+                      hintText: 'Leave blank to test entire subject notes',
+                      controller: _topicCtrl,
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-              const Text('Number of questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              Row(
-                children: [5, 10, 20].map((c) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: AppChip(
-                      label: '$c',
-                      isSelected: _questionCount == c,
-                      onTap: () => setState(() => _questionCount = c),
+                    const Text('Difficulty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ['Easy', 'Medium', 'Hard'].map((diff) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: AppChip(
+                            label: diff,
+                            isSelected: _selectedDifficulty == diff,
+                            onTap: () => setState(() => _selectedDifficulty = diff),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
+                    const SizedBox(height: 20),
 
-              const Spacer(),
-              AppPrimaryButton(
+                    const Text('Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [5, 10, 15].map((cnt) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: AppChip(
+                            label: '$cnt',
+                            isSelected: _questionCount == cnt,
+                            onTap: () => setState(() => _questionCount = cnt),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+              ),
+              child: AppPrimaryButton(
                 label: 'Start quiz',
-                onPressed: () {
-                  setState(() {
-                    _isPlaying = true;
-                    _currentIdx = 0;
-                    _selectedOptionIdx = null;
-                    _hasChecked = false;
-                  });
-                },
+                onPressed: _startQuiz,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

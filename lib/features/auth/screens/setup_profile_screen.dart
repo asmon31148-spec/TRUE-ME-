@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -14,17 +15,20 @@ class SetupProfileScreen extends StatefulWidget {
 
 class _SetupProfileScreenState extends State<SetupProfileScreen> {
   int _currentStep = 1;
+  bool _isConnectingDrive = false;
 
   // Step 1 Fields
   late final TextEditingController _nameController;
   final List<String> _subjects = [];
-  DateTime _deadline = DateTime.now().add(const Duration(days: 21));
+  DateTime _deadline = DateTime.now().add(const Duration(days: 30));
 
   @override
   void initState() {
     super.initState();
     final name = OfflineCacheService.getUserName();
     _nameController = TextEditingController(text: name != 'Student' ? name : '');
+    _subjects.addAll(OfflineCacheService.getUserSubjects());
+    _deadline = OfflineCacheService.getTargetExamDate();
   }
 
   @override
@@ -98,13 +102,23 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
     }
   }
 
-  Future<void> _completeSetup() async {
+  Future<void> _completeSetup({bool connectDrive = false}) async {
+    if (connectDrive) {
+      setState(() => _isConnectingDrive = true);
+      final ok = await DriveService.instance.signIn();
+      if (!mounted) return;
+      setState(() => _isConnectingDrive = false);
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not connect Drive right now. Continuing locally — you can connect later in Account.')),
+        );
+      }
+    }
+
     final name = _nameController.text.trim().isNotEmpty
         ? _nameController.text.trim()
-        : 'Student';
-    final subjectsList = _subjects.isNotEmpty
-        ? _subjects
-        : ['Microbiology', 'Biochemistry'];
+        : OfflineCacheService.getUserName();
+    final subjectsList = List<String>.from(_subjects);
 
     await OfflineCacheService.saveUserProfile(
       name: name,
@@ -115,7 +129,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       hasCompletedOnboarding: true,
     );
 
-    // Create initial notebooks for added subjects
+    // Create notebooks for added subjects (createNotebook prevents duplicates)
     for (final s in subjectsList) {
       await OfflineCacheService.createNotebook(title: s, subject: s);
     }
@@ -293,12 +307,13 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
                 const Spacer(),
                 AppPrimaryButton(
                   label: 'Connect Google Drive',
-                  onPressed: _completeSetup,
+                  isLoading: _isConnectingDrive,
+                  onPressed: () => _completeSetup(connectDrive: true),
                 ),
                 const SizedBox(height: 12),
                 Center(
                   child: TextButton(
-                    onPressed: _completeSetup,
+                    onPressed: _isConnectingDrive ? null : () => _completeSetup(connectDrive: false),
                     child: const Text('Do this later'),
                   ),
                 ),

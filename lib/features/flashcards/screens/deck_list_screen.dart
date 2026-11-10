@@ -1,45 +1,108 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../providers/flashcard_provider.dart';
 
-class DeckListScreen extends StatefulWidget {
-  const DeckListScreen({super.key});
+class DeckListScreen extends ConsumerStatefulWidget {
+  final String? notebookId;
+  final String? initialSubject;
+
+  const DeckListScreen({
+    super.key,
+    this.notebookId,
+    this.initialSubject,
+  });
 
   @override
-  State<DeckListScreen> createState() => _DeckListScreenState();
+  ConsumerState<DeckListScreen> createState() => _DeckListScreenState();
 }
 
-class _DeckListScreenState extends State<DeckListScreen> {
-  bool _isStudying = false;
-  int _cardIndex = 2; // Card 3 of 18 as per wireframe
+class _DeckListScreenState extends ConsumerState<DeckListScreen> {
+  FlashcardDeckModel? _activeDeck;
+  List<FlashcardModel> _sessionCards = [];
+  int _cardIndex = 0;
   bool _isFlipped = false;
+  int _reviewedCount = 0;
 
-  final List<Map<String, String>> _cards = const [
-    {
-      'question': 'What are the 4 standard reagents used in Gram staining, in order?',
-      'answer': '1. Crystal violet (primary stain)\n2. Gram’s iodine (mordant)\n3. 95% ethanol (decolorizer)\n4. Safranin (counterstain)',
-    },
-    {
-      'question': 'What structural component makes bacterial endospores heat and radiation resistant?',
-      'answer': 'Dipicolinic acid complexed with calcium (calcium dipicolinate) inside the dehydrated spore core.',
-    },
-    {
-      'question': 'Which structure is primarily responsible for bacterial movement?',
-      'answer': 'Bacterial flagellum driven by a proton-motive force motor at the cell membrane.',
-    },
-    {
-      'question': 'Define the D-value (decimal reduction time) in sterilization kinetics.',
-      'answer': 'The time required at a given temperature to reduce a microbial population by 90% (1 log reduction).',
-    },
-  ];
+  void _startDeck(FlashcardDeckModel deck, {bool onlyDue = false}) {
+    final now = DateTime.now().add(const Duration(minutes: 5));
+    final due = deck.cards.where((c) => c.nextReviewDate.isBefore(now)).toList();
+    final cardsToStudy = onlyDue && due.isNotEmpty ? due : deck.cards;
+
+    if (cardsToStudy.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This deck has no cards yet.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _activeDeck = deck;
+      _sessionCards = List<FlashcardModel>.from(cardsToStudy);
+      _cardIndex = 0;
+      _isFlipped = false;
+      _reviewedCount = 0;
+    });
+  }
+
+  void _startAllDue(List<FlashcardDeckModel> decks) {
+    final now = DateTime.now().add(const Duration(minutes: 5));
+    for (final d in decks) {
+      if (d.cards.any((c) => c.nextReviewDate.isBefore(now))) {
+        _startDeck(d, onlyDue: true);
+        return;
+      }
+    }
+    if (decks.isNotEmpty) {
+      _startDeck(decks.first);
+    }
+  }
+
+  void _rateCard(int sm2Rating) {
+    if (_activeDeck == null) return;
+    final card = _sessionCards[_cardIndex];
+    ref.read(flashcardProvider.notifier).recordCardRating(
+          deckId: _activeDeck!.id,
+          cardId: card.id,
+          rating: sm2Rating,
+        );
+
+    _reviewedCount++;
+
+    if (_cardIndex < _sessionCards.length - 1) {
+      setState(() {
+        _cardIndex++;
+        _isFlipped = false;
+      });
+    } else {
+      final finishedDeck = _activeDeck!;
+      final count = _reviewedCount;
+      OfflineCacheService.logStudySession(
+        activity: 'flashcards',
+        subject: finishedDeck.subject,
+        title: finishedDeck.topic,
+        subtitle: '$count ${count == 1 ? 'card' : 'cards'} reviewed',
+        minutes: (count * 0.5).ceil().clamp(2, 30),
+      );
+      setState(() {
+        _activeDeck = null;
+        _sessionCards = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Reviewed $count cards in "${finishedDeck.topic}"')),
+      );
+    }
+  }
 
   void _showGenerateDeckSheet() {
-    final subjects = OfflineCacheService.getUserSubjects();
-    String selectedSub = subjects.isNotEmpty ? subjects.first : 'Microbiology';
+    final notebooks = OfflineCacheService.getAllCachedNotebooks();
+    String? selectedNbId = widget.notebookId ??
+        (notebooks.isNotEmpty ? notebooks.first['id'] as String : null);
+    final customSubjectCtrl = TextEditingController(text: widget.initialSubject ?? '');
     final topicCtrl = TextEditingController();
     int count = 10;
 
@@ -71,38 +134,60 @@ class _DeckListScreenState extends State<DeckListScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                const Text('Subject', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border, width: 1),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: selectedSub,
-                      isExpanded: true,
-                      dropdownColor: AppColors.surface,
-                      items: subjects.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                      onChanged: (v) {
-                        if (v != null) setSheetState(() => selectedSub = v);
-                      },
+
+                if (notebooks.isNotEmpty) ...[
+                  const Text('Subject / Notebook', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border, width: 1),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: selectedNbId,
+                        isExpanded: true,
+                        dropdownColor: AppColors.surface,
+                        items: [
+                          ...notebooks.map((n) {
+                            return DropdownMenuItem<String?>(
+                              value: n['id'] as String,
+                              child: Text(n['title'] as String? ?? 'Subject'),
+                            );
+                          }),
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Custom subject'),
+                          ),
+                        ],
+                        onChanged: (v) => setSheetState(() => selectedNbId = v),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
+
+                if (selectedNbId == null) ...[
+                  AppInput(
+                    label: 'Subject',
+                    hintText: 'e.g. Calculus, History...',
+                    controller: customSubjectCtrl,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 AppInput(
                   label: 'Topic',
-                  hintText: 'e.g. Endospore formation',
+                  hintText: 'e.g. Chapter 3 definitions, key formulas',
                   controller: topicCtrl,
                 ),
                 const SizedBox(height: 16),
-                const Text('Cards', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const Text('Number of cards', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 8),
                 Row(
-                  children: [5, 10, 20].map((c) {
+                  children: [5, 10, 15].map((c) {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: AppChip(
@@ -116,11 +201,26 @@ class _DeckListScreenState extends State<DeckListScreen> {
                 const SizedBox(height: 24),
                 AppPrimaryButton(
                   label: 'Generate deck',
-                  onPressed: () {
+                  onPressed: () async {
+                    String subjectName = customSubjectCtrl.text.trim();
+                    String sourceText = '';
+                    if (selectedNbId != null) {
+                      final nb = OfflineCacheService.getCachedNotebook(selectedNbId!);
+                      subjectName = nb?['title'] as String? ?? 'Study';
+                      sourceText = OfflineCacheService.getNotebookCombinedText(selectedNbId!, maxChars: 14000);
+                    }
+                    if (subjectName.isEmpty) subjectName = 'General Study';
+                    final topic = topicCtrl.text.trim().isNotEmpty ? topicCtrl.text.trim() : '$subjectName Review';
+
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Deck generated from your notes.')),
-                    );
+
+                    await ref.read(flashcardProvider.notifier).generateDeck(
+                          notebookId: selectedNbId ?? 'custom',
+                          subject: subjectName,
+                          topic: topic,
+                          content: sourceText,
+                          count: count,
+                        );
                   },
                 ),
               ],
@@ -131,25 +231,99 @@ class _DeckListScreenState extends State<DeckListScreen> {
     );
   }
 
+  void _showCreateManualSheet() {
+    final subjectCtrl = TextEditingController(text: widget.initialSubject ?? '');
+    final topicCtrl = TextEditingController();
+    final frontCtrl = TextEditingController();
+    final backCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Create flashcard', style: AppTypography.sectionHeading),
+                  IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppInput(label: 'Subject', hintText: 'e.g. Biology', controller: subjectCtrl),
+              const SizedBox(height: 12),
+              AppInput(label: 'Deck title', hintText: 'e.g. Cell Division', controller: topicCtrl),
+              const SizedBox(height: 12),
+              AppInput(label: 'Question (Front)', hintText: 'Enter question...', controller: frontCtrl),
+              const SizedBox(height: 12),
+              AppInput(label: 'Answer (Back)', hintText: 'Enter answer...', controller: backCtrl),
+              const SizedBox(height: 20),
+              AppPrimaryButton(
+                label: 'Save card',
+                onPressed: () async {
+                  if (frontCtrl.text.trim().isEmpty || backCtrl.text.trim().isEmpty) return;
+                  final sub = subjectCtrl.text.trim().isNotEmpty ? subjectCtrl.text.trim() : 'General';
+                  final top = topicCtrl.text.trim().isNotEmpty ? topicCtrl.text.trim() : '$sub Cards';
+                  await ref.read(flashcardProvider.notifier).createCustomDeck(
+                    subject: sub,
+                    topic: top,
+                    cards: [
+                      FlashcardModel(
+                        id: 'c_${DateTime.now().millisecondsSinceEpoch}',
+                        front: frontCtrl.text.trim(),
+                        back: backCtrl.text.trim(),
+                        nextReviewDate: DateTime.now(),
+                      ),
+                    ],
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_isStudying) {
-      final card = _cards[_cardIndex.clamp(0, _cards.length - 1)];
+    final flashState = ref.watch(flashcardProvider);
+    final decks = flashState.decks;
+
+    // 1. Active Study Session View
+    if (_activeDeck != null && _sessionCards.isNotEmpty) {
+      final card = _sessionCards[_cardIndex.clamp(0, _sessionCards.length - 1)];
+      final total = _sessionCards.length;
 
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close, size: 24),
-            onPressed: () => setState(() => _isStudying = false),
+            onPressed: () => setState(() => _activeDeck = null),
           ),
           title: Text(
-            'Card ${_cardIndex + 1} of 18',
+            'Card ${_cardIndex + 1} of $total',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
           ),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(6),
-            child: AppProgressBar(value: (_cardIndex + 1) / 18.0),
+            child: AppProgressBar(value: (_cardIndex + 1) / total),
           ),
         ),
         body: SafeArea(
@@ -158,73 +332,75 @@ class _DeckListScreenState extends State<DeckListScreen> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                  child: InkWell(
+                  child: GestureDetector(
                     onTap: () => setState(() => _isFlipped = !_isFlipped),
-                    borderRadius: BorderRadius.circular(12),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.border, width: 1),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _isFlipped ? 'Answer' : 'Question',
-                            style: AppTypography.smallLabel,
-                          ),
-                          const SizedBox(height: 20),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 150),
-                            child: Text(
-                              _isFlipped ? card['answer']! : card['question']!,
-                              key: ValueKey(_isFlipped),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                                height: 1.5,
-                                color: AppColors.textPrimary,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: Column(
+                          key: ValueKey(_isFlipped),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _isFlipped ? 'ANSWER' : 'QUESTION',
+                              style: AppTypography.smallLabel.copyWith(
+                                letterSpacing: 1.0,
+                                fontWeight: FontWeight.w600,
+                                color: _isFlipped ? AppColors.accent : AppColors.textSecondary,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 28),
-                          Text(
-                            _isFlipped ? 'Tap to see question' : 'Tap to flip',
-                            style: AppTypography.secondary,
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            SingleChildScrollView(
+                              child: Text(
+                                _isFlipped ? card.back : card.front,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: _isFlipped ? 17 : 20,
+                                  fontWeight: _isFlipped ? FontWeight.w400 : FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ),
+                            if (!_isFlipped) ...[
+                              const SizedBox(height: 24),
+                              Text('Tap card to reveal answer', style: AppTypography.smallLabel),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-
-              // Rating Buttons with Neutral Borders & Intervals
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: const BoxDecoration(
                   color: AppColors.background,
                   border: Border(top: BorderSide(color: AppColors.border, width: 1)),
                 ),
-                child: _isFlipped
-                    ? Row(
-                        children: [
-                          _buildIntervalButton('Again', '< 10 min'),
-                          const SizedBox(width: 8),
-                          _buildIntervalButton('Hard', '1 day'),
-                          const SizedBox(width: 8),
-                          _buildIntervalButton('Good', '3 days'),
-                          const SizedBox(width: 8),
-                          _buildIntervalButton('Easy', '6 days'),
-                        ],
-                      )
-                    : AppPrimaryButton(
+                child: !_isFlipped
+                    ? AppPrimaryButton(
                         label: 'Show answer',
                         onPressed: () => setState(() => _isFlipped = true),
+                      )
+                    : Row(
+                        children: [
+                          _buildIntervalButton('Again', '< 1m', () => _rateCard(0)),
+                          const SizedBox(width: 8),
+                          _buildIntervalButton('Hard', '1d', () => _rateCard(2)),
+                          const SizedBox(width: 8),
+                          _buildIntervalButton('Good', '3d', () => _rateCard(4)),
+                          const SizedBox(width: 8),
+                          _buildIntervalButton('Easy', '6d', () => _rateCard(5)),
+                        ],
                       ),
               ),
             ],
@@ -233,111 +409,145 @@ class _DeckListScreenState extends State<DeckListScreen> {
       );
     }
 
+    // 2. Deck List View
+    final now = DateTime.now().add(const Duration(minutes: 5));
+    int totalDue = 0;
+    for (final d in decks) {
+      totalDue += d.cards.where((c) => c.nextReviewDate.isBefore(now)).length;
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Flashcards', style: AppTypography.screenTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add, size: 24),
+            tooltip: 'Create card manually',
+            onPressed: _showCreateManualSheet,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           children: [
-            // Due Today Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border, width: 1),
+            if (flashState.isGenerating) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.accent),
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
+                    SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Sage is generating flashcards from your notes...',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+
+            if (decks.isEmpty && !flashState.isGenerating) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: AppEmptyState(
+                  icon: Icons.style_outlined,
+                  message: 'No flashcard decks yet. Generate a deck from your notes with Sage or add cards manually.',
+                  buttonLabel: 'Generate deck with Sage',
+                  onButtonPressed: _showGenerateDeckSheet,
+                ),
+              ),
+            ] else ...[
+              // Due Today Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border, width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            totalDue > 0 ? 'Due today: $totalDue' : 'All caught up!',
+                            style: AppTypography.sectionHeading,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${decks.length} ${decks.length == 1 ? 'deck' : 'decks'} in your library',
+                            style: AppTypography.secondary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      width: 120,
+                      child: AppPrimaryButton(
+                        label: totalDue > 0 ? 'Study now' : 'Review',
+                        onPressed: () => _startAllDue(decks),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              const Text('Decks', style: AppTypography.sectionHeading),
+              const SizedBox(height: 10),
+
+              ...decks.map((deck) {
+                final dueCount = deck.cards.where((c) => c.nextReviewDate.isBefore(now)).length;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: AppListRow(
+                    title: deck.topic,
+                    subtitle: '${deck.subject} • ${deck.cards.length} cards ($dueCount due)',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Due today: 18', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Microbiology and Biochemistry review', style: AppTypography.secondary),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textSecondary),
+                          onPressed: () => ref.read(flashcardProvider.notifier).deleteDeck(deck.id),
+                        ),
+                        const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
                       ],
                     ),
+                    onTap: () => _startDeck(deck),
                   ),
-                  SizedBox(
-                    width: 120,
-                    child: AppPrimaryButton(
-                      label: 'Study now',
-                      onPressed: () => setState(() {
-                        _isStudying = true;
-                        _cardIndex = 0;
-                        _isFlipped = false;
-                      }),
-                    ),
-                  ),
-                ],
+                );
+              }),
+              const SizedBox(height: 16),
+
+              AppSecondaryButton(
+                label: 'Generate deck with Sage',
+                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                onPressed: _showGenerateDeckSheet,
               ),
-            ),
-            const SizedBox(height: 24),
-
-            const Text('Decks', style: AppTypography.sectionHeading),
-            const SizedBox(height: 10),
-
-            AppListRow(
-              title: 'Microbial cell structure',
-              subtitle: '12 cards due',
-              onTap: () => setState(() {
-                _isStudying = true;
-                _cardIndex = 0;
-                _isFlipped = false;
-              }),
-            ),
-            const SizedBox(height: 8),
-            AppListRow(
-              title: 'Sterilization & Autoclaving',
-              subtitle: '6 cards due',
-              onTap: () => setState(() {
-                _isStudying = true;
-                _cardIndex = 2;
-                _isFlipped = false;
-              }),
-            ),
-            const SizedBox(height: 8),
-            AppListRow(
-              title: 'Gram staining protocols',
-              subtitle: '0 cards due • Up to date',
-              onTap: () => setState(() {
-                _isStudying = true;
-                _cardIndex = 0;
-                _isFlipped = false;
-              }),
-            ),
-            const SizedBox(height: 20),
-
-            AppSecondaryButton(
-              label: 'Generate deck with Sage',
-              onPressed: _showGenerateDeckSheet,
-            ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildIntervalButton(String label, String interval) {
+  Widget _buildIntervalButton(String label, String interval, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
-        onTap: () {
-          setState(() {
-            _isFlipped = false;
-            if (_cardIndex < _cards.length - 1) {
-              _cardIndex++;
-            } else {
-              _isStudying = false;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cards reviewed for today.')),
-              );
-            }
-          });
-        },
+        onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -348,15 +558,9 @@ class _DeckListScreenState extends State<DeckListScreen> {
           ),
           child: Column(
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-              ),
+              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               const SizedBox(height: 2),
-              Text(
-                interval,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              ),
+              Text(interval, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ],
           ),
         ),

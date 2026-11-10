@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
+import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -18,7 +19,10 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 900));
+    if (OfflineCacheService.isDriveConnected()) {
+      DriveService.instance.signInSilently();
+    }
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
     if (OfflineCacheService.isLoggedIn()) {

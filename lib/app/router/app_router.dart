@@ -71,21 +71,44 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/chat',
       builder: (context, state) {
-        final scope = state.uri.queryParameters['scope'];
-        return ChatScreen(subject: scope);
+        final qp = state.uri.queryParameters;
+        return ChatScreen(
+          notebookId: qp['notebookId'],
+          subject: qp['scope'] ?? qp['subject'],
+          initialPrompt: qp['prompt'],
+        );
       },
     ),
     GoRoute(
       path: '/quiz',
-      builder: (context, state) => const QuizSetupScreen(),
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        return QuizSetupScreen(
+          notebookId: qp['notebookId'],
+          initialSubject: qp['subject'],
+          initialTopic: qp['topic'],
+        );
+      },
     ),
     GoRoute(
       path: '/flashcards',
-      builder: (context, state) => const DeckListScreen(),
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        return DeckListScreen(
+          notebookId: qp['notebookId'],
+          initialSubject: qp['subject'],
+        );
+      },
     ),
     GoRoute(
       path: '/mindmap',
-      builder: (context, state) => const MindmapScreen(),
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        return MindmapScreen(
+          notebookId: qp['notebookId'],
+          topic: qp['topic'],
+        );
+      },
     ),
     GoRoute(
       path: '/upload',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -16,6 +17,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _notebooks = [];
   String _filter = '';
+  bool _isConnectingDrive = false;
 
   @override
   void initState() {
@@ -34,6 +36,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() => _notebooks = list);
   }
 
+  Future<void> _connectDrive() async {
+    setState(() => _isConnectingDrive = true);
+    final ok = await DriveService.instance.signIn();
+    if (!mounted) return;
+    setState(() => _isConnectingDrive = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Connected Google Drive (${DriveService.instance.userEmail ?? 'Ready'})'
+              : 'Google Drive sign-in cancelled or failed.',
+        ),
+      ),
+    );
+  }
+
   void _showAddSubjectDialog() {
     final controller = TextEditingController();
     showDialog(
@@ -47,7 +65,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: const Text('Add subject', style: AppTypography.sectionHeading),
         content: AppInput(
           controller: controller,
-          hintText: 'e.g. Microbiology, Anatomy...',
+          autofocus: true,
+          hintText: 'e.g. Biology, Linear Algebra, Physics...',
         ),
         actions: [
           TextButton(
@@ -59,6 +78,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
               elevation: 0,
+              minimumSize: const Size(80, 40),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () async {
@@ -67,7 +87,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 await OfflineCacheService.createNotebook(title: title, subject: title);
                 _loadNotebooks();
               }
-              if (mounted) Navigator.pop(ctx);
+              if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Add'),
           ),
@@ -78,10 +98,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
     final filtered = _notebooks.where((nb) {
       final title = (nb['title'] as String? ?? '').toLowerCase();
       final sub = (nb['subject'] as String? ?? '').toLowerCase();
-      return title.contains(_filter.toLowerCase()) || sub.contains(_filter.toLowerCase());
+      final docs = (nb['documents'] as List? ?? []);
+      final docMatch = docs.any((d) =>
+          ((d as Map)['fileName'] as String? ?? '').toLowerCase().contains(_filter.toLowerCase()));
+      return title.contains(_filter.toLowerCase()) ||
+          sub.contains(_filter.toLowerCase()) ||
+          docMatch;
     }).toList();
 
     return Scaffold(
@@ -104,64 +130,91 @@ class _LibraryScreenState extends State<LibraryScreen> {
             // Search field
             AppInput(
               controller: _searchCtrl,
-              hintText: 'Search subjects and files',
+              hintText: 'Search subjects and uploaded files',
               prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
               onChanged: (val) => setState(() => _filter = val),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             // Drive Status Line
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_done_outlined, size: 16, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Google Drive connected',
-                    style: AppTypography.smallLabel.copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
+            InkWell(
+              onTap: driveConnected || _isConnectingDrive ? null : _connectDrive,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                child: Row(
+                  children: [
+                    Icon(
+                      driveConnected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                      size: 16,
+                      color: driveConnected ? AppColors.success : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _isConnectingDrive
+                            ? 'Connecting to Google Drive...'
+                            : (driveConnected
+                                ? 'Google Drive connected (${DriveService.instance.userEmail ?? 'True Me'})'
+                                : 'Saved on device • Tap to connect Google Drive'),
+                        style: AppTypography.smallLabel.copyWith(
+                          color: driveConnected ? AppColors.success : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
             // Subject Rows
-            if (filtered.isEmpty && _notebooks.isEmpty) ...[
+            if (_notebooks.isEmpty) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 48),
                 child: AppEmptyState(
                   icon: Icons.folder_open_outlined,
-                  message: 'No subjects yet',
+                  message: 'No subjects yet. Add your first subject and upload syllabus or notes to get started.',
                   buttonLabel: 'Add subject',
                   onButtonPressed: _showAddSubjectDialog,
                 ),
               ),
+            ] else if (filtered.isEmpty) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: Text('No subjects or files match your search.', style: AppTypography.secondary),
+                ),
+              ),
             ] else ...[
               ...filtered.map((nb) {
-                final id = nb['id'] as String? ?? '1';
+                final id = nb['id'] as String? ?? '';
                 final title = nb['title'] as String? ?? 'Untitled';
-                final files = List.from(nb['documents'] ?? nb['fileRefs'] ?? []);
-                final fileCount = files.length > 0 ? files.length : 12;
+                final docs = List.from(nb['documents'] ?? []);
+                final fileCount = docs.length;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: AppListRow(
                     title: title,
-                    subtitle: '$fileCount files',
-                    onTap: () => context.push('/notebook/$id'),
+                    subtitle: fileCount == 0
+                        ? 'No files yet • Tap to add sources'
+                        : '$fileCount ${fileCount == 1 ? 'file' : 'files'}',
+                    onTap: () async {
+                      await context.push('/notebook/$id');
+                      if (mounted) _loadNotebooks();
+                    },
                   ),
                 );
               }),
               const SizedBox(height: 12),
 
-              // Add Subject Button (Secondary)
               AppSecondaryButton(
                 label: 'Add subject',
+                icon: const Icon(Icons.add, size: 20),
                 onPressed: _showAddSubjectDialog,
               ),
             ],
-            const SizedBox(height: 24),
           ],
         ),
       ),

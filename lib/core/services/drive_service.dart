@@ -3,8 +3,13 @@ import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sig
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'offline_cache_service.dart';
 
 class DriveService {
+  static final DriveService instance = DriveService._internal();
+  factory DriveService() => instance;
+  DriveService._internal();
+
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     serverClientId: dotenv.env['GOOGLE_DRIVE_CLIENT_ID'],
     scopes: [
@@ -15,10 +20,28 @@ class DriveService {
 
   drive.DriveApi? _driveApi;
   String? _vaultFolderId;
+  GoogleSignInAccount? _currentAccount;
 
   bool get isSignedIn => _driveApi != null;
+  String? get userEmail => _currentAccount?.email ?? OfflineCacheService.getDriveEmail();
 
-  /// Signs the user into Google Drive using OAuth.
+  /// Attempts silent sign-in on startup/resume if previously connected.
+  Future<bool> signInSilently() async {
+    try {
+      final account = await _googleSignIn.signInSilently();
+      if (account == null) return false;
+      final httpClient = await _googleSignIn.authenticatedClient();
+      if (httpClient == null) return false;
+      _currentAccount = account;
+      _driveApi = drive.DriveApi(httpClient);
+      await OfflineCacheService.saveDriveStatus(true, email: account.email);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Signs the user into Google Drive using interactive OAuth.
   Future<bool> signIn() async {
     try {
       final account = await _googleSignIn.signIn();
@@ -27,21 +50,33 @@ class DriveService {
       final httpClient = await _googleSignIn.authenticatedClient();
       if (httpClient == null) return false;
 
+      _currentAccount = account;
       _driveApi = drive.DriveApi(httpClient);
       await _ensureVaultFolder();
+      await OfflineCacheService.saveDriveStatus(true, email: account.email);
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  /// Ensures a dedicated 'TrueMe_Study_Vault' folder exists in user's Google Drive.
+  Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    _driveApi = null;
+    _vaultFolderId = null;
+    _currentAccount = null;
+    await OfflineCacheService.saveDriveStatus(false);
+  }
+
+  /// Ensures a dedicated 'True Me' folder exists in user's Google Drive.
   Future<String> _ensureVaultFolder() async {
     if (_vaultFolderId != null) return _vaultFolderId!;
     if (_driveApi == null) throw StateError('Not signed in to Google Drive');
 
     final folderList = await _driveApi!.files.list(
-      q: "mimeType = 'application/vnd.google-apps.folder' and name = 'TrueMe_Study_Vault' and trashed = false",
+      q: "mimeType = 'application/vnd.google-apps.folder' and (name = 'True Me' or name = 'TrueMe_Study_Vault') and trashed = false",
       spaces: 'drive',
     );
 
@@ -50,9 +85,8 @@ class DriveService {
       return _vaultFolderId!;
     }
 
-    // Create folder
     final folderMeta = drive.File()
-      ..name = 'TrueMe_Study_Vault'
+      ..name = 'True Me'
       ..mimeType = 'application/vnd.google-apps.folder';
 
     final createdFolder = await _driveApi!.files.create(folderMeta);
@@ -60,8 +94,26 @@ class DriveService {
     return _vaultFolderId!;
   }
 
+  /// Lists files inside the user's Google Drive 'True Me' folder or recent Drive files.
+  Future<List<drive.File>> listFiles({int pageSize = 25}) async {
+    if (_driveApi == null) {
+      final ok = await signIn();
+      if (!ok) return [];
+    }
+    try {
+      final res = await _driveApi!.files.list(
+        q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+        pageSize: pageSize,
+        orderBy: 'modifiedTime desc',
+        $fields: 'files(id, name, mimeType, size, modifiedTime)',
+      );
+      return res.files ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Uploads a local file directly into the user's Google Drive vault.
-  /// Returns the Google Drive file ID.
   Future<String> uploadFile(File file, {String? customName}) async {
     if (_driveApi == null) throw StateError('Not signed in to Google Drive');
 
@@ -96,5 +148,15 @@ class DriveService {
     }).asFuture();
 
     return dataStore;
+  }
+
+  /// Deletes the True Me Drive folder when requested by user ("Delete everything").
+  Future<void> deleteVaultFolder() async {
+    if (_driveApi == null) return;
+    try {
+      final folderId = await _ensureVaultFolder();
+      await _driveApi!.files.delete(folderId);
+      _vaultFolderId = null;
+    } catch (_) {}
   }
 }

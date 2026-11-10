@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
 import '../../../core/services/tts_service.dart';
 
@@ -17,7 +18,7 @@ class VoiceTutorState {
     this.status = VoiceTutorStatus.idle,
     this.liveTranscript = '',
     this.lastAiResponse = '',
-    this.remainingSeconds = 1800, // 30 minutes
+    this.remainingSeconds = 1800,
     this.error,
   });
 
@@ -52,9 +53,7 @@ class VoiceTutorNotifier extends StateNotifier<VoiceTutorState> {
         _sttService = sttService,
         super(const VoiceTutorState());
 
-  /// Starts listening to the student.
   Future<void> startListening() async {
-    // If Sage is currently speaking, stop speech immediately (interruption support)
     await _ttsService.stop();
 
     state = state.copyWith(
@@ -77,36 +76,54 @@ class VoiceTutorNotifier extends StateNotifier<VoiceTutorState> {
     }
   }
 
-  /// Stops listening and sends student's voice input to Sage.
-  Future<void> stopAndProcessInput() async {
+  Future<void> stopAndProcessInput({String? subject, bool isMuted = false}) async {
     await _sttService.stopListening();
     final question = state.liveTranscript.trim();
-
     if (question.isEmpty) {
       state = state.copyWith(status: VoiceTutorStatus.idle);
       return;
     }
+    await sendTextQuestion(question, subject: subject, isMuted: isMuted);
+  }
 
-    state = state.copyWith(status: VoiceTutorStatus.processing);
+  Future<void> sendTextQuestion(String question, {String? subject, bool isMuted = false}) async {
+    final clean = question.trim();
+    if (clean.isEmpty) return;
+
+    state = state.copyWith(
+      status: VoiceTutorStatus.processing,
+      liveTranscript: clean,
+      error: null,
+    );
 
     try {
-      final prompt = '''
-Student spoken question during voice tutor session:
-"$question"
+      String contextSnippet = '';
+      if (subject != null && subject.isNotEmpty) {
+        final match = OfflineCacheService.getAllCachedNotebooks().where(
+          (n) => (n['title'] as String? ?? '').toLowerCase() == subject.toLowerCase(),
+        );
+        if (match.isNotEmpty) {
+          contextSnippet = OfflineCacheService.getNotebookCombinedText(match.first['id'] as String, maxChars: 6000);
+        }
+      }
 
-Respond as Sage. Keep your spoken response concise, conversational, and direct (2-3 sentences max). 
-Focus on guiding the student conceptually without walls of text.
+      final prompt = '''
+Student spoken question during voice tutor session (${subject ?? 'General Study'}):
+"$clean"
+${contextSnippet.isNotEmpty ? '\nRelevant student notes:\n$contextSnippet\n' : ''}
+Respond as Sage. Keep your spoken response concise, conversational, and direct (2-4 clear sentences max).
 ''';
 
       final responseText = await _aiRouter.executeRealtimeChat(prompt: prompt);
 
       state = state.copyWith(
-        status: VoiceTutorStatus.speaking,
+        status: isMuted ? VoiceTutorStatus.idle : VoiceTutorStatus.speaking,
         lastAiResponse: responseText,
       );
 
-      // Speak response aloud via device TTS
-      await _ttsService.speak(responseText);
+      if (!isMuted) {
+        await _ttsService.speak(responseText);
+      }
 
       state = state.copyWith(status: VoiceTutorStatus.idle);
     } catch (e) {
@@ -117,11 +134,17 @@ Focus on guiding the student conceptually without walls of text.
     }
   }
 
-  /// Stops speaking or listening immediately.
+  Future<void> stopSpeaking() async {
+    await _ttsService.stop();
+    if (state.status == VoiceTutorStatus.speaking) {
+      state = state.copyWith(status: VoiceTutorStatus.idle);
+    }
+  }
+
   Future<void> stopSession() async {
     await _ttsService.stop();
     await _sttService.stopListening();
-    state = state.copyWith(status: VoiceTutorStatus.idle);
+    state = const VoiceTutorState();
   }
 }
 

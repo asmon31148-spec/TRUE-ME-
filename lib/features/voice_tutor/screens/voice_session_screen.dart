@@ -1,19 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../providers/voice_tutor_provider.dart';
 
-class VoiceSessionScreen extends StatefulWidget {
+class VoiceSessionScreen extends ConsumerStatefulWidget {
   const VoiceSessionScreen({super.key});
 
   @override
-  State<VoiceSessionScreen> createState() => _VoiceSessionScreenState();
+  ConsumerState<VoiceSessionScreen> createState() => _VoiceSessionScreenState();
 }
 
-class _VoiceSessionScreenState extends State<VoiceSessionScreen> {
-  bool _isSpeaking = false;
+class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
   bool _isMuted = false;
+  late String _selectedSubject;
+  final DateTime _sessionStart = DateTime.now();
+  int _turnsCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final subs = OfflineCacheService.getUserSubjects();
+    _selectedSubject = subs.isNotEmpty ? subs.first : 'General Study';
+  }
+
+  @override
+  void dispose() {
+    ref.read(voiceTutorProvider.notifier).stopSession();
+    super.dispose();
+  }
 
   void _showTypeSheet() {
     final controller = TextEditingController();
@@ -39,17 +57,23 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen> {
             const SizedBox(height: 12),
             AppInput(
               controller: controller,
-              hintText: 'Ask Sage tutor...',
+              autofocus: true,
+              hintText: 'Ask Sage tutor about $_selectedSubject...',
             ),
             const SizedBox(height: 16),
             AppPrimaryButton(
               label: 'Send',
               onPressed: () {
+                final text = controller.text.trim();
                 Navigator.pop(ctx);
-                setState(() => _isSpeaking = true);
-                Future.delayed(const Duration(seconds: 4), () {
-                  if (mounted) setState(() => _isSpeaking = false);
-                });
+                if (text.isNotEmpty) {
+                  _turnsCount++;
+                  ref.read(voiceTutorProvider.notifier).sendTextQuestion(
+                        text,
+                        subject: _selectedSubject,
+                        isMuted: _isMuted,
+                      );
+                }
               },
             ),
           ],
@@ -58,46 +82,127 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen> {
     );
   }
 
+  Future<void> _endSession() async {
+    await ref.read(voiceTutorProvider.notifier).stopSession();
+    if (_turnsCount > 0) {
+      final mins = DateTime.now().difference(_sessionStart).inMinutes.clamp(1, 120);
+      await OfflineCacheService.logStudySession(
+        activity: 'voice',
+        subject: _selectedSubject,
+        title: '$_selectedSubject voice tutor',
+        subtitle: '$_turnsCount questions • $mins min',
+        minutes: mins,
+      );
+    }
+    if (mounted) context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final vtState = ref.watch(voiceTutorProvider);
+    final subjects = OfflineCacheService.getUserSubjects();
+    final isListening = vtState.status == VoiceTutorStatus.listening;
+    final isProcessing = vtState.status == VoiceTutorStatus.processing;
+    final isSpeaking = vtState.status == VoiceTutorStatus.speaking;
+
+    String statusLabel = 'Tap circle to speak';
+    if (isListening) statusLabel = 'Listening... tap circle when done';
+    if (isProcessing) statusLabel = 'Sage is thinking...';
+    if (isSpeaking) statusLabel = 'Sage is speaking (tap to interrupt)';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Voice tutor', style: AppTypography.screenTitle),
+        actions: [
+          if (subjects.isNotEmpty)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.menu_book_outlined, size: 22),
+              tooltip: 'Switch subject',
+              onSelected: (val) => setState(() => _selectedSubject = val),
+              itemBuilder: (_) => subjects
+                  .map((s) => PopupMenuItem(value: s, child: Text(s)))
+                  .toList(),
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
             const Spacer(),
 
-            // Centered simple circle that changes size slightly with audio level (flat accent color, no glow, no gradient)
-            Center(
+            // Tap circle to start/stop listening or interrupt speaking
+            GestureDetector(
+              onTap: () {
+                final notifier = ref.read(voiceTutorProvider.notifier);
+                if (isListening) {
+                  _turnsCount++;
+                  notifier.stopAndProcessInput(subject: _selectedSubject, isMuted: _isMuted);
+                } else if (isSpeaking) {
+                  notifier.stopSpeaking();
+                } else if (!isProcessing) {
+                  notifier.startListening();
+                }
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: _isSpeaking ? 140 : 110,
-                height: _isSpeaking ? 140 : 110,
-                decoration: const BoxDecoration(
-                  color: AppColors.accent,
+                width: isListening || isSpeaking ? 136 : 112,
+                height: isListening || isSpeaking ? 136 : 112,
+                decoration: BoxDecoration(
+                  color: isListening ? AppColors.error : AppColors.accent,
                   shape: BoxShape.circle,
                 ),
+                alignment: Alignment.center,
+                child: isProcessing
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Icon(
+                        isListening ? Icons.stop : (isSpeaking ? Icons.volume_up : Icons.mic),
+                        color: Colors.white,
+                        size: 40,
+                      ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // Status text below
-            Text(
-              _isSpeaking ? 'Sage is speaking' : (_isMuted ? 'Muted' : 'Listening'),
-              style: AppTypography.sectionHeading,
-            ),
+            Text(statusLabel, style: AppTypography.sectionHeading, textAlign: TextAlign.center),
             const SizedBox(height: 6),
-            const Text(
-              'Microbiology tutor session',
-              style: AppTypography.secondary,
-            ),
+            Text('$_selectedSubject session', style: AppTypography.secondary),
+
+            if (vtState.liveTranscript.isNotEmpty || vtState.lastAiResponse.isNotEmpty || vtState.error != null) ...[
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 160),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (vtState.error != null)
+                          Text(vtState.error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                        if (vtState.liveTranscript.isNotEmpty) ...[
+                          Text('You: ${vtState.liveTranscript}', style: AppTypography.secondary),
+                          if (vtState.lastAiResponse.isNotEmpty) const SizedBox(height: 8),
+                        ],
+                        if (vtState.lastAiResponse.isNotEmpty)
+                          Text('Sage: ${vtState.lastAiResponse}', style: AppTypography.body),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
 
             const Spacer(),
 
-            // Three controls at the bottom: Mute, Type instead, End session
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Column(
@@ -106,9 +211,14 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen> {
                     children: [
                       Expanded(
                         child: AppSecondaryButton(
-                          label: _isMuted ? 'Unmute' : 'Mute',
-                          icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, size: 20),
-                          onPressed: () => setState(() => _isMuted = !_isMuted),
+                          label: _isMuted ? 'Audio off' : 'Audio on',
+                          icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up, size: 20),
+                          onPressed: () {
+                            setState(() => _isMuted = !_isMuted);
+                            if (_isMuted) {
+                              ref.read(voiceTutorProvider.notifier).stopSpeaking();
+                            }
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -124,7 +234,7 @@ class _VoiceSessionScreenState extends State<VoiceSessionScreen> {
                   const SizedBox(height: 12),
                   AppPrimaryButton(
                     label: 'End session',
-                    onPressed: () => context.pop(),
+                    onPressed: _endSession,
                   ),
                 ],
               ),

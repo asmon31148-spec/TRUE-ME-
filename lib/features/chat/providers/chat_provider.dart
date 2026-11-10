@@ -55,24 +55,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
   ChatNotifier({required AiRouter aiRouter, required RagService ragService})
       : _aiRouter = aiRouter,
         _ragService = ragService,
-        super(
-          ChatState(
-            messages: [
-              ChatMessage(
-                id: 'welcome_1',
-                isUser: false,
-                text:
-                    "Hello ${OfflineCacheService.getUserName()}! I am Sage, your AI study coach. Ask me anything about your lecture notes, equations, or exam topics!",
-                timestamp: DateTime.now(),
-              ),
-            ],
-          ),
-        );
+        super(const ChatState());
 
   Future<void> sendMessage({
     required String question,
     required String userId,
     String? notebookId,
+    String? subject,
     String? studentName,
   }) async {
     final cleanQuestion = question.trim();
@@ -92,53 +81,78 @@ class ChatNotifier extends StateNotifier<ChatState> {
     );
 
     try {
-      // 1. Retrieve relevant grounded chunks from pgvector ONLY if studying a notebook
       List<String> retrievedExcerpts = [];
       String? citationSource;
 
-      if (notebookId != null && notebookId.isNotEmpty) {
-        try {
-          final chunks = await _ragService
-              .retrieveContext(
-                query: cleanQuestion,
-                userId: userId,
-                notebookId: notebookId,
-                topK: 4,
-              )
-              .timeout(
-                const Duration(milliseconds: 1200),
-                onTimeout: () => [],
-              );
-
-          if (chunks.isNotEmpty) {
-            retrievedExcerpts = chunks.map((c) => c.content).toList();
-            final top = chunks.first;
-            citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
-          }
-        } catch (ragError) {
-          // Log gracefully; answer directly without grounded chunks
-          retrievedExcerpts = [];
-          citationSource = null;
+      // 1. Check local uploaded documents & notes for the selected notebook/subject
+      String? targetNbId = notebookId;
+      if ((targetNbId == null || targetNbId.isEmpty) && subject != null && subject.isNotEmpty) {
+        final match = OfflineCacheService.getAllCachedNotebooks().where(
+          (n) => (n['title'] as String? ?? '').toLowerCase() == subject.toLowerCase(),
+        );
+        if (match.isNotEmpty) {
+          targetNbId = match.first['id'] as String?;
         }
       }
 
-      // 2. Query AI Router (Groq 8B instant LPU -> fast fallback)
+      if (targetNbId != null && targetNbId.isNotEmpty) {
+        final localDocs = OfflineCacheService.getNotebookDocuments(targetNbId);
+        if (localDocs.isNotEmpty) {
+          for (final doc in localDocs) {
+            final content = (doc['content'] as String? ?? '').trim();
+            if (content.isNotEmpty) {
+              final snippet = content.length > 4000 ? content.substring(0, 4000) : content;
+              retrievedExcerpts.add('[Source: ${doc['fileName']} (${doc['section']})]\n$snippet');
+              citationSource ??= '${doc['fileName']} (${doc['section']})';
+            }
+          }
+        }
+
+        // Also check pgvector RAG if configured
+        if (retrievedExcerpts.isEmpty) {
+          try {
+            final chunks = await _ragService
+                .retrieveContext(
+                  query: cleanQuestion,
+                  userId: userId,
+                  notebookId: targetNbId,
+                  topK: 4,
+                )
+                .timeout(
+                  const Duration(milliseconds: 1200),
+                  onTimeout: () => [],
+                );
+
+            if (chunks.isNotEmpty) {
+              retrievedExcerpts = chunks.map((c) => c.content).toList();
+              final top = chunks.first;
+              citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 2. Query AI Router (Groq -> OpenRouter -> Gemini fallback)
       String answer;
       try {
         final name = studentName ?? OfflineCacheService.getUserName();
+        final subs = OfflineCacheService.getUserSubjects();
+        final subContext = subject != null && subject.isNotEmpty
+            ? 'Subject focus: $subject.'
+            : (subs.isNotEmpty ? 'Student subjects: ${subs.join(', ')}.' : '');
+
         if (retrievedExcerpts.isEmpty) {
-          // ULTRA FAST PATH: Real-time conversation (<500ms latency)
           final systemPrompt = '''
-You are Sage, the personal AI mentor for $name in the True Me app.
-Provide direct, crystal-clear, concise, and helpful explanations.
-Format with concise paragraphs, bullet points, or bold highlights when useful.
+You are Sage, the personal AI study mentor for $name in the True Me app.
+$subContext
+Provide direct, crystal-clear, concise, and helpful academic explanations.
+Format with clear paragraphs and bullet points when useful.
 ''';
           answer = await _aiRouter.executeRealtimeChat(
             prompt: cleanQuestion,
             systemPrompt: systemPrompt,
           );
         } else {
-          // Grounded Notebook Chat
           answer = await _aiRouter.chatWithNotes(
             question: cleanQuestion,
             retrievedChunks: retrievedExcerpts,
@@ -147,7 +161,7 @@ Format with concise paragraphs, bullet points, or bold highlights when useful.
         }
       } catch (aiError) {
         answer =
-            "I could not reach the AI models at this moment ($aiError). Please verify that your API keys are active or try again shortly.";
+            "I could not reach the AI models right now ($aiError). Please check your internet connection and try again.";
       }
 
       final aiMsg = ChatMessage(

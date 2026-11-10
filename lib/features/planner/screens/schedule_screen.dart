@@ -13,36 +13,58 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   bool _isEditing = false;
-  late List<Map<String, dynamic>> _todayTasks;
-  late List<Map<String, dynamic>> _tomorrowTasks;
+  late String _todayKey;
+  late String _tomorrowKey;
+  List<Map<String, dynamic>> _todayTasks = [];
+  List<Map<String, dynamic>> _tomorrowTasks = [];
 
   @override
   void initState() {
     super.initState();
-    final subjects = OfflineCacheService.getUserSubjects();
-    final pSub = subjects.isNotEmpty ? subjects.first : 'Microbiology';
-    final sSub = subjects.length > 1 ? subjects[1] : pSub;
+    final now = DateTime.now();
+    _todayKey = OfflineCacheService.dateKey(now);
+    _tomorrowKey = OfflineCacheService.dateKey(now.add(const Duration(days: 1)));
+    _loadPlans();
+  }
 
-    _todayTasks = [
-      {'title': 'Bacterial cell structure', 'subject': pSub, 'duration': 20, 'completed': true},
-      {'title': 'Microbial growth curve', 'subject': pSub, 'duration': 20, 'completed': false},
-      {'title': 'Sterilization methods', 'subject': pSub, 'duration': 25, 'completed': false},
-      {'title': 'Previous paper: Unit 2', 'subject': pSub, 'duration': 25, 'completed': false},
-    ];
+  void _loadPlans() {
+    final tCached = OfflineCacheService.getCachedStudyPlan(_todayKey);
+    final tmCached = OfflineCacheService.getCachedStudyPlan(_tomorrowKey);
 
-    _tomorrowTasks = [
-      {'title': 'Bacterial genetics review', 'subject': pSub, 'duration': 30, 'completed': false},
-      {'title': 'Enzyme kinetics problem set', 'subject': sSub, 'duration': 25, 'completed': false},
-      {'title': 'Unit 3 Flashcards', 'subject': pSub, 'duration': 15, 'completed': false},
-    ];
+    setState(() {
+      _todayTasks = (tCached?['sessions'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      _tomorrowTasks = (tmCached?['sessions'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    });
+  }
+
+  Future<void> _savePlans() async {
+    await OfflineCacheService.cacheStudyPlan(_todayKey, {
+      'sessions': _todayTasks,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    await OfflineCacheService.cacheStudyPlan(_tomorrowKey, {
+      'sessions': _tomorrowTasks,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
   }
 
   void _showAddTaskSheet() {
     final subjects = OfflineCacheService.getUserSubjects();
-    String selectedSubject = subjects.isNotEmpty ? subjects.first : 'General';
+    final notebooks = OfflineCacheService.getAllCachedNotebooks();
+    final subOptions = subjects.isNotEmpty
+        ? subjects
+        : notebooks.map((n) => n['title'] as String? ?? 'General').toSet().toList();
+    if (subOptions.isEmpty) subOptions.add('General');
+
+    String selectedSubject = subOptions.first;
     final topicCtrl = TextEditingController();
-    final durationCtrl = TextEditingController(text: '20');
-    String selectedType = 'Quiz';
+    final durationCtrl = TextEditingController(text: '25');
+    String selectedType = 'quiz';
+    String selectedDay = 'Today';
 
     showModalBottomSheet(
       context: context,
@@ -74,10 +96,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: ['Today', 'Tomorrow'].map((day) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: AppChip(
+                        label: day,
+                        isSelected: selectedDay == day,
+                        onTap: () => setSheetState(() => selectedDay = day),
+                      ),
+                    );
+                  }).toList(),
+                ),
                 const SizedBox(height: 16),
                 AppInput(
                   label: 'Topic',
-                  hintText: 'e.g. Gram stain procedure',
+                  hintText: 'e.g. Chapter 2 Practice',
                   controller: topicCtrl,
                 ),
                 const SizedBox(height: 16),
@@ -95,7 +130,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       value: selectedSubject,
                       isExpanded: true,
                       dropdownColor: AppColors.surface,
-                      items: subjects.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      items: subOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                       onChanged: (v) {
                         if (v != null) setSheetState(() => selectedSubject = v);
                       },
@@ -131,9 +166,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                 value: selectedType,
                                 isExpanded: true,
                                 dropdownColor: AppColors.surface,
-                                items: ['Reading', 'Flashcards', 'Quiz']
-                                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                                    .toList(),
+                                items: const [
+                                  DropdownMenuItem(value: 'quiz', child: Text('Quiz')),
+                                  DropdownMenuItem(value: 'flashcard', child: Text('Flashcards')),
+                                  DropdownMenuItem(value: 'reading', child: Text('Reading')),
+                                ],
                                 onChanged: (v) {
                                   if (v != null) setSheetState(() => selectedType = v);
                                 },
@@ -147,21 +184,28 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
                 const SizedBox(height: 24),
                 AppPrimaryButton(
-                  label: 'Add task',
-                  onPressed: () {
+                  label: 'Add to $selectedDay',
+                  onPressed: () async {
                     final topic = topicCtrl.text.trim();
-                    if (topic.isEmpty) return;
-                    final dur = int.tryParse(durationCtrl.text.trim()) ?? 20;
-
-                    setState(() {
-                      _todayTasks.add({
+                    final mins = int.tryParse(durationCtrl.text.trim()) ?? 25;
+                    if (topic.isNotEmpty) {
+                      final task = {
                         'title': topic,
                         'subject': selectedSubject,
-                        'duration': dur,
+                        'duration': mins,
+                        'type': selectedType,
                         'completed': false,
+                      };
+                      setState(() {
+                        if (selectedDay == 'Today') {
+                          _todayTasks.add(task);
+                        } else {
+                          _tomorrowTasks.add(task);
+                        }
                       });
-                    });
-                    Navigator.pop(ctx);
+                      await _savePlans();
+                    }
+                    if (ctx.mounted) Navigator.pop(ctx);
                   },
                 ),
               ],
@@ -183,95 +227,108 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             onPressed: () => setState(() => _isEditing = !_isEditing),
             child: Text(_isEditing ? 'Done' : 'Edit'),
           ),
-          IconButton(
-            icon: const Icon(Icons.add, size: 24),
-            tooltip: 'Add task',
-            onPressed: _showAddTaskSheet,
-          ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-          _buildDayGroup('Today', _todayTasks),
-          const SizedBox(height: 24),
-          _buildDayGroup('Tomorrow', _tomorrowTasks),
-        ],
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          children: [
+            _buildDaySection('Today', _todayTasks),
+            const SizedBox(height: 24),
+            _buildDaySection('Tomorrow', _tomorrowTasks),
+            const SizedBox(height: 24),
+            AppSecondaryButton(
+              label: 'Add task',
+              icon: const Icon(Icons.add, size: 20),
+              onPressed: _showAddTaskSheet,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDayGroup(String dayLabel, List<Map<String, dynamic>> tasks) {
+  Widget _buildDaySection(String dayLabel, List<Map<String, dynamic>> tasks) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(dayLabel, style: AppTypography.sectionHeading),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border, width: 1),
-          ),
-          child: Column(
-            children: tasks.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final task = entry.value;
-              final isDone = task['completed'] == true;
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    child: Row(
-                      children: [
-                        if (_isEditing) ...[
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
-                            onPressed: () => setState(() => tasks.removeAt(idx)),
-                          ),
-                        ] else ...[
-                          SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: Checkbox(
+        const SizedBox(height: 10),
+        if (tasks.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border, width: 1),
+            ),
+            child: const Text('No tasks scheduled', style: AppTypography.secondary),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border, width: 1),
+            ),
+            child: Column(
+              children: List.generate(tasks.length, (i) {
+                final t = tasks[i];
+                final isDone = t['completed'] == true;
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          if (_isEditing)
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+                              onPressed: () async {
+                                setState(() => tasks.removeAt(i));
+                                await _savePlans();
+                              },
+                            )
+                          else
+                            Checkbox(
                               value: isDone,
                               activeColor: AppColors.accent,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              side: const BorderSide(color: AppColors.border, width: 1.5),
-                              onChanged: (val) => setState(() => task['completed'] = val ?? false),
+                              onChanged: (v) async {
+                                setState(() => t['completed'] = v == true);
+                                await _savePlans();
+                              },
+                            ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  t['title'] as String? ?? 'Task',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDone ? AppColors.textMuted : AppColors.textPrimary,
+                                    decoration: isDone ? TextDecoration.lineThrough : null,
+                                  ),
+                                ),
+                                Text(t['subject'] as String? ?? '', style: AppTypography.smallLabel),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          Text('${t['duration'] ?? 20} min', style: AppTypography.smallLabel),
                         ],
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                task['title'] as String,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                  decoration: isDone ? TextDecoration.lineThrough : null,
-                                  color: isDone ? AppColors.textSecondary : AppColors.textPrimary,
-                                ),
-                              ),
-                              Text(task['subject'] as String, style: AppTypography.smallLabel),
-                            ],
-                          ),
-                        ),
-                        Text('${task['duration']} min', style: AppTypography.secondary),
-                      ],
+                      ),
                     ),
-                  ),
-                  if (idx < tasks.length - 1)
-                    const Divider(color: AppColors.border, height: 1, indent: 14, endIndent: 14),
-                ],
-              );
-            }).toList(),
+                    if (i < tasks.length - 1) const Divider(color: AppColors.border, height: 1),
+                  ],
+                );
+              }),
+            ),
           ),
-        ),
       ],
     );
   }

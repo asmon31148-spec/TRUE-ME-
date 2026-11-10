@@ -535,4 +535,84 @@ $question
   String generateImageUrl(String prompt) {
     return PollinationsService.getImageUrl(prompt: prompt);
   }
+
+  /// Generates a structured concept hierarchy for Mind Map visualization.
+  Future<String> generateMindmap({
+    required String topic,
+    String? content,
+  }) async {
+    final systemPrompt = '''
+You are an expert educational mind-map architect.
+Generate a clear, hierarchical concept map for the given topic (and study content if provided).
+Return ONLY valid JSON matching this schema:
+{
+  "root": "$topic",
+  "branches": [
+    {
+      "title": "Main sub-concept 1",
+      "summary": "Clear 1-2 sentence explanation of this sub-concept.",
+      "children": [
+        {
+          "title": "Detail 1.1",
+          "summary": "Clear 1-2 sentence explanation."
+        }
+      ]
+    }
+  ]
+}
+Provide 3 to 4 main branches, each with 2 to 3 concise children.
+''';
+    final prompt = (content != null && content.trim().isNotEmpty)
+        ? 'Topic: $topic\n\nStudy Material:\n$content'
+        : 'Topic: $topic';
+
+    return executeWithFallback(
+      prompt: prompt,
+      systemPrompt: systemPrompt,
+      jsonMode: true,
+    );
+  }
+
+  /// Generates a realistic daily study plan from the student's actual subjects & syllabus context.
+  Future<String> generateStudyPlan({
+    required List<String> subjects,
+    required int daysLeft,
+    String? syllabusContext,
+  }) async {
+    final subList = subjects.isNotEmpty ? subjects.join(', ') : 'General Study';
+    final systemPrompt = '''
+You are Sage, an academic study planner.
+Create a realistic, actionable study plan for Today (3-4 focused tasks) and Tomorrow (3 focused tasks) for a student preparing for exams in $daysLeft days.
+Student's subjects: $subList.
+Return ONLY valid JSON matching this schema:
+{
+  "today": [
+    {
+      "title": "Specific topic or skill to study",
+      "subject": "One of the student's subjects",
+      "duration": 25,
+      "type": "reading"
+    }
+  ],
+  "tomorrow": [
+    {
+      "title": "Specific topic or skill to study",
+      "subject": "One of the student's subjects",
+      "duration": 25,
+      "type": "quiz"
+    }
+  ]
+}
+Allowed types: "reading", "flashcard", "quiz".
+''';
+    final prompt = (syllabusContext != null && syllabusContext.trim().isNotEmpty)
+        ? 'Student Syllabus & Notes:\n$syllabusContext'
+        : 'Subjects: $subList. Days until exam: $daysLeft.';
+
+    return executeWithFallback(
+      prompt: prompt,
+      systemPrompt: systemPrompt,
+      jsonMode: true,
+    );
+  }
 }
