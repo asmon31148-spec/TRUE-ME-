@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +5,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
+import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -100,13 +100,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           buffer.writeln(txt);
         }
       }
-      final daysLeft = OfflineCacheService.getTargetExamDate().difference(DateTime.now()).inDays.clamp(1, 365);
+      final daysLeft = OfflineCacheService.daysUntil(OfflineCacheService.getTargetExamDate()).clamp(1, 365);
       final jsonStr = await ref.read(aiRouterProvider).generateStudyPlan(
             subjects: subjects,
             daysLeft: daysLeft,
             syllabusContext: buffer.toString(),
           );
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final data = AiRouter.parseJsonObject(jsonStr);
       final todayList = (data['today'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map)..['completed'] = false)
           .toList();
@@ -352,12 +352,16 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   Future<void> _toggleTask(String key, int index) async {
     final tasks = _tasksByDate[key]!;
     final wasDone = tasks[index]['completed'] == true;
+    final alreadyLogged = tasks[index]['loggedOnce'] == true;
     setState(() {
       tasks[index]['completed'] = !wasDone;
+      if (!wasDone) {
+        tasks[index]['loggedOnce'] = true;
+      }
     });
     await _saveDatePlan(key);
 
-    if (!wasDone) {
+    if (!wasDone && !alreadyLogged) {
       await OfflineCacheService.logStudySession(
         activity: 'task',
         subject: tasks[index]['subject'] as String? ?? 'Study',

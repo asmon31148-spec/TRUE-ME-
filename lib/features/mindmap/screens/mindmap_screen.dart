@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +6,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
+import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -83,7 +83,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
 
       final aiRouter = ref.read(aiRouterProvider);
       final jsonStr = await aiRouter.generateMindmap(topic: cleanTopic, content: content);
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final data = AiRouter.parseJsonObject(jsonStr);
 
       final newGraph = Graph()..isTree = true;
       _nodeLabels.clear();

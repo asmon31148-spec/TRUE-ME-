@@ -61,7 +61,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
     await ref.read(chatProvider.notifier).sendMessage(
           question: text,
-          userId: 'current_user',
+          userId: OfflineCacheService.getUserId(),
           notebookId: widget.notebookId,
           subject: _activeSubject,
           studentName: OfflineCacheService.getUserName(),

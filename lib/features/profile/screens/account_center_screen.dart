@@ -7,6 +7,7 @@ import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -176,6 +177,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                 return;
               }
               if (deleteAll) {
+                await SupabaseService.instance.deleteAllUserData(OfflineCacheService.getUserId());
                 await DriveService.instance.deleteVaultFolder();
                 await DriveService.instance.signOut();
               }
@@ -195,7 +197,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final daysRemaining = _targetExamDate.difference(DateTime.now()).inDays.clamp(0, 999);
+    final daysRemaining = OfflineCacheService.daysUntil(_targetExamDate);
     final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
     final driveEmail = DriveService.instance.userEmail;
     final currentThemeMode = ref.watch(themeModeProvider);
@@ -266,11 +268,13 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                     subtitle: 'Target exam deadline ($daysRemaining days left)',
                     trailing: Icon(Icons.calendar_today_outlined, size: 18, color: context.textSecondary),
                     onTap: () async {
+                      final now = DateTime.now();
+                      final safeInitial = _targetExamDate.isAfter(now) ? _targetExamDate : now;
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: _targetExamDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 730)),
+                        initialDate: safeInitial,
+                        firstDate: now,
+                        lastDate: now.add(const Duration(days: 730)),
                       );
                       if (picked != null) {
                         await OfflineCacheService.saveTargetExamDate(picked);

@@ -79,11 +79,13 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
   }
 
   Future<void> _pickDeadline() async {
+    final now = DateTime.now();
+    final safeInitial = _deadline.isAfter(now) ? _deadline : now;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      initialDate: safeInitial,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 2)),
     );
     if (picked != null) {
       setState(() => _deadline = picked);

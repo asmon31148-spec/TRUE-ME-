@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../core/ai/ai_providers.dart';
+import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 
@@ -47,12 +47,11 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   }
 
   void _loadData() {
-    final now = DateTime.now();
     _userName = OfflineCacheService.getUserName();
     _deadline = OfflineCacheService.getTargetExamDate();
     final setupDate = OfflineCacheService.getExamSetupDate();
 
-    _daysLeft = _deadline.difference(now).inDays.clamp(0, 999);
+    _daysLeft = OfflineCacheService.daysUntil(_deadline);
     _totalExamSpanDays = _deadline.difference(setupDate).inDays.clamp(1, 999);
     _streak = OfflineCacheService.getCurrentStreak();
 
@@ -168,7 +167,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
         syllabusContext: buffer.toString(),
       );
 
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final data = AiRouter.parseJsonObject(jsonStr);
       final todayList = (data['today'] as List? ?? []).map((e) {
         final m = Map<String, dynamic>.from(e as Map);
         m['completed'] = false;
@@ -205,12 +204,16 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
 
   Future<void> _toggleTask(int index) async {
     final wasCompleted = _tasks[index]['completed'] == true;
+    final alreadyLogged = _tasks[index]['loggedOnce'] == true;
     setState(() {
       _tasks[index]['completed'] = !wasCompleted;
+      if (!wasCompleted) {
+        _tasks[index]['loggedOnce'] = true;
+      }
     });
     await _savePlan();
 
-    if (!wasCompleted) {
+    if (!wasCompleted && !alreadyLogged) {
       final mins = (_tasks[index]['duration'] as num? ?? 20).toInt();
       final sub = _tasks[index]['subject'] as String? ?? 'Study';
       final title = _tasks[index]['title'] as String? ?? 'Task';
@@ -260,8 +263,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
 
   void _launchTask(Map<String, dynamic> task) {
     final type = (task['type'] as String? ?? 'reading').toLowerCase();
-    final subject = Uri.encodeComponent(task['subject'] as String? ?? '');
-    final topic = Uri.encodeComponent(task['title'] as String? ?? '');
+    final rawSubject = task['subject'] as String? ?? '';
+    final rawTitle = task['title'] as String? ?? '';
+    final subject = Uri.encodeComponent(rawSubject);
+    final topic = Uri.encodeComponent(rawTitle);
 
     if (type == 'quiz') {
       context.push('/quiz?subject=$subject&topic=$topic');
@@ -269,7 +274,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
       context.push('/flashcards?subject=$subject');
     } else {
       context.push(
-        '/chat?scope=$subject&prompt=${Uri.encodeComponent('Help me study: ${task['title']} ($subject)')}',
+        '/chat?scope=$subject&prompt=${Uri.encodeComponent('Help me study: $rawTitle ($rawSubject)')}',
       );
     }
   }

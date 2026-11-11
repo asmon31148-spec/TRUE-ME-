@@ -3,6 +3,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/rag_service.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../core/utils/text_chunker.dart';
 
 class ChatMessage {
   final String id;
@@ -96,39 +97,70 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
 
       if (targetNbId != null && targetNbId.isNotEmpty) {
-        final localDocs = OfflineCacheService.getNotebookDocuments(targetNbId);
-        if (localDocs.isNotEmpty) {
-          for (final doc in localDocs) {
-            final content = (doc['content'] as String? ?? '').trim();
-            if (content.isNotEmpty) {
-              final snippet = content.length > 4000 ? content.substring(0, 4000) : content;
-              retrievedExcerpts.add('[Source: ${doc['fileName']} (${doc['section']})]\n$snippet');
-              citationSource ??= '${doc['fileName']} (${doc['section']})';
+        // 1a. Try Supabase pgvector semantic search first
+        try {
+          final chunks = await _ragService
+              .retrieveContext(
+                query: cleanQuestion,
+                userId: userId,
+                notebookId: targetNbId,
+                topK: 4,
+              )
+              .timeout(
+                const Duration(milliseconds: 2500),
+                onTimeout: () => [],
+              );
+
+          if (chunks.isNotEmpty) {
+            retrievedExcerpts = chunks.map((c) => c.content).toList();
+            final top = chunks.first;
+            citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
+          }
+        } catch (_) {}
+
+        // 1b. Keyword-ranked local chunk retrieval across entire documents (no 4000-char blind truncation)
+        if (retrievedExcerpts.isEmpty) {
+          final localDocs = OfflineCacheService.getNotebookDocuments(targetNbId);
+          if (localDocs.isNotEmpty) {
+            final queryTerms = cleanQuestion
+                .toLowerCase()
+                .split(RegExp(r'[^a-z0-9]+'))
+                .where((w) => w.length >= 3)
+                .toSet();
+
+            final List<Map<String, dynamic>> scoredChunks = [];
+            for (final doc in localDocs) {
+              final content = (doc['content'] as String? ?? '').trim();
+              if (content.isEmpty) continue;
+              final fName = doc['fileName'] as String? ?? 'Document';
+              final section = doc['section'] as String? ?? 'Notes';
+
+              final chunks = TextChunker.splitIntoChunks(
+                content,
+                targetChunkChars: 2500,
+                overlapChars: 250,
+              );
+              for (final ch in chunks) {
+                final lower = ch.content.toLowerCase();
+                int score = 0;
+                for (final term in queryTerms) {
+                  if (lower.contains(term)) score++;
+                }
+                scoredChunks.add({
+                  'score': score,
+                  'text': '[Source: $fName ($section)]\n${ch.content}',
+                  'citation': '$fName ($section)',
+                });
+              }
+            }
+
+            scoredChunks.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+            final topChunks = scoredChunks.take(4).toList();
+            if (topChunks.isNotEmpty) {
+              retrievedExcerpts = topChunks.map((e) => e['text'] as String).toList();
+              citationSource = topChunks.first['citation'] as String;
             }
           }
-        }
-
-        // Also check pgvector RAG if configured
-        if (retrievedExcerpts.isEmpty) {
-          try {
-            final chunks = await _ragService
-                .retrieveContext(
-                  query: cleanQuestion,
-                  userId: userId,
-                  notebookId: targetNbId,
-                  topK: 4,
-                )
-                .timeout(
-                  const Duration(milliseconds: 1200),
-                  onTimeout: () => [],
-                );
-
-            if (chunks.isNotEmpty) {
-              retrievedExcerpts = chunks.map((c) => c.content).toList();
-              final top = chunks.first;
-              citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
-            }
-          } catch (_) {}
         }
       }
 

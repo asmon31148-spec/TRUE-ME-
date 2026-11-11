@@ -30,7 +30,7 @@ class AchievementService {
     int totalReviewedCards = 0;
     for (final s in sessions.where((e) => e['activity'] == 'flashcards')) {
       final sub = (s['subtitle'] as String? ?? '');
-      final match = RegExp(r'(\d+)').firstMatch(sub);
+      final match = RegExp(r'(\d+)\s*cards?', caseSensitive: false).firstMatch(sub);
       if (match != null) {
         totalReviewedCards += int.tryParse(match.group(1) ?? '0') ?? 0;
       }

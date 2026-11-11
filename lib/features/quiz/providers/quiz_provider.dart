@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/error_boundary.dart';
 import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 
@@ -33,9 +33,10 @@ class QuizState {
     int? correctCount,
     String? error,
     bool resetSelection = false,
+    bool clearQuiz = false,
   }) {
     return QuizState(
-      currentQuiz: currentQuiz ?? this.currentQuiz,
+      currentQuiz: clearQuiz ? null : (currentQuiz ?? this.currentQuiz),
       isGenerating: isGenerating ?? this.isGenerating,
       currentQuestionIndex: currentQuestionIndex ?? this.currentQuestionIndex,
       selectedOptionIndex:
@@ -63,7 +64,7 @@ class QuizNotifier extends StateNotifier<QuizState> {
     String difficulty = 'medium',
     int count = 5,
   }) async {
-    state = state.copyWith(isGenerating: true, error: null);
+    state = state.copyWith(isGenerating: true, error: null, clearQuiz: true);
 
     try {
       final prompt = (content != null && content.trim().isNotEmpty)
@@ -76,12 +77,13 @@ class QuizNotifier extends StateNotifier<QuizState> {
         difficulty: difficulty,
       );
 
-      final Map<String, dynamic> data = jsonDecode(jsonString);
+      final data = AiRouter.parseJsonObject(jsonString);
       final rawQuestions = data['questions'] as List<dynamic>? ?? [];
 
       final List<QuizQuestionModel> questions = [];
       for (int i = 0; i < rawQuestions.length; i++) {
         final q = rawQuestions[i];
+        if (q is! Map) continue;
         final options = List<String>.from(q['options'] ?? const []);
         if (options.length >= 2) {
           questions.add(
@@ -98,8 +100,7 @@ class QuizNotifier extends StateNotifier<QuizState> {
       }
 
       if (questions.isEmpty) {
-        // Dynamic fallback questions tailored to subject
-        questions.addAll(_buildFallbackQuestions(subject, topic));
+        throw StateError('AI returned no valid multiple-choice questions. Please try again.');
       }
 
       final quiz = QuizModel(
@@ -124,58 +125,15 @@ class QuizNotifier extends StateNotifier<QuizState> {
         selectedOptionIndex: null,
         hasSubmitted: false,
         correctCount: 0,
+        error: null,
       );
     } catch (e) {
-      // Create subject-specific questions on offline/error
-      final fallbackQuestions = _buildFallbackQuestions(subject, topic);
-      final quiz = QuizModel(
-        id: 'quiz_${DateTime.now().millisecondsSinceEpoch}',
-        notebookId: notebookId,
-        subject: subject,
-        topic: topic,
-        difficulty: difficulty,
-        questions: fallbackQuestions,
-        createdAt: DateTime.now(),
-      );
-
       state = state.copyWith(
-        currentQuiz: quiz,
         isGenerating: false,
-        currentQuestionIndex: 0,
-        selectedOptionIndex: null,
-        hasSubmitted: false,
-        correctCount: 0,
+        clearQuiz: true,
+        error: '${AiErrorBoundary.formatErrorMessage(e)} ($e)',
       );
     }
-  }
-
-  List<QuizQuestionModel> _buildFallbackQuestions(String subject, String topic) {
-    return [
-      QuizQuestionModel(
-        id: 'fb_1',
-        question: 'In the context of $subject, what is the primary objective of studying $topic?',
-        options: [
-          'To model and analyze core system dynamics and analytical relationships',
-          'To eliminate all theoretical constraints without empirical testing',
-          'To bypass the standard axioms of $subject',
-          'None of the above',
-        ],
-        correctOptionIndex: 0,
-        explanation: 'Axiomatic foundations in $subject seek to formally model physical, computational, or theoretical behavior under verified constraints.',
-      ),
-      QuizQuestionModel(
-        id: 'fb_2',
-        question: 'Which method is standard practice when evaluating problems in $topic?',
-        options: [
-          'Uncontrolled trial and error',
-          'Decomposition into sub-problems and applying conservation/invariant principles',
-          'Ignoring boundary and initial conditions',
-          'Random sampling without statistical validity',
-        ],
-        correctOptionIndex: 1,
-        explanation: 'Decomposition and invariant verification are foundational across collegiate $subject curricula.',
-      ),
-    ];
   }
 
   void selectOption(int index) {

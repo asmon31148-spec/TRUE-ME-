@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/ai/rag_service.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/ocr_service.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -122,6 +124,19 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       'driveFileId': uploadedDriveId,
       'createdAt': DateTime.now().toIso8601String(),
     });
+
+    if (content.trim().length > 40) {
+      unawaited(
+        RagService()
+            .ingestDocument(
+              userId: OfflineCacheService.getUserId(),
+              notebookId: widget.notebookId,
+              fileName: fileName,
+              fullText: content,
+            )
+            .catchError((_) => 0),
+      );
+    }
 
     widget.onFileAdded?.call();
 
@@ -345,17 +360,31 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     });
 
     try {
-      final bytes = await DriveService.instance.downloadFile(dFile.id!);
+      final mime = dFile.mimeType ?? '';
+      final bytes = await DriveService.instance.downloadFile(dFile.id!, mimeType: mime);
       final tmpDir = await getTemporaryDirectory();
-      final fName = dFile.name ?? 'drive_file.pdf';
+      String fName = dFile.name ?? 'drive_file.pdf';
+      if (mime == 'application/vnd.google-apps.document' && !fName.toLowerCase().endsWith('.txt')) {
+        fName = '$fName.txt';
+      } else if ((mime == 'application/vnd.google-apps.presentation' ||
+              mime == 'application/vnd.google-apps.spreadsheet') &&
+          !fName.toLowerCase().endsWith('.pdf')) {
+        fName = '$fName.pdf';
+      }
       final tmpFile = File('${tmpDir.path}/$fName');
       await tmpFile.writeAsBytes(bytes);
 
       String extracted = '';
-      if (fName.toLowerCase().endsWith('.pdf')) {
+      final lower = fName.toLowerCase();
+      if (lower.endsWith('.pdf')) {
         extracted = await PdfProcessor.extractText(tmpFile);
-      } else {
+      } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+        _ocrService ??= OcrService();
+        extracted = await _ocrService!.recognizeTextFromImage(tmpFile);
+      } else if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv') || lower.endsWith('.json') || mime == 'application/vnd.google-apps.document') {
         extracted = await tmpFile.readAsString();
+      } else {
+        throw StateError('Unsupported Drive file format "$fName". Import PDF, Google Docs, TXT, MD, or Image files.');
       }
 
       await _saveExtractedDocument(

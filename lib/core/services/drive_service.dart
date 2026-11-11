@@ -241,14 +241,30 @@ class DriveService {
     return uploaded.id ?? '';
   }
 
-  /// Downloads a file from user's Google Drive as bytes.
-  Future<List<int>> downloadFile(String fileId) async {
+  /// Downloads a file (or exports a Google Doc/Slide) from user's Google Drive as bytes.
+  Future<List<int>> downloadFile(String fileId, {String? mimeType}) async {
     if (_driveApi == null) throw StateError('Not signed in to Google Drive');
 
-    final drive.Media response = await _driveApi!.files.get(
-      fileId,
-      downloadOptions: drive.DownloadOptions.fullMedia,
-    ) as drive.Media;
+    final drive.Media response;
+    if (mimeType == 'application/vnd.google-apps.document') {
+      response = (await _driveApi!.files.export(
+        fileId,
+        'text/plain',
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ))!;
+    } else if (mimeType == 'application/vnd.google-apps.presentation' ||
+        mimeType == 'application/vnd.google-apps.spreadsheet') {
+      response = (await _driveApi!.files.export(
+        fileId,
+        'application/pdf',
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ))!;
+    } else {
+      response = await _driveApi!.files.get(
+        fileId,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+    }
 
     final List<int> dataStore = [];
     await response.stream.listen((data) {

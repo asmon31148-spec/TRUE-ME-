@@ -33,49 +33,97 @@ class YoutubeProcessor {
     return {'title': 'Lecture Video', 'author': 'Educator'};
   }
 
-  /// Fetches real closed captions / subtitles from YouTube watch page if available.
+  /// Fetches real closed captions / subtitles via YouTube InnerTube Android API
+  /// (with watch-page fallback).
   static Future<String?> fetchCaptions(String videoId) async {
+    List<dynamic>? tracks;
+
+    // 1. InnerTube Android player endpoint (returns active timedtext URLs)
     try {
-      final watchRes = await http.get(
-        Uri.parse('https://www.youtube.com/watch?v=$videoId'),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      ).timeout(const Duration(seconds: 15));
+      final playerRes = await http
+          .post(
+            Uri.parse('https://www.youtube.com/youtubei/v1/player?prettyPrint=false'),
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)',
+            },
+            body: jsonEncode({
+              'context': {
+                'client': {
+                  'clientName': 'ANDROID',
+                  'clientVersion': '20.10.38',
+                  'hl': 'en',
+                  'gl': 'US',
+                },
+              },
+              'videoId': videoId,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      if (watchRes.statusCode != 200) return null;
-      final body = watchRes.body;
+      if (playerRes.statusCode == 200) {
+        final data = jsonDecode(playerRes.body);
+        final renderer = data['captions']?['playerCaptionsTracklistRenderer'];
+        if (renderer is Map && renderer['captionTracks'] is List) {
+          tracks = renderer['captionTracks'] as List<dynamic>;
+        }
+      }
+    } catch (_) {}
 
-      final match = RegExp(r'"captionTracks":(\[.*?\])').firstMatch(body);
-      if (match == null) return null;
+    // 2. Watch-page fallback if InnerTube didn't yield tracks
+    if (tracks == null || tracks.isEmpty) {
+      try {
+        final watchRes = await http.get(
+          Uri.parse('https://www.youtube.com/watch?v=$videoId'),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        ).timeout(const Duration(seconds: 15));
 
-      final tracks = jsonDecode(match.group(1)!) as List<dynamic>;
-      if (tracks.isEmpty) return null;
+        if (watchRes.statusCode == 200) {
+          final match = RegExp(r'"captionTracks":(\[.*?\])').firstMatch(watchRes.body);
+          if (match != null) {
+            tracks = jsonDecode(match.group(1)!) as List<dynamic>;
+          }
+        }
+      } catch (_) {}
+    }
 
-      // Prefer English track if present, otherwise first track
+    if (tracks == null || tracks.isEmpty) return null;
+
+    try {
+      // Prefer English manual track, then English auto-generated, then first track
       Map<String, dynamic> selectedTrack = Map<String, dynamic>.from(tracks.first as Map);
       for (final t in tracks) {
         final m = Map<String, dynamic>.from(t as Map);
         final lang = (m['languageCode'] as String? ?? '').toLowerCase();
         if (lang.startsWith('en')) {
           selectedTrack = m;
-          break;
+          if (m['kind'] != 'asr') break;
         }
       }
 
       final baseUrl = selectedTrack['baseUrl'] as String?;
       if (baseUrl == null || baseUrl.isEmpty) return null;
 
-      final capRes = await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 15));
-      if (capRes.statusCode != 200) return null;
+      final capRes = await http.get(
+        Uri.parse(baseUrl),
+        headers: {
+          'User-Agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)',
+        },
+      ).timeout(const Duration(seconds: 15));
 
-      // Strip XML <text> tags and decode basic HTML entities
+      if (capRes.statusCode != 200 || capRes.body.trim().isEmpty) return null;
+
+      // Strip XML <p>/<text> tags and decode basic HTML entities
       var text = capRes.body.replaceAll(RegExp(r'<[^>]*>'), ' ');
       text = text
           .replaceAll('&amp;', '&')
           .replaceAll('&quot;', '"')
           .replaceAll('&#39;', "'")
+          .replaceAll('&apos;', "'")
+          .replaceAll('&nbsp;', ' ')
           .replaceAll('&lt;', '<')
           .replaceAll('&gt;', '>')
           .replaceAll(RegExp(r'\s+'), ' ')

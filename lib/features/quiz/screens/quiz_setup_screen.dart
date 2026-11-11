@@ -199,6 +199,55 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
       );
     }
 
+    // 1b. Quiz Generation Error View (No fake questions)
+    if (_isPlaying && !quizState.isGenerating && quiz == null && quizState.error != null) {
+      return Scaffold(
+        backgroundColor: context.bgColor,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => setState(() => _isPlaying = false),
+          ),
+          title: const Text('Quiz Error', style: AppTypography.sectionHeading),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 44),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Could not generate quiz',
+                    style: AppTypography.sectionHeading,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    quizState.error!,
+                    style: AppTypography.secondary,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  AppPrimaryButton(
+                    label: 'Retry',
+                    onPressed: _startQuiz,
+                  ),
+                  const SizedBox(height: 10),
+                  AppSecondaryButton(
+                    label: 'Back to setup',
+                    onPressed: () => setState(() => _isPlaying = false),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     // 2. Reviewing Missed Questions
     if (_reviewingMissed && _missedQuestions.isNotEmpty) {
       final q = _missedQuestions[_reviewIdx];

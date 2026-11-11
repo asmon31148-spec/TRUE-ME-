@@ -30,7 +30,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   void _loadStats() {
     final now = DateTime.now();
     final deadline = OfflineCacheService.getTargetExamDate();
-    final daysLeft = deadline.difference(now).inDays.clamp(0, 999);
+    final daysLeft = OfflineCacheService.daysUntil(deadline);
 
     final todayPlan = OfflineCacheService.getCachedStudyPlan(OfflineCacheService.dateKey(now));
     final tasks = (todayPlan?['sessions'] as List? ?? []);

@@ -39,6 +39,7 @@ class TextChunker {
     int chunkIndex = 0;
 
     while (start < cleanText.length) {
+      final prevStart = start;
       int end = start + targetChunkChars;
 
       if (end >= cleanText.length) {
@@ -84,9 +85,9 @@ class TextChunker {
         chunkIndex++;
       }
 
-      // Slide start forward, keeping the overlap
+      // Slide start forward, keeping the overlap while guaranteeing forward progress
       start = breakPoint - overlapChars;
-      if (start <= 0 || start <= chunks.last.charCount - targetChunkChars) {
+      if (start <= prevStart || start <= 0) {
         start = breakPoint;
       }
     }

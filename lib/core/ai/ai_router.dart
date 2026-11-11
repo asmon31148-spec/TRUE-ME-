@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import '../utils/rate_limiter.dart';
 import 'cloudflare_service.dart';
@@ -27,6 +28,35 @@ class AiRouter {
         _cohere = cohere ?? CohereService(),
         _cloudflare = cloudflare ?? CloudflareService(),
         _openRouter = openRouter ?? OpenRouterService();
+
+  /// Strips markdown code fences and surrounding prose from LLM output
+  /// to extract a clean JSON object string.
+  static String extractJsonString(String raw) {
+    var text = raw.trim();
+    final fenceMatch = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).firstMatch(text);
+    if (fenceMatch != null) {
+      text = (fenceMatch.group(1) ?? '').trim();
+    }
+    final firstBrace = text.indexOf('{');
+    final lastBrace = text.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return text.substring(firstBrace, lastBrace + 1);
+    }
+    return text;
+  }
+
+  /// Safely decodes an LLM response into a JSON object map.
+  static Map<String, dynamic> parseJsonObject(String raw) {
+    final cleaned = extractJsonString(raw);
+    final decoded = jsonDecode(cleaned);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+    throw const FormatException('Expected a JSON object from AI response.');
+  }
 
   // ---------------------------------------------------------------------------
   // TIER 1: ULTRA-HEAVY / COMPLEX REASONING (Deep Synthesis & Big Context)

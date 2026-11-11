@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -24,9 +26,25 @@ class DeckListScreen extends ConsumerStatefulWidget {
 class _DeckListScreenState extends ConsumerState<DeckListScreen> {
   FlashcardDeckModel? _activeDeck;
   List<FlashcardModel> _sessionCards = [];
+  final Set<String> _requeuedCardIds = {};
   int _cardIndex = 0;
   bool _isFlipped = false;
   int _reviewedCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(flashcardProvider.notifier).refreshFromCache();
+      }
+    });
+  }
+
+  String _previewInterval(FlashcardModel card, int rating) {
+    final days = Sm2Algorithm.calculateNextReview(card: card, rating: rating).interval;
+    return '${days}d';
+  }
 
   void _startDeck(FlashcardDeckModel deck, {bool onlyDue = false}) {
     final now = DateTime.now().add(const Duration(minutes: 5));
@@ -43,6 +61,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     setState(() {
       _activeDeck = deck;
       _sessionCards = List<FlashcardModel>.from(cardsToStudy);
+      _requeuedCardIds.clear();
       _cardIndex = 0;
       _isFlipped = false;
       _reviewedCount = 0;
@@ -71,7 +90,12 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
           rating: sm2Rating,
         );
 
-    _reviewedCount++;
+    if (sm2Rating == 0 && !_requeuedCardIds.contains(card.id)) {
+      _requeuedCardIds.add(card.id);
+      _sessionCards.add(card);
+    } else {
+      _reviewedCount++;
+    }
 
     if (_cardIndex < _sessionCards.length - 1) {
       setState(() {
@@ -91,6 +115,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
       setState(() {
         _activeDeck = null;
         _sessionCards = [];
+        _requeuedCardIds.clear();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Reviewed $count cards in "${finishedDeck.topic}"')),
@@ -393,13 +418,17 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                       )
                     : Row(
                         children: [
-                          _buildIntervalButton('Again', '< 1m', () => _rateCard(0)),
+                          _buildIntervalButton(
+                            'Again',
+                            _requeuedCardIds.contains(card.id) ? '1d' : '< 1m',
+                            () => _rateCard(0),
+                          ),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Hard', '1d', () => _rateCard(2)),
+                          _buildIntervalButton('Hard', _previewInterval(card, 2), () => _rateCard(2)),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Good', '3d', () => _rateCard(4)),
+                          _buildIntervalButton('Good', _previewInterval(card, 4), () => _rateCard(4)),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Easy', '6d', () => _rateCard(5)),
+                          _buildIntervalButton('Easy', _previewInterval(card, 5), () => _rateCard(5)),
                         ],
                       ),
               ),
@@ -451,6 +480,34 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                         'Sage is generating flashcards from your notes...',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            if (flashState.error != null) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.error.withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        flashState.error!,
+                        style: const TextStyle(fontSize: 13, color: AppColors.error),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                      onPressed: () => ref.read(flashcardProvider.notifier).clearError(),
                     ),
                   ],
                 ),

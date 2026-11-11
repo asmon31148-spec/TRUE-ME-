@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../utils/rate_limiter.dart';
@@ -47,7 +48,7 @@ class GeminiService {
               systemInstruction != null ? Content.system(systemInstruction) : null,
           generationConfig: GenerationConfig(
             temperature: systemInstruction != null ? 0.3 : 0.4,
-            maxOutputTokens: 2048,
+            maxOutputTokens: 8192,
             responseMimeType: jsonMode ? 'application/json' : 'text/plain',
           ),
         );
@@ -81,11 +82,21 @@ class GeminiService {
     final response = await _embeddingModel.embedContent(content);
     await LocalRateLimiter.incrementUsage('gemini_embeddings');
 
-    final values = response.embedding.values;
-    if (values.length > 768) {
-      return values.sublist(0, 768).toList();
+    final rawValues = response.embedding.values;
+    final sliced = rawValues.length > 768
+        ? rawValues.sublist(0, 768).toList()
+        : rawValues.toList();
+
+    // L2-normalize sliced Matryoshka vector for accurate pgvector cosine search
+    double sumSq = 0.0;
+    for (final v in sliced) {
+      sumSq += v * v;
     }
-    return values.toList();
+    final norm = math.sqrt(sumSq);
+    if (norm > 0) {
+      return sliced.map((v) => v / norm).toList();
+    }
+    return sliced;
   }
 
   /// Batch generate embeddings for multiple chunks.

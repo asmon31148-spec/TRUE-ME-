@@ -81,16 +81,30 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         } catch (authErr) {
           final msg = authErr.toString();
-          if (msg.contains('Invalid login credentials')) {
+          final isOfflineError = msg.contains('SocketException') ||
+              msg.contains('TimeoutException') ||
+              msg.contains('Failed host lookup') ||
+              msg.contains('ClientException');
+          if (!isOfflineError) {
+            String friendly = 'Authentication failed. Please check your credentials.';
+            if (msg.contains('Invalid login credentials')) {
+              friendly = 'Incorrect email or password.';
+            } else if (msg.contains('already registered') || msg.contains('User already')) {
+              friendly = 'An account with this email already exists. Please sign in instead.';
+            } else if (msg.contains('Email not confirmed')) {
+              friendly = 'Please confirm your email address before signing in.';
+            } else if (msg.contains('Password')) {
+              friendly = 'Password does not meet security requirements.';
+            }
             if (mounted) {
               setState(() {
-                _errorText = 'Incorrect email or password.';
+                _errorText = friendly;
                 _isLoading = false;
               });
             }
             return;
           }
-          // Otherwise continue gracefully offline / unconfirmed email
+          // Offline / unreachable: continue with local mode
         }
       }
 

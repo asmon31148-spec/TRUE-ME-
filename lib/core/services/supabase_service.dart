@@ -361,12 +361,55 @@ class SupabaseService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchFlashcardDecks(String userId) async {
+    final client = _clientOrNull;
+    if (client == null) return [];
+    try {
+      final res = await client
+          .from('flashcard_decks')
+          .select()
+          .eq('user_id', userId)
+          .order('updated_at', ascending: false);
+      return (res as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (e) {
+      debugPrint('Supabase fetchFlashcardDecks skipped: $e');
+      return [];
+    }
+  }
+
   Future<void> deleteFlashcardDeck(String deckId) async {
     final client = _clientOrNull;
     if (client == null) return;
     try {
       await client.from('flashcard_decks').delete().eq('id', deckId);
     } catch (_) {}
+  }
+
+  /// Deletes all cloud records belonging to [userId] across all tables.
+  Future<void> deleteAllUserData(String userId) async {
+    final client = _clientOrNull;
+    if (client == null) return;
+    final userOwnedTables = [
+      'study_tasks',
+      'study_sessions',
+      'quiz_attempts',
+      'flashcard_decks',
+      'notebooks',
+      'user_files',
+      'document_chunks',
+    ];
+    for (final table in userOwnedTables) {
+      try {
+        await client.from(table).delete().eq('user_id', userId);
+      } catch (e) {
+        debugPrint('Supabase delete $table skipped: $e');
+      }
+    }
+    try {
+      await client.from('user_profiles').delete().eq('id', userId);
+    } catch (e) {
+      debugPrint('Supabase delete user_profiles skipped: $e');
+    }
   }
 
   // ---------------------------------------------------------------------------

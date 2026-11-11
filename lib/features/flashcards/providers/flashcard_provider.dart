@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/error_boundary.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -49,6 +49,14 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
     return [];
   }
 
+  void refreshFromCache() {
+    state = state.copyWith(decks: _loadInitialDecks());
+  }
+
+  void clearError() {
+    state = state.copyWith(error: null);
+  }
+
   /// Generates a brand new high-yield deck on any topic using Gemini/Groq AI.
   Future<void> generateDeck({
     required String notebookId,
@@ -69,36 +77,29 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         count: count,
       );
 
-      final Map<String, dynamic> data = jsonDecode(jsonString);
+      final data = AiRouter.parseJsonObject(jsonString);
       final rawCards = data['cards'] as List<dynamic>? ?? [];
 
       final List<FlashcardModel> newCards = [];
       for (int i = 0; i < rawCards.length; i++) {
         final c = rawCards[i];
-        final front = c['front'] as String? ?? 'Concept';
-        final back = c['back'] as String? ?? 'Definition';
+        if (c is! Map) continue;
+        final front = (c['front'] as String? ?? '').trim();
+        final back = (c['back'] as String? ?? '').trim();
+        if (front.isEmpty || back.isEmpty) continue;
 
         newCards.add(
           FlashcardModel(
             id: 'gen_${DateTime.now().millisecondsSinceEpoch}_$i',
             front: front,
             back: back,
-            imageUrl: _aiRouter.generateImageUrl(front),
             nextReviewDate: DateTime.now(),
           ),
         );
       }
 
       if (newCards.isEmpty) {
-        // Fallback card if AI returned empty
-        newCards.add(
-          FlashcardModel(
-            id: 'gen_${DateTime.now().millisecondsSinceEpoch}_0',
-            front: 'Core concept of $topic',
-            back: 'Key formulation and definitions in $subject.',
-            nextReviewDate: DateTime.now(),
-          ),
-        );
+        throw StateError('AI returned no valid flashcards. Try adding more study notes.');
       }
 
       final newDeck = FlashcardDeckModel(
@@ -120,7 +121,7 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
     } catch (e) {
       state = state.copyWith(
         isGenerating: false,
-        error: e.toString(),
+        error: '${AiErrorBoundary.formatErrorMessage(e)} ($e)',
       );
     }
   }

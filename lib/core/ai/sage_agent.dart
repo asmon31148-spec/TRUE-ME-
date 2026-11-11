@@ -1,4 +1,3 @@
-import 'dart:convert';
 import '../models/study_plan_model.dart';
 import '../models/user_model.dart';
 import 'ai_router.dart';
@@ -92,7 +91,7 @@ Format your response strictly as JSON with this schema:
         jsonMode: true,
       );
 
-      final Map<String, dynamic> json = jsonDecode(responseText);
+      final json = AiRouter.parseJsonObject(responseText);
       final rawSessions = json['sessions'] as List<dynamic>? ?? [];
 
       final sessions = rawSessions

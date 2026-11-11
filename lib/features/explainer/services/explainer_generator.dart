@@ -1,4 +1,3 @@
-import 'dart:convert';
 import '../../../core/ai/ai_router.dart';
 import '../models/explainer_script_model.dart';
 
@@ -39,7 +38,7 @@ Return ONLY valid JSON matching this schema:
       jsonMode: true,
     );
 
-    final Map<String, dynamic> data = jsonDecode(jsonString);
+    final data = AiRouter.parseJsonObject(jsonString);
     return ExplainerScriptModel.fromMap(data);
   }
 }
