@@ -11,6 +11,7 @@ class OfflineCacheService {
   static const String notesBox = 'offline_notes';
   static const String userProfileBox = 'user_profile';
   static const String analyticsBox = 'analytics_data';
+  static const String chatBox = 'offline_chat';
 
   static bool _isInitialized = false;
 
@@ -24,6 +25,7 @@ class OfflineCacheService {
     await Hive.openBox(notesBox);
     await Hive.openBox(userProfileBox);
     await Hive.openBox(analyticsBox);
+    await Hive.openBox(chatBox);
     _isInitialized = true;
   }
 
@@ -910,6 +912,87 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
+  // SCOPED SAGE CHAT & PER-SUBJECT PROGRESS
+  // ---------------------------------------------------------------------------
+  static Future<void> saveChatHistory(
+    String scopeKey,
+    List<Map<String, dynamic>> messages,
+  ) async {
+    try {
+      final box = Hive.box(chatBox);
+      await box.put(scopeKey, messages);
+    } catch (_) {}
+  }
+
+  static List<Map<String, dynamic>> getChatHistory(String scopeKey) {
+    try {
+      final box = Hive.box(chatBox);
+      final raw = box.get(scopeKey);
+      if (raw is List) {
+        return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<void> clearChatHistory(String scopeKey) async {
+    try {
+      await Hive.box(chatBox).delete(scopeKey);
+    } catch (_) {}
+  }
+
+  /// Returns an accurate, real-data summary of student progress strictly for [subject].
+  static String getSubjectProgressSummary(String subject, {String? notebookId}) {
+    final target = subject.trim().toLowerCase();
+    int docCount = 0;
+    if (notebookId != null && notebookId.isNotEmpty) {
+      docCount = getNotebookDocuments(notebookId).length;
+    } else {
+      for (final nb in getAllCachedNotebooks()) {
+        if ((nb['title'] as String? ?? '').trim().toLowerCase() == target) {
+          docCount += (nb['documents'] as List? ?? []).length;
+        }
+      }
+    }
+
+    final quizzes = getQuizAttempts()
+        .where((q) => (q['subject'] as String? ?? '').trim().toLowerCase() == target)
+        .toList();
+    final quizCount = quizzes.length;
+    final avgScore = quizCount > 0
+        ? (quizzes.fold<int>(0, (s, q) => s + ((q['percentage'] as num? ?? 0).toInt())) / quizCount)
+            .round()
+        : 0;
+    final weakTopics = quizzes
+        .where((q) => ((q['percentage'] as num? ?? 100).toInt()) < 80)
+        .map((q) => '${q['topic']} (${q['percentage']}%)')
+        .toSet()
+        .take(4)
+        .toList();
+
+    final decks = getAllCachedDecks()
+        .where((d) => (d['subject'] as String? ?? '').trim().toLowerCase() == target)
+        .toList();
+    final nowPlus = DateTime.now().add(const Duration(minutes: 5));
+    int totalCards = 0;
+    int dueCards = 0;
+    for (final d in decks) {
+      final cards = d['cards'] as List? ?? [];
+      totalCards += cards.length;
+      for (final c in cards) {
+        final nextStr = (c as Map)['nextReviewDate'] as String?;
+        final nextDt = nextStr != null ? DateTime.tryParse(nextStr) : null;
+        if (nextDt == null || nextDt.isBefore(nowPlus)) dueCards++;
+      }
+    }
+
+    return '- Uploaded sources in $subject: $docCount\n'
+        '- Quizzes taken in $subject: $quizCount${quizCount > 0 ? ' (avg $avgScore%)' : ''}\n'
+        '${weakTopics.isNotEmpty ? '- Weak topics in $subject: ${weakTopics.join(', ')}\n' : ''}'
+        '- Flashcard decks in $subject: ${decks.length} ($totalCards cards, $dueCards due now)';
+  }
+
+  // ---------------------------------------------------------------------------
   // CACHE MAINTENANCE
   // ---------------------------------------------------------------------------
   static Future<void> clearAllCache() async {
@@ -919,5 +1002,6 @@ class OfflineCacheService {
     await Hive.box(quizzesBox).clear();
     await Hive.box(notesBox).clear();
     await Hive.box(analyticsBox).clear();
+    await Hive.box(chatBox).clear();
   }
 }

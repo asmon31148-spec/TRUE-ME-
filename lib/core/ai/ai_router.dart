@@ -382,6 +382,8 @@ Return ONLY valid JSON matching this schema:
     required String question,
     required List<String> retrievedChunks,
     String studentName = 'Student',
+    String? subjectScope,
+    String? subjectProgressSummary,
   }) async {
     if (retrievedChunks.isEmpty) {
       return executeRealtimeChat(
@@ -411,11 +413,23 @@ Return ONLY valid JSON matching this schema:
     }
 
     final contextText = optimalChunks.join('\n---\n');
+    final scopeLine = (subjectScope != null && subjectScope.isNotEmpty)
+        ? 'You are scoped STRICTLY to the subject "$subjectScope". Only discuss and track progress for "$subjectScope".'
+        : '';
+    final progressLine = (subjectProgressSummary != null && subjectProgressSummary.isNotEmpty)
+        ? '\nStudent Progress in $subjectScope:\n$subjectProgressSummary'
+        : '';
     final systemPrompt = '''
 You are Sage, the personal AI study mentor for $studentName in the True Me app.
+$scopeLine$progressLine
 Answer the student's question grounded firmly on the provided lecture notes and document excerpts.
-Always cite the source or document when referencing specific concepts or equations.
+Always cite the source or document when referencing specific concepts.
+Formatting rules for mobile readability:
+- Use clean ## section headings and concise bullet points (- ).
+- Do NOT output wide markdown pipe tables (| col | col |); use clean bulleted breakdowns instead so it is easy to read on a phone screen.
 If the notes do not contain the answer, state so honestly, then provide the general academic explanation.
+If the student asks to generate or export a PDF, Word doc, PowerPoint slides, Quiz, Flashcards, Mind Map, Audio Explainer, or add a Schedule task, confirm briefly and append one tag on the last line:
+[ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule | <short topic>]
 ''';
 
     final userPrompt = '''

@@ -16,6 +16,8 @@ import '../../../features/export/docx_exporter.dart';
 import '../../../features/export/pdf_exporter.dart';
 import '../../../features/export/pptx_exporter.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../chat/providers/chat_provider.dart';
+import '../../chat/widgets/sage_chat_view.dart';
 import '../../upload/widgets/add_files_sheet.dart';
 
 class NotebookDetailScreen extends ConsumerStatefulWidget {
@@ -429,6 +431,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             onSelected: (val) async {
               if (val == 'rename') {
                 _showRenameDialog();
+              } else if (val == 'clear_chat') {
+                ref.read(chatProvider(widget.notebookId).notifier).clearHistory();
               } else if (val == 'delete') {
                 await OfflineCacheService.deleteNotebook(widget.notebookId);
                 if (mounted) context.pop();
@@ -436,6 +440,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             },
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'rename', child: Text('Rename')),
+              PopupMenuItem(value: 'clear_chat', child: Text('Clear Sage chat')),
               PopupMenuItem(
                 value: 'delete',
                 child: Text('Delete subject', style: TextStyle(color: AppColors.error)),
@@ -519,47 +524,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             ],
           ),
 
-          // 2. Chat Tab (Grounded directly in this subject's uploaded sources)
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Ask Sage about $title', style: AppTypography.sectionHeading),
-                const SizedBox(height: 6),
-                Text(
-                  totalDocs > 0
-                      ? 'Grounded in your $totalDocs uploaded source${totalDocs == 1 ? '' : 's'}.'
-                      : 'Add files in Sources so Sage can cite your syllabus and notes directly.',
-                  style: AppTypography.secondary,
-                ),
-                const SizedBox(height: 20),
-                const Text('Quick actions', style: AppTypography.smallLabel),
-                const SizedBox(height: 8),
-                AppListRow(
-                  leading: Icon(Icons.summarize_outlined, size: 20, color: context.accentColor),
-                  title: 'Summarize my $title sources',
-                  onTap: () => context.push(
-                    '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Summarize the key concepts from my $title notes.')}',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                AppListRow(
-                  leading: Icon(Icons.lightbulb_outline, size: 20, color: context.accentColor),
-                  title: 'Explain important exam topics',
-                  onTap: () => context.push(
-                    '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('What are the most important exam topics in $title?')}',
-                  ),
-                ),
-                const Spacer(),
-                AppPrimaryButton(
-                  label: 'Open Sage Chat',
-                  onPressed: () => context.push(
-                    '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}',
-                  ),
-                ),
-              ],
-            ),
+          // 2. Chat Tab (Live embedded Sage Chat strictly scoped to this subject)
+          SageChatView(
+            notebookId: widget.notebookId,
+            subject: title,
           ),
 
           // 3. Study Tab
