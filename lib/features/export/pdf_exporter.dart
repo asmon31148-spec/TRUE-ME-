@@ -7,6 +7,113 @@ import '../../core/models/flashcard_model.dart';
 class PdfExporter {
   PdfExporter._();
 
+  static String _sanitize(String text) {
+    return text
+        .replaceAll('•', '-')
+        .replaceAll('→', '->')
+        .replaceAll('←', '<-')
+        .replaceAll('—', '--')
+        .replaceAll('–', '-')
+        .replaceAll('’', "'")
+        .replaceAll('‘', "'")
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('≤', '<=')
+        .replaceAll('≥', '>=')
+        .replaceAll('≠', '!=')
+        .replaceAll('×', 'x')
+        .replaceAll('÷', '/')
+        .replaceAll('…', '...')
+        .replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]'), '');
+  }
+
+  static List<pw.Widget> _buildFormattedContent(String rawContent) {
+    final lines = _sanitize(rawContent).split('\n');
+    final widgets = <pw.Widget>[];
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        widgets.add(pw.SizedBox(height: 6));
+        continue;
+      }
+
+      final cleanText = line.replaceAll('**', '');
+      if (cleanText.startsWith('### ')) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
+            child: pw.Text(
+              cleanText.substring(4).trim(),
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.indigo700,
+              ),
+            ),
+          ),
+        );
+      } else if (cleanText.startsWith('## ')) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 14, bottom: 4),
+            child: pw.Text(
+              cleanText.substring(3).trim(),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey900,
+              ),
+            ),
+          ),
+        );
+      } else if (cleanText.startsWith('# ')) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 16, bottom: 6),
+            child: pw.Text(
+              cleanText.substring(2).trim(),
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.indigo800,
+              ),
+            ),
+          ),
+        );
+      } else if (cleanText.startsWith('- ') || cleanText.startsWith('* ')) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(left: 10, bottom: 3),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('- ', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo600)),
+                pw.Expanded(
+                  child: pw.Text(
+                    cleanText.substring(2).trim(),
+                    style: const pw.TextStyle(fontSize: 10, lineSpacing: 1.8, color: PdfColors.grey800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            child: pw.Text(
+              cleanText,
+              style: const pw.TextStyle(fontSize: 10, lineSpacing: 1.8, color: PdfColors.grey800),
+            ),
+          ),
+        );
+      }
+    }
+    return widgets;
+  }
+
   /// Generates and previews a study guide PDF.
   static Future<Uint8List> generateStudyGuidePdf({
     required String title,
@@ -15,6 +122,9 @@ class PdfExporter {
     List<String> keyTakeaways = const [],
   }) async {
     final pdf = pw.Document();
+    final safeTitle = _sanitize(title);
+    final safeSubject = _sanitize(subject);
+    final contentWidgets = _buildFormattedContent(content);
 
     pdf.addPage(
       pw.MultiPage(
@@ -33,28 +143,31 @@ class PdfExporter {
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'TRUE ME STUDY GUIDE',
-                        style: pw.TextStyle(
-                          color: PdfColors.indigo600,
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'TRUE ME STUDY GUIDE',
+                          style: pw.TextStyle(
+                            color: PdfColors.indigo600,
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        title,
-                        style: pw.TextStyle(
-                          fontSize: 20,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.grey900,
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          safeTitle,
+                          style: pw.TextStyle(
+                            fontSize: 20,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.grey900,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  pw.SizedBox(width: 12),
                   pw.Container(
                     padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: pw.BoxDecoration(
@@ -62,7 +175,7 @@ class PdfExporter {
                       borderRadius: pw.BorderRadius.circular(6),
                     ),
                     child: pw.Text(
-                      subject.toUpperCase(),
+                      safeSubject.toUpperCase(),
                       style: pw.TextStyle(
                         fontSize: 9,
                         fontWeight: pw.FontWeight.bold,
@@ -101,10 +214,10 @@ class PdfExporter {
                         child: pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
-                            pw.Text('• ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            pw.Text('- ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                             pw.Expanded(
                               child: pw.Text(
-                                t,
+                                _sanitize(t),
                                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
                               ),
                             ),
@@ -118,24 +231,8 @@ class PdfExporter {
               pw.SizedBox(height: 20),
             ],
 
-            // Content body
-            pw.Text(
-              'Comprehensive Notes',
-              style: pw.TextStyle(
-                fontSize: 14,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.grey900,
-              ),
-            ),
-            pw.SizedBox(height: 8),
-            pw.Text(
-              content,
-              style: const pw.TextStyle(
-                fontSize: 10,
-                lineSpacing: 2,
-                color: PdfColors.grey800,
-              ),
-            ),
+            // Content body (paginated paragraph by paragraph)
+            ...contentWidgets,
           ];
         },
       ),

@@ -1,13 +1,20 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
+import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../features/export/docx_exporter.dart';
 import '../../../features/export/pdf_exporter.dart';
+import '../../../features/export/pptx_exporter.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../upload/widgets/add_files_sheet.dart';
 
@@ -26,7 +33,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
   final TextEditingController _sourceSearchCtrl = TextEditingController();
   String _sourceFilter = '';
   Map<String, dynamic>? _notebook;
-  bool _isGeneratingPdf = false;
+  String? _exportingFormat; // 'pdf', 'docx', 'pptx'
 
   @override
   void initState() {
@@ -242,43 +249,164 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     );
   }
 
-  Future<void> _exportRealPdf() async {
+  List<PptxSlideData> _parseSlidesFromAi(String raw, String fallbackTitle) {
+    try {
+      String cleaned = raw.trim();
+      final start = cleaned.indexOf('[');
+      final end = cleaned.lastIndexOf(']');
+      if (start >= 0 && end > start) {
+        cleaned = cleaned.substring(start, end + 1);
+      }
+      final list = jsonDecode(cleaned) as List<dynamic>;
+      final slides = <PptxSlideData>[];
+      for (final item in list) {
+        if (item is Map) {
+          final sTitle = (item['title'] as String? ?? 'Key Concept').trim();
+          final rawBullets = item['bullets'] as List? ?? item['bulletPoints'] as List? ?? [];
+          final bullets = rawBullets.map((b) => b.toString().trim()).where((b) => b.isNotEmpty).toList();
+          if (bullets.isNotEmpty) {
+            slides.add(PptxSlideData(title: sTitle, bulletPoints: bullets));
+          }
+        }
+      }
+      if (slides.isNotEmpty) return slides;
+    } catch (_) {}
+
+    // Fallback: split markdown sections into slides
+    final chunks = raw.split(RegExp(r'\n#{1,3}\s+')).where((s) => s.trim().isNotEmpty).toList();
+    if (chunks.isNotEmpty) {
+      return chunks.take(8).map((c) {
+        final lines = c.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+        final sTitle = lines.isNotEmpty ? lines.first.replaceAll('#', '').trim() : fallbackTitle;
+        final bullets = lines.skip(1).take(5).map((l) => l.replaceFirst(RegExp(r'^[-*•]\s*'), '')).toList();
+        return PptxSlideData(
+          title: sTitle,
+          bulletPoints: bullets.isNotEmpty ? bullets : ['Summary of $sTitle'],
+        );
+      }).toList();
+    }
+
+    return [
+      PptxSlideData(
+        title: fallbackTitle,
+        bulletPoints: [raw.length > 250 ? raw.substring(0, 250) : raw],
+      ),
+    ];
+  }
+
+  Future<void> _exportStudyFile(String format) async {
     final title = _notebook?['title'] as String? ?? 'Study Guide';
     final combinedText = OfflineCacheService.getNotebookCombinedText(widget.notebookId);
     if (combinedText.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one file or note before exporting a PDF.')),
+        const SnackBar(content: Text('Add at least one file or note before exporting.')),
       );
       return;
     }
 
-    setState(() => _isGeneratingPdf = true);
+    setState(() => _exportingFormat = format);
     try {
       final aiRouter = ref.read(aiRouterProvider);
-      final synthesized = await aiRouter.executeHeavyReasoning(
-        prompt: 'Create a structured, high-yield exam study guide summarizing these notes for "$title". Use clear sections and bullet points.\n\nNotes:\n$combinedText',
-      );
+      final safeBase = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+      final dir = await getApplicationDocumentsDirectory();
 
-      final pdfBytes = await PdfExporter.generateStudyGuidePdf(
-        title: '$title Study Guide',
-        subject: title,
-        content: synthesized,
-      );
-
-      if (mounted) {
-        await Printing.sharePdf(
-          bytes: pdfBytes,
-          filename: '${title.replaceAll(' ', '_')}_Study_Guide.pdf',
+      if (format == 'pdf') {
+        final synthesized = await aiRouter.executeHeavyReasoning(
+          prompt: 'Create a structured, high-yield exam study guide summarizing these notes for "$title". Use clear markdown headings (#, ##) and bullet points (- ).\n\nNotes:\n$combinedText',
         );
+        final pdfBytes = await PdfExporter.generateStudyGuidePdf(
+          title: '$title Study Guide',
+          subject: title,
+          content: synthesized,
+        );
+        final fileName = '${safeBase}_Study_Guide.pdf';
+        final outFile = File('${dir.path}/$fileName');
+        await outFile.writeAsBytes(pdfBytes, flush: true);
+
+        if (DriveService.instance.isSignedIn) {
+          try {
+            await DriveService.instance.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
+          } catch (_) {}
+        }
+
+        if (mounted) {
+          await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+        }
+      } else if (format == 'docx') {
+        final synthesized = await aiRouter.executeHeavyReasoning(
+          prompt: 'Create a structured, comprehensive Word study guide for "$title". Use clear headings (#, ##) and bullet points (- ).\n\nNotes:\n$combinedText',
+        );
+        final docBytes = DocxExporter.createDocument(
+          title: '$title Study Guide',
+          subject: title,
+          content: synthesized,
+        );
+        final fileName = '${safeBase}_Study_Guide.docx';
+        final outFile = File('${dir.path}/$fileName');
+        await outFile.writeAsBytes(docBytes, flush: true);
+
+        bool uploadedToDrive = false;
+        if (DriveService.instance.isSignedIn) {
+          try {
+            await DriveService.instance.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
+            uploadedToDrive = true;
+          } catch (_) {}
+        }
+
+        final openRes = await OpenFilex.open(outFile.path);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                openRes.type == ResultType.done
+                    ? 'Saved & opened $fileName${uploadedToDrive ? ' (synced to Drive)' : ''}'
+                    : 'Saved $fileName${uploadedToDrive ? ' & synced to Drive' : ''} (${openRes.message})',
+              ),
+            ),
+          );
+        }
+      } else if (format == 'pptx') {
+        final rawSlides = await aiRouter.executeHeavyReasoning(
+          prompt: 'Create a 6 to 8 slide study presentation for "$title" from these notes. Return ONLY a valid JSON array where each element has {"title": "Slide title", "bullets": ["concise point 1", "concise point 2", "concise point 3"]}.\n\nNotes:\n$combinedText',
+        );
+        final slides = _parseSlidesFromAi(rawSlides, '$title Overview');
+        final pptxBytes = PptxExporter.createPresentation(
+          presentationTitle: '$title Slides',
+          slides: slides,
+        );
+        final fileName = '${safeBase}_Slides.pptx';
+        final outFile = File('${dir.path}/$fileName');
+        await outFile.writeAsBytes(pptxBytes, flush: true);
+
+        bool uploadedToDrive = false;
+        if (DriveService.instance.isSignedIn) {
+          try {
+            await DriveService.instance.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
+            uploadedToDrive = true;
+          } catch (_) {}
+        }
+
+        final openRes = await OpenFilex.open(outFile.path);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                openRes.type == ResultType.done
+                    ? 'Saved & opened $fileName${uploadedToDrive ? ' (synced to Drive)' : ''}'
+                    : 'Saved $fileName${uploadedToDrive ? ' & synced to Drive' : ''} (${openRes.message})',
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF generation failed: $e')),
+          SnackBar(content: Text('${format.toUpperCase()} generation failed: $e')),
         );
       }
     } finally {
-      if (mounted) setState(() => _isGeneratingPdf = false);
+      if (mounted) setState(() => _exportingFormat = null);
     }
   }
 
@@ -476,12 +604,30 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: _isGeneratingPdf
+                leading: _exportingFormat == 'pdf'
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
                     : Icon(Icons.picture_as_pdf_outlined, size: 22, color: context.textPrimary),
-                title: _isGeneratingPdf ? 'Generating PDF...' : 'Make a PDF study sheet',
+                title: _exportingFormat == 'pdf' ? 'Generating PDF...' : 'Make a PDF study sheet',
                 subtitle: 'Synthesize sources into a shareable PDF guide',
-                onTap: _isGeneratingPdf ? null : _exportRealPdf,
+                onTap: _exportingFormat != null ? null : () => _exportStudyFile('pdf'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: _exportingFormat == 'docx'
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(Icons.description_outlined, size: 22, color: context.textPrimary),
+                title: _exportingFormat == 'docx' ? 'Generating Word (.docx)...' : 'Make a Word document (.docx)',
+                subtitle: 'Create an editable study guide for Word / Docs',
+                onTap: _exportingFormat != null ? null : () => _exportStudyFile('docx'),
+              ),
+              const SizedBox(height: 10),
+              AppListRow(
+                leading: _exportingFormat == 'pptx'
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(Icons.slideshow_outlined, size: 22, color: context.textPrimary),
+                title: _exportingFormat == 'pptx' ? 'Generating Slides (.pptx)...' : 'Make a PowerPoint deck (.pptx)',
+                subtitle: 'Turn your notes into presentation slides',
+                onTap: _exportingFormat != null ? null : () => _exportStudyFile('pptx'),
               ),
             ],
           ),

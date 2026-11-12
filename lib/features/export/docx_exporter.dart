@@ -30,8 +30,22 @@ class DocxExporter {
     archive.addFile(_createArchiveFile('_rels/.rels', rootRelsXml));
 
     // 3. word/document.xml
-    final paragraphs = content.split('\n\n').map((p) {
-      return '<w:p><w:r><w:t>${_escapeXml(p.trim())}</w:t></w:r></w:p>';
+    final paragraphs = content.split('\n').map((rawLine) {
+      final line = rawLine.trim().replaceAll('**', '');
+      if (line.isEmpty) {
+        return '<w:p/>';
+      }
+      if (line.startsWith('# ')) {
+        return '<w:p><w:pPr><w:spacing w:before="240" w:after="100"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="1E40AF"/></w:rPr><w:t>${_escapeXml(line.substring(2).trim())}</w:t></w:r></w:p>';
+      }
+      if (line.startsWith('## ') || line.startsWith('### ')) {
+        final text = line.replaceFirst(RegExp(r'^#{2,3}\s+'), '').trim();
+        return '<w:p><w:pPr><w:spacing w:before="180" w:after="80"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="111827"/></w:rPr><w:t>${_escapeXml(text)}</w:t></w:r></w:p>';
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        return '<w:p><w:pPr><w:ind w:left="360"/><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>• ${_escapeXml(line.substring(2).trim())}</w:t></w:r></w:p>';
+      }
+      return '<w:p><w:pPr><w:spacing w:after="100"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${_escapeXml(line)}</w:t></w:r></w:p>';
     }).join('');
 
     final documentXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

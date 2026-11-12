@@ -119,7 +119,8 @@ class PptxExporter {
     // 6. ppt/slides/slideX.xml + slide rels
     for (int i = 0; i < slides.length; i++) {
       final s = slides[i];
-      final bulletsXml = s.bulletPoints
+      final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concepts and review points'];
+      final bulletsXml = safeBullets
           .map((b) => '<a:p><a:r><a:rPr lang="en-US" sz="1800"/><a:t>• ${_escapeXml(b)}</a:t></a:r></a:p>')
           .join('');
 
@@ -131,13 +132,13 @@ class PptxExporter {
       <p:grpSpPr/>
       <p:sp>
         <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="914400"/></a:xfrm></p:spPr>
-        <p:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US" sz="2800" b="1"/><a:t>${_escapeXml(s.title)}</a:t></a:r></a:p></p:txBody>
+        <p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
+        <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="2800" b="1"/><a:t>${_escapeXml(s.title)}</a:t></a:r></a:p></p:txBody>
       </p:sp>
       <p:sp>
         <p:nvSpPr><p:cNvPr id="3" name="Content"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr><a:xfrm><a:off x="457200" y="1600200"/><a:ext cx="8229600" cy="4572000"/></a:xfrm></p:spPr>
-        <p:txBody><a:bodyPr/>$bulletsXml</p:txBody>
+        <p:spPr><a:xfrm><a:off x="457200" y="1600200"/><a:ext cx="8229600" cy="4572000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
+        <p:txBody><a:bodyPr/><a:lstStyle/>$bulletsXml</p:txBody>
       </p:sp>
     </p:spTree>
   </p:cSld>
