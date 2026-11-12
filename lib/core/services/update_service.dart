@@ -67,9 +67,18 @@ class UpdateService {
       String downloadUrl = '';
       for (final asset in assets) {
         final name = asset['name'] as String? ?? '';
-        if (name.endsWith('.apk')) {
+        if (name == 'TrueMe-release.apk') {
           downloadUrl = asset['browser_download_url'] as String? ?? '';
           break;
+        }
+      }
+      if (downloadUrl.isEmpty) {
+        for (final asset in assets) {
+          final name = asset['name'] as String? ?? '';
+          if (name.endsWith('.apk')) {
+            downloadUrl = asset['browser_download_url'] as String? ?? '';
+            break;
+          }
         }
       }
 

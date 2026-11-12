@@ -2,11 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme/theme_provider.dart';
+import '../../core/services/update_service.dart';
 
-class AppScaffoldShell extends StatelessWidget {
+class AppScaffoldShell extends StatefulWidget {
   final Widget child;
 
   const AppScaffoldShell({super.key, required this.child});
+
+  @override
+  State<AppScaffoldShell> createState() => _AppScaffoldShellState();
+}
+
+class _AppScaffoldShellState extends State<AppScaffoldShell> {
+  static bool _hasCheckedUpdateThisLaunch = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_hasCheckedUpdateThisLaunch) {
+      _hasCheckedUpdateThisLaunch = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkForAppUpdate();
+      });
+    }
+  }
+
+  Future<void> _checkForAppUpdate() async {
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    final info = await UpdateService().checkForUpdate();
+    if (mounted && info != null && info.hasUpdate) {
+      UpdateService.showUpdateDialog(context: context, info: info);
+    }
+  }
 
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -51,7 +79,7 @@ class AppScaffoldShell extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: context.bgColor,
-      body: child,
+      body: widget.child,
       bottomNavigationBar: showBar
           ? Container(
               decoration: BoxDecoration(
