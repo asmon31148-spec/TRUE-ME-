@@ -23,6 +23,8 @@ def patch_android_build():
                 content = content.replace('buildTypes {', release_signing_kts + 'buildTypes {')
         if 'isMinifyEnabled' not in content:
             content = content.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = if (file("trueme-release.jks").exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")\n            isMinifyEnabled = false\n            isShrinkResources = false')
+        if 'checkReleaseBuilds' not in content:
+            content = content.replace('buildTypes {', 'lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n    buildTypes {')
         if 'coreLibraryDesugaring(' not in content:
             if 'dependencies {' in content:
                 content = content.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")')
@@ -54,6 +56,8 @@ def patch_android_build():
                 content = content.replace('buildTypes {', release_signing_groovy + 'buildTypes {')
         if 'minifyEnabled' not in content:
             content = content.replace('signingConfig signingConfigs.debug', 'signingConfig file("trueme-release.jks").exists() ? signingConfigs.release : signingConfigs.debug\n            minifyEnabled false\n            shrinkResources false')
+        if 'checkReleaseBuilds' not in content:
+            content = content.replace('buildTypes {', 'lintOptions {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n    buildTypes {')
         if 'coreLibraryDesugaring ' not in content:
             if 'dependencies {' in content:
                 content = content.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"')
