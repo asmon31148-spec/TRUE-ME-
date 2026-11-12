@@ -8,6 +8,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/tts_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/generation_progress_view.dart';
 import '../models/explainer_script_model.dart';
 import '../services/explainer_generator.dart';
 
@@ -223,15 +224,14 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
               // Stage
               Expanded(
                 child: _isGenerating
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(color: context.accentColor),
-                            const SizedBox(height: 16),
-                            const Text('Creating structured walkthrough from your notes...', style: AppTypography.secondary),
-                          ],
-                        ),
+                    ? const GenerationProgressView(
+                        title: 'Creating audio walkthrough...',
+                        stages: [
+                          'Reading your notes...',
+                          'Writing narrated scenes...',
+                          'Highlighting key takeaways...',
+                          'Preparing voice playback...',
+                        ],
                       )
                     : _errorText != null
                         ? Center(

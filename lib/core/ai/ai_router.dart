@@ -62,79 +62,91 @@ class AiRouter {
   // TIER 1: ULTRA-HEAVY / COMPLEX REASONING (Deep Synthesis & Big Context)
   // ---------------------------------------------------------------------------
   /// Handles heavy university lectures, full chapters, deep reasoning,
-  /// and multi-scene explainer scripts.
-  /// Priority: Gemini 2.5 Flash (1M ctx) -> OpenRouter Nemotron 550B -> Cohere Command R+ -> Groq OSS 120B
+  /// and multi-scene explainer scripts — capped strictly under 50s.
+  /// Priority: Groq OSS 120B (2-5s LPU) -> Gemini Flash -> OpenRouter Lightning -> Cohere
   Future<String> executeHeavyReasoning({
     required String prompt,
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
-    // 1. Gemini 2.5 Flash (1 Million token window, 1,500 RPD)
-    if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
-      try {
-        final res = await _gemini.generateContent(
-          prompt,
-          systemInstruction: systemPrompt,
-          jsonMode: jsonMode,
-        );
-        return res;
-      } catch (e) {
-        RateLimitGuardian.trip('gemini_flash');
-      }
-    }
+    return _runHeavyReasoning(
+      prompt: prompt,
+      systemPrompt: systemPrompt,
+      jsonMode: jsonMode,
+    ).timeout(
+      const Duration(seconds: 50),
+      onTimeout: () => throw StateError('Generation timed out (50s limit). Please try again.'),
+    );
+  }
 
-    // 2. OpenRouter Nemotron 3 Ultra 550B:free (Monster parameter capacity for complex math & logic)
-    if (_openRouter.isConfigured && await RateLimitGuardian.isAvailable('openrouter')) {
-      try {
-        await RateLimitGuardian.recordRequest('openrouter');
-        return await _openRouter.completeFallback(
-          prompt: prompt,
-          systemPrompt: systemPrompt,
-          model: OpenRouterService.modelNemotronUltra,
-          jsonMode: jsonMode,
-        );
-      } catch (e) {
-        RateLimitGuardian.trip('openrouter');
-      }
-    }
-
-    // 3. Cohere Command R+ (128k context, rigorous academic citations)
-    if (_cohere.isConfigured && !jsonMode && await RateLimitGuardian.isAvailable('cohere')) {
-      try {
-        await RateLimitGuardian.recordRequest('cohere');
-        return await _cohere.chat(
-          prompt: prompt,
-          systemPrompt: systemPrompt,
-        );
-      } catch (e) {
-        RateLimitGuardian.trip('cohere');
-      }
-    }
-
-    // 4. Groq OSS 120B (Large reasoning model, ultra-fast)
+  Future<String> _runHeavyReasoning({
+    required String prompt,
+    String? systemPrompt,
+    bool jsonMode = false,
+  }) async {
+    // 1. Groq OSS 120B (Ultra-fast LPU inference: typically 1.5 - 4s)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_heavy')) {
       try {
-        return await _groq.complete70B(
-          prompt: prompt,
-          systemPrompt: systemPrompt,
-          jsonMode: jsonMode,
-        );
+        return await _groq
+            .complete70B(
+              prompt: prompt,
+              systemPrompt: systemPrompt,
+              jsonMode: jsonMode,
+            )
+            .timeout(const Duration(seconds: 20));
       } catch (e) {
         RateLimitGuardian.trip('groq_heavy');
       }
     }
 
-    // 5. OpenRouter Nemotron 3.5 Lightning:free (Reliable fallback)
-    if (_openRouter.isConfigured) {
-      return await _openRouter.completeFallback(
-        prompt: prompt,
-        systemPrompt: systemPrompt,
-        model: OpenRouterService.modelNemotronLightning,
-        jsonMode: jsonMode,
-      );
+    // 2. Gemini Flash (Large context fallback)
+    if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
+      try {
+        return await _gemini
+            .generateContent(
+              prompt,
+              systemInstruction: systemPrompt,
+              jsonMode: jsonMode,
+            )
+            .timeout(const Duration(seconds: 22));
+      } catch (e) {
+        RateLimitGuardian.trip('gemini_flash');
+      }
     }
 
-    throw StateError('All Heavy Reasoning models failed or lack configuration.');
+    // 3. OpenRouter Nemotron 3.5 Lightning:free (Fast fallback)
+    if (_openRouter.isConfigured && await RateLimitGuardian.isAvailable('openrouter')) {
+      try {
+        await RateLimitGuardian.recordRequest('openrouter');
+        return await _openRouter
+            .completeFallback(
+              prompt: prompt,
+              systemPrompt: systemPrompt,
+              model: OpenRouterService.modelNemotronLightning,
+              jsonMode: jsonMode,
+            )
+            .timeout(const Duration(seconds: 15));
+      } catch (e) {
+        RateLimitGuardian.trip('openrouter');
+      }
+    }
+
+    // 4. Cohere Command R+
+    if (_cohere.isConfigured && !jsonMode && await RateLimitGuardian.isAvailable('cohere')) {
+      try {
+        await RateLimitGuardian.recordRequest('cohere');
+        return await _cohere
+            .chat(
+              prompt: prompt,
+              systemPrompt: systemPrompt,
+            )
+            .timeout(const Duration(seconds: 15));
+      } catch (e) {
+        RateLimitGuardian.trip('cohere');
+      }
+    }
+
+    throw StateError('All AI models are currently busy or unreachable.');
   }
 
   // ---------------------------------------------------------------------------
@@ -264,7 +276,7 @@ Return ONLY valid JSON matching this schema:
       prompt: prompt,
       systemPrompt: systemPrompt,
       jsonMode: true,
-    );
+    ).timeout(const Duration(seconds: 50));
   }
 
   /// High-volume quiz generation
@@ -334,7 +346,7 @@ Return ONLY valid JSON matching this schema:
       prompt: prompt,
       systemPrompt: systemPrompt,
       jsonMode: true,
-    );
+    ).timeout(const Duration(seconds: 50));
   }
 
   // ---------------------------------------------------------------------------
@@ -488,29 +500,48 @@ $question
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
-    // 1. Gemini Flash
-    if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
+    return _runFallbackChain(
+      prompt: prompt,
+      systemPrompt: systemPrompt,
+      jsonMode: jsonMode,
+    ).timeout(
+      const Duration(seconds: 50),
+      onTimeout: () => throw StateError('Generation timed out (50s limit). Please try again.'),
+    );
+  }
+
+  Future<String> _runFallbackChain({
+    required String prompt,
+    String? systemPrompt,
+    bool jsonMode = false,
+  }) async {
+    // 1. Groq (Fastest: 1-3s LPU inference)
+    if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
-        return await _gemini.generateContent(
-          prompt,
-          systemInstruction: systemPrompt,
-          jsonMode: jsonMode,
-        );
+        return await _groq
+            .complete8B(
+              prompt: prompt,
+              systemPrompt: systemPrompt,
+              jsonMode: jsonMode,
+            )
+            .timeout(const Duration(seconds: 18));
       } catch (e) {
-        RateLimitGuardian.trip('gemini_flash');
+        RateLimitGuardian.trip('groq_speed');
       }
     }
 
-    // 2. Groq (OSS 120B or 20B)
-    if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
+    // 2. Gemini Flash
+    if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
-        return await _groq.complete8B(
-          prompt: prompt,
-          systemPrompt: systemPrompt,
-          jsonMode: jsonMode,
-        );
+        return await _gemini
+            .generateContent(
+              prompt,
+              systemInstruction: systemPrompt,
+              jsonMode: jsonMode,
+            )
+            .timeout(const Duration(seconds: 20));
       } catch (e) {
-        RateLimitGuardian.trip('groq_speed');
+        RateLimitGuardian.trip('gemini_flash');
       }
     }
 
@@ -614,7 +645,7 @@ Provide 3 to 4 main branches, each with 2 to 3 concise children.
       prompt: prompt,
       systemPrompt: systemPrompt,
       jsonMode: true,
-    );
+    ).timeout(const Duration(seconds: 50));
   }
 
   /// Generates a realistic daily study plan from the student's actual subjects & syllabus context.
@@ -657,6 +688,6 @@ Allowed types: "reading", "flashcard", "quiz".
       prompt: prompt,
       systemPrompt: systemPrompt,
       jsonMode: true,
-    );
+    ).timeout(const Duration(seconds: 50));
   }
 }

@@ -53,7 +53,9 @@ class GeminiService {
           ),
         );
 
-        final response = await model.generateContent([Content.text(prompt)]);
+        final response = await model
+            .generateContent([Content.text(prompt)])
+            .timeout(const Duration(seconds: 12));
         final text = response.text;
         if (text != null && text.isNotEmpty) {
           await LocalRateLimiter.incrementUsage('gemini_flash');

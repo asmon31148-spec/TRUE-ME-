@@ -9,6 +9,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/generation_progress_view.dart';
 
 class MindmapScreen extends ConsumerStatefulWidget {
   final String? notebookId;
@@ -221,15 +222,14 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
             // Canvas or empty/loading state
             Expanded(
               child: _isGenerating
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircularProgressIndicator(color: context.accentColor),
-                          const SizedBox(height: 16),
-                          const Text('Mapping concept hierarchy with AI...', style: AppTypography.secondary),
-                        ],
-                      ),
+                  ? const GenerationProgressView(
+                      title: 'Mapping concept hierarchy...',
+                      stages: [
+                        'Analyzing core topic...',
+                        'Building branches & relationships...',
+                        'Generating concept summaries...',
+                        'Rendering interactive tree...',
+                      ],
                     )
                   : _errorText != null
                       ? Center(

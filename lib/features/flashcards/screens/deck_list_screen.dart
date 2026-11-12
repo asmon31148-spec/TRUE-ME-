@@ -7,6 +7,7 @@ import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/generation_progress_view.dart';
 import '../providers/flashcard_provider.dart';
 
 class DeckListScreen extends ConsumerStatefulWidget {
@@ -463,24 +464,16 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           children: [
             if (flashState.isGenerating) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.accentColor),
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: context.accentColor)),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text(
-                        'Sage is generating flashcards from your notes...',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: GenerationProgressView(
+                  compact: true,
+                  title: 'Generating flashcards with Sage',
+                  stages: [
+                    'Extracting key concepts...',
+                    'Creating active-recall Q&A cards...',
+                    'Scheduling SM-2 intervals...',
+                    'Almost ready...',
                   ],
                 ),
               ),

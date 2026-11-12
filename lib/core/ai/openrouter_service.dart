@@ -33,8 +33,8 @@ class OpenRouterService {
             Dio(
               BaseOptions(
                 baseUrl: 'https://openrouter.ai/api/v1',
-                connectTimeout: const Duration(seconds: 25),
-                receiveTimeout: const Duration(seconds: 40),
+                connectTimeout: const Duration(seconds: 8),
+                receiveTimeout: const Duration(seconds: 18),
               ),
             );
 

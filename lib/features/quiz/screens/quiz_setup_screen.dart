@@ -7,6 +7,7 @@ import '../../../app/theme/typography.dart';
 import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/generation_progress_view.dart';
 import '../providers/quiz_provider.dart';
 
 class QuizSetupScreen extends ConsumerStatefulWidget {
@@ -171,30 +172,17 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
           ),
           title: const Text('Creating Quiz', style: AppTypography.sectionHeading),
         ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: context.accentColor),
-                const SizedBox(height: 20),
-                Text(
-                  'Sage is building your $_questionCount-question $_selectedDifficulty quiz...',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.sectionHeading,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _selectedNotebookId != null
-                      ? 'Using your $_effectiveSubject notes and syllabus'
-                      : 'Topic: ${_topicCtrl.text.trim().isNotEmpty ? _topicCtrl.text.trim() : _effectiveSubject}',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.secondary,
-                ),
-              ],
-            ),
-          ),
+        body: GenerationProgressView(
+          title: 'Building $_questionCount-question $_selectedDifficulty quiz...',
+          subtitle: _selectedNotebookId != null
+              ? 'Using your $_effectiveSubject notes and syllabus'
+              : 'Topic: ${_topicCtrl.text.trim().isNotEmpty ? _topicCtrl.text.trim() : _effectiveSubject}',
+          stages: const [
+            'Reading your study material...',
+            'Drafting quiz questions with Sage...',
+            'Verifying options & explanations...',
+            'Finalizing quiz...',
+          ],
         ),
       );
     }

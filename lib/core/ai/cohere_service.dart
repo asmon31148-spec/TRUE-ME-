@@ -13,8 +13,8 @@ class CohereService {
             Dio(
               BaseOptions(
                 baseUrl: _baseUrl,
-                connectTimeout: const Duration(seconds: 25),
-                receiveTimeout: const Duration(seconds: 40),
+                connectTimeout: const Duration(seconds: 8),
+                receiveTimeout: const Duration(seconds: 18),
               ),
             );
 

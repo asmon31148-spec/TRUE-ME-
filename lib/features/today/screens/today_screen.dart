@@ -8,6 +8,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/generation_progress_view.dart';
 
 class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
@@ -581,6 +582,19 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 ),
               ),
               const SizedBox(height: 14),
+              if (_isGeneratingPlan) ...[
+                const GenerationProgressView(
+                  compact: true,
+                  title: 'Building your study plan with Sage',
+                  stages: [
+                    'Checking exam countdown & subjects...',
+                    'Prioritizing weak topics...',
+                    'Balancing Today & Tomorrow...',
+                    'Saving plan...',
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
 
               // 3. Exam Countdown Segmented Card (tappable to change date)
               InkWell(

@@ -16,6 +16,7 @@ import '../../../features/export/docx_exporter.dart';
 import '../../../features/export/pdf_exporter.dart';
 import '../../../features/export/pptx_exporter.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/generation_progress_view.dart';
 import '../../chat/providers/chat_provider.dart';
 import '../../chat/widgets/sage_chat_view.dart';
 import '../../upload/widgets/add_files_sheet.dart';
@@ -538,6 +539,21 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
+              if (_exportingFormat != null) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: GenerationProgressView(
+                    compact: true,
+                    title: 'Generating ${_exportingFormat!.toUpperCase()} for $title',
+                    stages: const [
+                      'Reading subject sources...',
+                      'Synthesizing structured guide with Sage...',
+                      'Building document file...',
+                      'Opening & syncing to Drive...',
+                    ],
+                  ),
+                ),
+              ],
               AppListRow(
                 leading: const AppIconBadge(icon: Icons.summarize_outlined, size: 38, iconSize: 19),
                 title: 'Summary',
