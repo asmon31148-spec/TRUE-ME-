@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/env_config.dart';
 import '../utils/rate_limiter.dart';
 
 class GroqService {
@@ -11,7 +11,7 @@ class GroqService {
   static const String _baseUrl = 'https://api.groq.com/openai/v1';
 
   GroqService({String? apiKey, Dio? dio})
-      : _apiKey = apiKey ?? dotenv.env['GROQ_API_KEY'] ?? '',
+      : _apiKey = apiKey ?? EnvConfig.get('GROQ_API_KEY'),
         _dio = dio ??
             Dio(
               BaseOptions(

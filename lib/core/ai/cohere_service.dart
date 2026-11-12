@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/env_config.dart';
 
 class CohereService {
   final String _apiKey;
@@ -8,7 +8,7 @@ class CohereService {
   static const String _baseUrl = 'https://api.cohere.com/v2';
 
   CohereService({String? apiKey, Dio? dio})
-      : _apiKey = apiKey ?? dotenv.env['COHERE_API_KEY'] ?? '',
+      : _apiKey = apiKey ?? EnvConfig.get('COHERE_API_KEY'),
         _dio = dio ??
             Dio(
               BaseOptions(

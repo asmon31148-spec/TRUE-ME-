@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/env_config.dart';
 import '../utils/rate_limiter.dart';
 
 class CloudflareService {
@@ -8,8 +8,8 @@ class CloudflareService {
   final Dio _dio;
 
   CloudflareService({String? accountId, String? apiToken, Dio? dio})
-      : _accountId = accountId ?? dotenv.env['CLOUDFLARE_ACCOUNT_ID'] ?? '',
-        _apiToken = apiToken ?? dotenv.env['CLOUDFLARE_API_TOKEN'] ?? '',
+      : _accountId = accountId ?? EnvConfig.get('CLOUDFLARE_ACCOUNT_ID'),
+        _apiToken = apiToken ?? EnvConfig.get('CLOUDFLARE_API_TOKEN'),
         _dio = dio ?? Dio();
 
   bool get isConfigured => _accountId.isNotEmpty && _apiToken.isNotEmpty;

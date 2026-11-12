@@ -136,7 +136,7 @@ jobs:
           "
 
       - name: Build Android APK (Release)
-        run: flutter build apk --release --no-tree-shake-icons --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }}
+        run: flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }}
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

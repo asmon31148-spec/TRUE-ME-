@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/env_config.dart';
 
 class OpenRouterService {
   final String _apiKey;
@@ -28,7 +28,7 @@ class OpenRouterService {
   ];
 
   OpenRouterService({String? apiKey, Dio? dio})
-      : _apiKey = apiKey ?? dotenv.env['OPENROUTER_API_KEY'] ?? '',
+      : _apiKey = apiKey ?? EnvConfig.get('OPENROUTER_API_KEY'),
         _dio = dio ??
             Dio(
               BaseOptions(

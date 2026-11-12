@@ -11,11 +11,12 @@ import 'core/services/supabase_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Load environment variables (.env)
+  // 1. Load environment variables (.env) safely
   try {
     await dotenv.load(fileName: '.env');
   } catch (e) {
     debugPrint('dotenv could not load .env file: $e');
+    dotenv.testLoad(fileInput: '');
   }
 
   // 2. Initialize Offline Hive Cache Boxes

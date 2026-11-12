@@ -1,6 +1,6 @@
 import 'dart:math' as math;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import '../config/env_config.dart';
 import '../utils/rate_limiter.dart';
 
 class GeminiService {
@@ -14,7 +14,7 @@ class GeminiService {
   ];
 
   GeminiService({String? apiKey})
-      : _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '' {
+      : _apiKey = apiKey ?? EnvConfig.get('GEMINI_API_KEY') {
     _embeddingModel = GenerativeModel(
       model: 'gemini-embedding-001',
       apiKey: _apiKey,

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/env_config.dart';
 import '../models/document_chunk_model.dart';
 
 class SupabaseService {
@@ -29,8 +29,8 @@ class SupabaseService {
   }
 
   static Future<void> initialize() async {
-    final url = dotenv.env['SUPABASE_URL'] ?? '';
-    final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+    final url = EnvConfig.get('SUPABASE_URL');
+    final anonKey = EnvConfig.get('SUPABASE_ANON_KEY');
 
     if (url.isNotEmpty && anonKey.isNotEmpty) {
       await Supabase.initialize(
