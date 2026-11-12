@@ -218,9 +218,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          children: [
+        child: RefreshIndicator(
+          color: context.accentColor,
+          onRefresh: () async {
+            await OfflineCacheService.syncFromCloud();
+            if (mounted) _loadNotebooks();
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: [
             // Search field
             AppInput(
               controller: _searchCtrl,
@@ -289,6 +296,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: AppListRow(
+                    leading: const AppIconBadge(icon: Icons.folder_outlined),
                     title: title,
                     subtitle: _buildSubjectSubtitle(docs),
                     trailing: Row(
@@ -331,6 +339,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ],
           ],
+          ),
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
@@ -203,6 +204,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   }
 
   Future<void> _toggleTask(int index) async {
+    HapticFeedback.lightImpact();
     final wasCompleted = _tasks[index]['completed'] == true;
     final alreadyLogged = _tasks[index]['loggedOnce'] == true;
     setState(() {
@@ -358,6 +360,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
             if (mounted) _loadData();
           },
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
               // 1. Custom Clean Greeting Header + Streak Pill + Avatar

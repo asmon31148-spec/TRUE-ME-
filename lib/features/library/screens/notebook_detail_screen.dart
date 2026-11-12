@@ -454,7 +454,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
           labelColor: context.accentColor,
           unselectedLabelColor: context.textSecondary,
           indicatorColor: context.accentColor,
+          dividerColor: context.borderColor,
           indicatorSize: TabBarIndicatorSize.tab,
+          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           tabs: const [
             Tab(text: 'Sources'),
             Tab(text: 'Chat'),
@@ -532,10 +535,11 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
 
           // 3. Study Tab
           ListView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
               AppListRow(
-                leading: Icon(Icons.summarize_outlined, size: 22, color: context.textPrimary),
+                leading: const AppIconBadge(icon: Icons.summarize_outlined, size: 38, iconSize: 19),
                 title: 'Summary',
                 subtitle: 'Ask Sage to summarize all uploaded sources',
                 onTap: () => context.push(
@@ -544,28 +548,28 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: Icon(Icons.style_outlined, size: 22, color: context.textPrimary),
+                leading: const AppIconBadge(icon: Icons.style_outlined, size: 38, iconSize: 19),
                 title: 'Flashcards',
                 subtitle: 'Review or generate AI cards from $title',
                 onTap: () => context.push('/flashcards?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: Icon(Icons.quiz_outlined, size: 22, color: context.textPrimary),
+                leading: const AppIconBadge(icon: Icons.quiz_outlined, size: 38, iconSize: 19),
                 title: 'Quiz',
                 subtitle: 'Test yourself on your $title notes',
                 onTap: () => context.push('/quiz?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: Icon(Icons.account_tree_outlined, size: 22, color: context.textPrimary),
+                leading: const AppIconBadge(icon: Icons.account_tree_outlined, size: 38, iconSize: 19),
                 title: 'Mind map',
                 subtitle: 'Generate visual concept hierarchy with AI',
                 onTap: () => context.push('/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
               ),
               const SizedBox(height: 10),
               AppListRow(
-                leading: Icon(Icons.play_circle_outline, size: 22, color: context.textPrimary),
+                leading: const AppIconBadge(icon: Icons.play_circle_outline, size: 38, iconSize: 19),
                 title: 'Audio explainer',
                 subtitle: 'Listen to a narrated walkthrough of $title',
                 onTap: () => context.push('/explainer?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}'),
@@ -573,8 +577,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               const SizedBox(height: 10),
               AppListRow(
                 leading: _exportingFormat == 'pdf'
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(Icons.picture_as_pdf_outlined, size: 22, color: context.textPrimary),
+                    ? const SizedBox(width: 38, height: 38, child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+                    : const AppIconBadge(icon: Icons.picture_as_pdf_outlined, size: 38, iconSize: 19),
                 title: _exportingFormat == 'pdf' ? 'Generating PDF...' : 'Make a PDF study sheet',
                 subtitle: 'Synthesize sources into a shareable PDF guide',
                 onTap: _exportingFormat != null ? null : () => _exportStudyFile('pdf'),
@@ -582,8 +586,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               const SizedBox(height: 10),
               AppListRow(
                 leading: _exportingFormat == 'docx'
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(Icons.description_outlined, size: 22, color: context.textPrimary),
+                    ? const SizedBox(width: 38, height: 38, child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+                    : const AppIconBadge(icon: Icons.description_outlined, size: 38, iconSize: 19),
                 title: _exportingFormat == 'docx' ? 'Generating Word (.docx)...' : 'Make a Word document (.docx)',
                 subtitle: 'Create an editable study guide for Word / Docs',
                 onTap: _exportingFormat != null ? null : () => _exportStudyFile('docx'),
@@ -591,8 +595,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
               const SizedBox(height: 10),
               AppListRow(
                 leading: _exportingFormat == 'pptx'
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(Icons.slideshow_outlined, size: 22, color: context.textPrimary),
+                    ? const SizedBox(width: 38, height: 38, child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+                    : const AppIconBadge(icon: Icons.slideshow_outlined, size: 38, iconSize: 19),
                 title: _exportingFormat == 'pptx' ? 'Generating Slides (.pptx)...' : 'Make a PowerPoint deck (.pptx)',
                 subtitle: 'Turn your notes into presentation slides',
                 onTap: _exportingFormat != null ? null : () => _exportStudyFile('pptx'),

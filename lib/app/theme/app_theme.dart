@@ -27,8 +27,8 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
       primaryColor: AppColors.accent,
       dividerColor: AppColors.border,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.transparent,
+      splashColor: AppColors.accent.withOpacity(0.06),
+      highlightColor: AppColors.accent.withOpacity(0.03),
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: AppColors.textPrimary, fontSize: 16),
         bodyMedium: TextStyle(color: AppColors.textPrimary, fontSize: 14),
@@ -178,8 +178,8 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.darkBackground,
       primaryColor: const Color(0xFF3B82F6),
       dividerColor: AppColors.darkBorder,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.transparent,
+      splashColor: const Color(0xFF3B82F6).withOpacity(0.10),
+      highlightColor: const Color(0xFF3B82F6).withOpacity(0.05),
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: AppColors.darkTextPrimary, fontSize: 16),
         bodyMedium: TextStyle(color: AppColors.darkTextPrimary, fontSize: 14),

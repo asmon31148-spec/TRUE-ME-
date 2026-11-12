@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme/theme_provider.dart';
 
@@ -26,6 +27,7 @@ class AppScaffoldShell extends StatelessWidget {
   }
 
   void _onItemTapped(int index, BuildContext context) {
+    HapticFeedback.selectionClick();
     switch (index) {
       case 0:
         context.go('/today');
@@ -61,7 +63,7 @@ class AppScaffoldShell extends StatelessWidget {
               child: SafeArea(
                 top: false,
                 child: SizedBox(
-                  height: 56,
+                  height: 60,
                   child: Row(
                     children: [
                       _NavItem(
@@ -127,12 +129,21 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 22,
-              color: color,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? context.accentTint : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                isSelected ? activeIcon : icon,
+                size: 21,
+                color: color,
+              ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(

@@ -55,6 +55,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
       ),
       body: SafeArea(
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
             // 1. Quiz Card
@@ -64,11 +65,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/quiz');
                 if (mounted) _loadRecent();
               },
-              child: Row(
+              child: const Row(
                 children: [
-                  Icon(Icons.quiz_outlined, size: 28, color: context.textPrimary),
-                  const SizedBox(width: 16),
-                  const Expanded(
+                  AppIconBadge(icon: Icons.quiz_outlined, size: 42, iconSize: 22),
+                  SizedBox(width: 14),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -90,11 +91,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/flashcards');
                 if (mounted) _loadRecent();
               },
-              child: Row(
+              child: const Row(
                 children: [
-                  Icon(Icons.style_outlined, size: 28, color: context.textPrimary),
-                  const SizedBox(width: 16),
-                  const Expanded(
+                  AppIconBadge(icon: Icons.style_outlined, size: 42, iconSize: 22),
+                  SizedBox(width: 14),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -116,11 +117,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/voice-tutor');
                 if (mounted) _loadRecent();
               },
-              child: Row(
+              child: const Row(
                 children: [
-                  Icon(Icons.mic_none_outlined, size: 28, color: context.textPrimary),
-                  const SizedBox(width: 16),
-                  const Expanded(
+                  AppIconBadge(icon: Icons.mic_none_outlined, size: 42, iconSize: 22),
+                  SizedBox(width: 14),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -142,11 +143,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 await context.push('/mindmap');
                 if (mounted) _loadRecent();
               },
-              child: Row(
+              child: const Row(
                 children: [
-                  Icon(Icons.account_tree_outlined, size: 28, color: context.textPrimary),
-                  const SizedBox(width: 16),
-                  const Expanded(
+                  AppIconBadge(icon: Icons.account_tree_outlined, size: 42, iconSize: 22),
+                  SizedBox(width: 14),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

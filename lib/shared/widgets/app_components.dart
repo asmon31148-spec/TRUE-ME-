@@ -117,7 +117,43 @@ class AppSecondaryButton extends StatelessWidget {
   }
 }
 
-/// Card: Theme surface fill, 1 px border, radius 12, padding 16.
+/// Rounded tinted icon container used across Today, Library, Practice, and Study tabs.
+class AppIconBadge extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final double iconSize;
+  final Color? color;
+  final Color? backgroundColor;
+
+  const AppIconBadge({
+    super.key,
+    required this.icon,
+    this.size = 40,
+    this.iconSize = 20,
+    this.color,
+    this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: backgroundColor ?? context.accentTint,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        icon,
+        size: iconSize,
+        color: color ?? context.accentColor,
+      ),
+    );
+  }
+}
+
+/// Card: Theme surface fill, 1 px border, radius 14, padding 16.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -141,7 +177,7 @@ class AppCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? context.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.borderColor, width: 1),
       ),
       child: showChevron
@@ -158,7 +194,7 @@ class AppCard extends StatelessWidget {
     if (onTap != null) {
       return InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: cardContent,
       );
     }
@@ -187,13 +223,13 @@ class AppListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         constraints: const BoxConstraints(minHeight: 56),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: context.borderColor, width: 1),
         ),
         child: Row(

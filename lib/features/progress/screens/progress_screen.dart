@@ -82,8 +82,15 @@ class _ProgressScreenState extends State<ProgressScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: RefreshIndicator(
+          color: context.accentColor,
+          onRefresh: () async {
+            await OfflineCacheService.syncFromCloud();
+            if (mounted) _loadStats();
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
             // Pace Card
             Container(
@@ -251,6 +258,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
