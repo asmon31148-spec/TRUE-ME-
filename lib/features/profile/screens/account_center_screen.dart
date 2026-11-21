@@ -140,6 +140,62 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
     }
   }
 
+  Future<void> _disconnectDrive() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.bgColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: ctx.borderColor),
+        ),
+        title: const Text('Disconnect Google Drive?', style: AppTypography.sectionHeading),
+        content: const Text(
+          'Your notes, quizzes, and decks will remain safely on this device. You can connect another Google Drive account anytime.',
+          style: AppTypography.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Disconnect', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isConnectingDrive = true);
+    await DriveService.instance.disconnect();
+    if (!mounted) return;
+    setState(() => _isConnectingDrive = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Google Drive disconnected.')),
+    );
+  }
+
+  Future<void> _switchDriveAccount() async {
+    setState(() => _isConnectingDrive = true);
+    await DriveService.instance.disconnect();
+    final ok = await DriveService.instance.signIn();
+    if (!mounted) return;
+    setState(() => _isConnectingDrive = false);
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connected Google Drive (${DriveService.instance.userEmail ?? 'Ready'}).')),
+      );
+    } else {
+      final err = DriveService.instance.lastError ?? 'Google Drive sign-in cancelled or failed.';
+      if (!err.contains('cancelled')) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      }
+    }
+  }
+
   void _showConfirmDeleteDialog({required bool deleteAll}) {
     final confirmationController = TextEditingController();
     showDialog(
@@ -320,17 +376,37 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                   AppListRow(
                     title: driveConnected ? 'Connected' : 'Not connected',
                     subtitle: driveConnected
-                        ? (driveEmail != null ? 'Google Drive ($driveEmail)' : 'Google Drive linked')
+                        ? (driveEmail != null ? 'Google Drive: $driveEmail' : 'Google Drive linked')
                         : 'Files are currently stored only on this phone',
                     trailing: _isConnectingDrive
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : TextButton(
-                            onPressed: _connectDrive,
-                            child: Text(
-                              driveConnected ? 'Reconnect' : 'Connect',
-                              style: TextStyle(color: context.accentColor, fontSize: 13, fontWeight: FontWeight.w600),
-                            ),
-                          ),
+                        : (driveConnected
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextButton(
+                                    onPressed: _switchDriveAccount,
+                                    child: Text(
+                                      'Switch',
+                                      style: TextStyle(color: context.accentColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: _disconnectDrive,
+                                    child: const Text(
+                                      'Disconnect',
+                                      style: TextStyle(color: AppColors.error, fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : TextButton(
+                                onPressed: _connectDrive,
+                                child: Text(
+                                  'Connect',
+                                  style: TextStyle(color: context.accentColor, fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                              )),
                   ),
                   Divider(height: 1, thickness: 1, color: context.borderColor),
                   const AppListRow(

@@ -827,6 +827,16 @@ class OfflineCacheService {
     );
   }
 
+  static List<Map<String, dynamic>> getRecentSessions() {
+    try {
+      final box = Hive.box(analyticsBox);
+      final rawRecent = box.get('recent_sessions') as List? ?? [];
+      return rawRecent.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static List<int> getWeeklyStudyMinutes() {
     try {
       final box = Hive.box(analyticsBox);

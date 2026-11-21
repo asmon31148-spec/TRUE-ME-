@@ -86,6 +86,145 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  Future<void> _disconnectDrive() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.bgColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: ctx.borderColor),
+        ),
+        title: const Text('Disconnect Google Drive?', style: AppTypography.sectionHeading),
+        content: const Text(
+          'Your notes and subjects will remain safely stored on this device. You can connect a different Google Drive account at any time.',
+          style: AppTypography.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Disconnect', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isConnectingDrive = true);
+    await DriveService.instance.disconnect();
+    if (!mounted) return;
+    setState(() => _isConnectingDrive = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Google Drive disconnected.')),
+    );
+  }
+
+  Future<void> _switchDriveAccount() async {
+    setState(() => _isConnectingDrive = true);
+    await DriveService.instance.disconnect();
+    final ok = await DriveService.instance.signIn();
+    if (!mounted) return;
+    setState(() => _isConnectingDrive = false);
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connected Google Drive (${DriveService.instance.userEmail ?? 'Ready'})'),
+        ),
+      );
+    } else {
+      final err = DriveService.instance.lastError ?? 'Google Drive sign-in cancelled or failed.';
+      if (!err.contains('cancelled')) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      }
+    }
+  }
+
+  void _showDriveAccountSheet() {
+    final email = DriveService.instance.userEmail ?? 'Connected';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.cloud_done_outlined, color: AppColors.success, size: 24),
+                  const SizedBox(width: 10),
+                  const Text('Google Drive Vault', style: AppTypography.sectionHeading),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: ctx.bgColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: ctx.borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Current Account', style: AppTypography.smallLabel.copyWith(color: ctx.textSecondary)),
+                    const SizedBox(height: 2),
+                    Text(email, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('Target folder: Google Drive / True Me', style: AppTypography.secondary),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(color: ctx.accentTint, borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.switch_account_outlined, color: ctx.accentColor, size: 20),
+                ),
+                title: const Text('Switch Google Account', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: const Text('Pick another Google Drive account to sync notes', style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _switchDriveAccount();
+                },
+              ),
+              Divider(color: ctx.borderColor, height: 1),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(color: AppColors.error.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.link_off, color: AppColors.error, size: 20),
+                ),
+                title: const Text('Disconnect Drive', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: const Text('Unlinks this account; local files stay on your phone', style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _disconnectDrive();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showAddSubjectDialog() {
     final controller = TextEditingController();
     showDialog(
@@ -249,7 +388,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
             // Drive Status Line
             InkWell(
-              onTap: driveConnected || _isConnectingDrive ? null : _connectDrive,
+              onTap: _isConnectingDrive ? null : (driveConnected ? _showDriveAccountSheet : _connectDrive),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
@@ -266,13 +405,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         _isConnectingDrive
                             ? 'Connecting to Google Drive...'
                             : (driveConnected
-                                ? 'Google Drive connected (${DriveService.instance.userEmail ?? 'True Me'})'
+                                ? 'Google Drive (${DriveService.instance.userEmail ?? 'True Me'}) • Tap to manage'
                                 : 'Saved on device • Tap to connect Google Drive'),
                         style: AppTypography.smallLabel.copyWith(
                           color: driveConnected ? AppColors.success : context.textSecondary,
                         ),
                       ),
                     ),
+                    if (driveConnected) ...[
+                      Icon(Icons.more_horiz, size: 16, color: context.textSecondary),
+                    ],
                   ],
                 ),
               ),

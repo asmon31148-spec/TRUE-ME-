@@ -110,6 +110,23 @@ class DriveService {
     }
   }
 
+  /// Completely disconnects Google Drive and revokes OAuth token,
+  /// allowing the user to select and connect a different Google account.
+  Future<void> disconnect() async {
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {}
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    _driveApi = null;
+    _vaultFolderId = null;
+    _folderCache.clear();
+    _currentAccount = null;
+    lastError = null;
+    await OfflineCacheService.saveDriveStatus(false);
+  }
+
   Future<void> signOut() async {
     try {
       await _googleSignIn.signOut();
