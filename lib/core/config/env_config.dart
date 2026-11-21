@@ -16,9 +16,13 @@ class EnvConfig {
   static const _cloudflareApiToken = String.fromEnvironment('CLOUDFLARE_API_TOKEN');
 
   static String get(String key) {
-    if (dotenv.isInitialized) {
-      final val = dotenv.env[key];
-      if (val != null && val.isNotEmpty) return val;
+    try {
+      if (dotenv.isInitialized) {
+        final val = dotenv.maybeGet(key) ?? dotenv.env[key];
+        if (val != null && val.isNotEmpty) return val;
+      }
+    } catch (_) {
+      // Gracefully fall back to compile-time definitions if dotenv is not loaded
     }
     switch (key) {
       case 'GEMINI_API_KEY':

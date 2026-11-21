@@ -149,57 +149,116 @@ class FormattedMessageBody extends StatelessWidget {
 
   Widget _buildTable(BuildContext context, List<List<String>> rows) {
     if (rows.isEmpty) return const SizedBox.shrink();
-    final colCount = rows.fold<int>(0, (max, r) => r.length > max ? r.length : max);
-    if (colCount == 0) return const SizedBox.shrink();
+    final headers = rows.first;
+    final dataRows = rows.skip(1).toList();
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Container(
+    // If only header row or simple 1-row table, render a single card
+    if (dataRows.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: context.bgColor,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: context.borderColor),
         ),
-        child: Table(
-          defaultColumnWidth: const IntrinsicColumnWidth(),
-          border: TableBorder.symmetric(
-            inside: BorderSide(color: context.borderColor, width: 0.8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: headers.map((h) => Text.rich(_parseInlineSpans(h, TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: textColor), context))).toList(),
+        ),
+      );
+    }
+
+    // Convert table rows into readable mobile-native concept cards
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: dataRows.map((r) {
+        final title = r.isNotEmpty ? r[0] : '';
+        final details = r.length > 1 ? r.sublist(1) : <String>[];
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.borderColor, width: 1),
           ),
-          children: List.generate(rows.length, (rIdx) {
-            final isHeader = rIdx == 0;
-            final row = rows[rIdx];
-            return TableRow(
-              decoration: isHeader
-                  ? BoxDecoration(
-                      color: context.accentTint,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-                    )
-                  : null,
-              children: List.generate(colCount, (cIdx) {
-                final cell = cIdx < row.length ? row[cIdx] : '';
-                return ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 80, maxWidth: 210),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    child: Text.rich(
-                      _parseInlineSpans(
-                        cell,
-                        TextStyle(
-                          fontSize: 13,
-                          height: 1.35,
-                          fontWeight: isHeader ? FontWeight.w700 : FontWeight.w400,
-                          color: isHeader ? context.accentColor : textColor,
-                        ),
-                        context,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title.isNotEmpty) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.only(top: 6, right: 8),
+                      decoration: BoxDecoration(
+                        color: context.accentColor,
+                        shape: BoxShape.circle,
                       ),
                     ),
+                    Expanded(
+                      child: Text.rich(
+                        _parseInlineSpans(
+                          title,
+                          TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: context.accentColor,
+                            height: 1.35,
+                          ),
+                          context,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+              ],
+              ...List.generate(details.length, (idx) {
+                final colIdx = idx + 1;
+                final headerLabel = colIdx < headers.length ? headers[colIdx] : '';
+                final value = details[idx];
+
+                return Padding(
+                  padding: const EdgeInsets.only(top: 3, bottom: 2, left: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (headerLabel.isNotEmpty)
+                        Text(
+                          headerLabel.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 0.5,
+                            fontWeight: FontWeight.w700,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      const SizedBox(height: 1),
+                      Text.rich(
+                        _parseInlineSpans(
+                          value,
+                          TextStyle(
+                            fontSize: 13.5,
+                            height: 1.4,
+                            color: textColor,
+                          ),
+                          context,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }),
-            );
-          }),
-        ),
-      ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -270,18 +329,34 @@ class FormattedMessageBody extends StatelessWidget {
       // Markdown table block
       if (line.startsWith('|') && line.contains('|', 1)) {
         final rows = <List<String>>[];
-        while (i < lines.length && lines[i].trim().startsWith('|')) {
-          final rowLine = lines[i].trim();
-          final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(rowLine);
-          if (!isSeparator) {
-            final cells = rowLine
-                .split('|')
-                .map((c) => c.trim())
-                .where((c) => c.isNotEmpty)
-                .toList();
-            if (cells.isNotEmpty) rows.add(cells);
+        while (i < lines.length) {
+          final currentLine = lines[i].trim();
+          if (currentLine.isEmpty) break;
+          if (currentLine.startsWith('|')) {
+            final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(currentLine);
+            if (!isSeparator) {
+              final cells = currentLine
+                  .split('|')
+                  .map((c) => c.trim())
+                  .where((c) => c.isNotEmpty)
+                  .toList();
+              if (cells.isNotEmpty) rows.add(cells);
+            }
+            i++;
+          } else if (rows.isNotEmpty &&
+              !currentLine.startsWith('#') &&
+              !currentLine.startsWith('-') &&
+              !currentLine.startsWith('*') &&
+              !currentLine.startsWith('```')) {
+            // Multiline cell continuation from previous row
+            final lastRow = rows.last;
+            if (lastRow.isNotEmpty) {
+              lastRow[lastRow.length - 1] = '${lastRow.last} $currentLine';
+            }
+            i++;
+          } else {
+            break;
           }
-          i++;
         }
         if (rows.isNotEmpty) {
           blocks.add(_MdBlock(_BlockKind.table, rows: rows));

@@ -550,8 +550,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
             final systemPrompt = '''
 You are Sage, the personal AI study mentor for $name in the True Me app.
 $scopeInstruction
-Format with clean ## headings and concise bullet points (- ). Avoid markdown pipe tables (| col |) so it reads cleanly on mobile.
-If the student asks to export a PDF/Word/PPTX, or open Quiz/Flashcards/Mind Map/Audio Explainer/Schedule, confirm briefly and append on the last line:
+Format with clean ## headings and high-yield bullet points (- ).
+CRITICAL: NEVER output markdown pipe tables (| col |). Format concepts as:
+### [Concept Title]
+- **Core Idea**: [Clear explanation]
+- **Source**: [Source note]
+If the student asks to export a PDF/Word/PPTX, or open Quiz/Flashcards/Mind Map/Audio Explainer/Schedule, confirm enthusiastically and append on the last line:
 [ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule | <short topic>]
 ''';
             rawAnswer = await _aiRouter.executeRealtimeChat(

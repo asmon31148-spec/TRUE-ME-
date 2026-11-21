@@ -424,147 +424,133 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.fromLTRB(18, 14, 18, kBottomNavigationBarHeight + 28),
             children: [
-              // 1. Zen Scholar Header: Editorial Serif + Subtitle Mist + Cinnabar Hanko Streak Seal
+              // 1. Top Utility Row: Trial Countdown on Left, Hanko Seal + Avatar on Right
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _greetingText(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: ZenTypography.editorialTitle.copyWith(
-                            color: primaryInk,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        InkWell(
-                          onTap: _pickExamDeadline,
-                          borderRadius: BorderRadius.circular(6),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _shortFormattedDate(),
-                                  style: ZenTypography.subtitleMist.copyWith(
-                                    color: secondaryMist,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  '  ·  ',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: secondaryMist.withOpacity(0.5),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: surfaceBg,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: hairlineBorder, width: 0.8),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text('🎓', style: TextStyle(fontSize: 11)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _daysLeft == 0
-                                            ? 'The Trial is Today'
-                                            : '$_daysLeft days until the trial',
-                                        style: TextStyle(
-                                          fontFamilyFallback: ZenTypography.sansFallbacks,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFB91C1C),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Vermilion Hanko Seal (Square red seal: [ 印 1 Day ])
                   InkWell(
-                    onTap: () => context.go('/progress'),
+                    onTap: _pickExamDeadline,
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
-                        color: redWash,
+                        color: surfaceBg,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: redSeal.withOpacity(0.6), width: 1.2),
+                        border: Border.all(color: hairlineBorder, width: 0.8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          const Text('🎓', style: TextStyle(fontSize: 11)),
+                          const SizedBox(width: 5),
                           Text(
-                            '印',
-                            style: ZenTypography.hankoSeal.copyWith(
-                              color: redSeal,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$_streak ${_streak == 1 ? 'Day' : 'Days'}',
+                            _daysLeft == 0 ? 'Trial is Today!' : '$_daysLeft days until trial',
                             style: TextStyle(
                               fontFamilyFallback: ZenTypography.sansFallbacks,
                               fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: redSeal,
-                              letterSpacing: 0.2,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFB91C1C),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-
-                  // Quiet Scholar Avatar
-                  InkWell(
-                    onTap: () async {
-                      await context.push('/account');
-                      if (mounted) _loadData();
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: surfaceBg,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: hairlineBorder, width: 1),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        initialLetter,
-                        style: ZenTypography.editorialTitle.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: primaryInk,
+                  Row(
+                    children: [
+                      // Vermilion Hanko Seal (Square red seal: [ 印 1 Day ])
+                      InkWell(
+                        onTap: () => context.go('/progress'),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: redWash,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: redSeal.withOpacity(0.6), width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '印',
+                                style: ZenTypography.hankoSeal.copyWith(
+                                  color: redSeal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$_streak ${_streak == 1 ? 'Day' : 'Days'}',
+                                style: TextStyle(
+                                  fontFamilyFallback: ZenTypography.sansFallbacks,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: redSeal,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+
+                      // Scholar Avatar
+                      InkWell(
+                        onTap: () async {
+                          await context.push('/account');
+                          if (mounted) _loadData();
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: surfaceBg,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: hairlineBorder, width: 1),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            initialLetter,
+                            style: ZenTypography.editorialTitle.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: primaryInk,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Full-width Unclipped Editorial Greeting Row
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _greetingText(),
+                    style: ZenTypography.editorialTitle.copyWith(
+                      color: primaryInk,
+                      fontSize: 27,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${_shortFormattedDate()} · The Mindful Study Flow',
+                    style: ZenTypography.subtitleMist.copyWith(
+                      color: secondaryMist,
+                      fontSize: 13,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
 
               // 2. The Focus Portal: Ink-Wash Progress Stroke + Up Next Headline + Tactile Calligraphic Button
               Container(
@@ -782,7 +768,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
 
               if (_isGeneratingPlan) ...[
                 const GenerationProgressView(
@@ -795,7 +781,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     'Inscribing study plan...',
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
               ],
 
               // 3. The Daily Scroll Header + Calligraphic Actions
@@ -892,9 +878,9 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              // 4. The Daily Scroll (Zero Box Enclosures — Separated by Delicate Hairline Dividers)
+              // 4. The Daily Scroll (Zero Box Enclosures — Delicate Hairline Dividers & Spacious Layout)
               if (_tasks.isEmpty) ...[
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -955,7 +941,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   const SizedBox(height: 12),
                 ],
 
-                // The Scroll Canvas: Delicate Hairline Dividers
+                // The Scroll Canvas: Delicate Hairline Dividers & Multi-tier Unclipped Rows
                 Container(
                   decoration: BoxDecoration(
                     color: surfaceBg,
@@ -989,50 +975,48 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           onLongPress: () => _moveTaskToTomorrow(i),
                           borderRadius: BorderRadius.circular(16),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                            child: Row(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Active Indicator (2.5px vermilion left brushstroke) or Quiet Icon
-                                if (isUpNext) ...[
-                                  Container(
-                                    width: 3.5,
-                                    height: 32,
-                                    margin: const EdgeInsets.only(right: 10),
-                                    decoration: BoxDecoration(
-                                      color: redSeal,
-                                      borderRadius: BorderRadius.circular(2),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    if (isUpNext) ...[
+                                      Container(
+                                        width: 3.5,
+                                        height: 24,
+                                        margin: const EdgeInsets.only(right: 8),
+                                        decoration: BoxDecoration(
+                                          color: redSeal,
+                                          borderRadius: BorderRadius.circular(2),
+                                        ),
+                                      ),
+                                    ],
+                                    Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: isDone
+                                            ? canvasBg
+                                            : (isUpNext ? redWash : canvasBg),
+                                        borderRadius: BorderRadius.circular(7),
+                                        border: Border.all(color: hairlineBorder, width: 0.6),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Icon(
+                                        _taskIcon(type),
+                                        size: 15,
+                                        color: isDone
+                                            ? secondaryMist.withOpacity(0.4)
+                                            : (isUpNext ? redSeal : primaryInk),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 10),
 
-                                // Task Type Icon
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: isDone
-                                        ? canvasBg
-                                        : (isUpNext ? redWash : canvasBg),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: hairlineBorder, width: 0.6),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    _taskIcon(type),
-                                    size: 18,
-                                    color: isDone
-                                        ? secondaryMist.withOpacity(0.4)
-                                        : (isUpNext ? redSeal : primaryInk),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                // Title + Subject Tag + Duration
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                                    // Full Unclipped Task Title
+                                    Expanded(
+                                      child: Row(
                                         children: [
                                           if (isHighPriority && !isDone) ...[
                                             Container(
@@ -1048,8 +1032,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                           Expanded(
                                             child: Text(
                                               t['title'] as String? ?? 'Task',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 2,
                                               style: TextStyle(
                                                 fontFamilyFallback: ZenTypography.sansFallbacks,
                                                 fontSize: 15,
@@ -1064,151 +1047,153 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 5),
-                                      Row(
-                                        children: [
-                                          // Subject Wash Tag
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: chipStyle.background,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              subjectTitle,
-                                              style: TextStyle(
-                                                fontFamilyFallback: ZenTypography.sansFallbacks,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                color: chipStyle.text,
-                                                letterSpacing: -0.1,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            '·  $mins min',
-                                            style: TextStyle(
-                                              fontFamilyFallback: ZenTypography.sansFallbacks,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              color: secondaryMist,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
+                                    ),
+                                    const SizedBox(width: 8),
 
-                                // Mastered Vermilion Hanko Stamp or Focus Play Trigger
-                                if (isDone) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: redWash,
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: redSeal.withOpacity(0.5), width: 0.8),
-                                    ),
-                                    child: Text(
-                                      '完 Mastered',
-                                      style: TextStyle(
-                                        fontFamilyFallback: ZenTypography.serifFallbacks,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        color: redSeal,
-                                        letterSpacing: 0.2,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                ] else if (isUpNext) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? ZenColors.darkVermilion : ZenColors.sumiInk,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.play_arrow_rounded, size: 12, color: Colors.white),
-                                        SizedBox(width: 2),
-                                        Text(
-                                          'Focus',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
+                                    // Options Menu
+                                    PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert, size: 17, color: secondaryMist),
+                                      padding: EdgeInsets.zero,
+                                      onSelected: (val) {
+                                        if (val == 'start') {
+                                          _launchTask(t);
+                                        } else if (val == 'tomorrow') {
+                                          _moveTaskToTomorrow(i);
+                                        } else if (val == 'delete') {
+                                          _removeTask(i);
+                                        }
+                                      },
+                                      itemBuilder: (_) => const [
+                                        PopupMenuItem(value: 'start', child: Text('Begin session')),
+                                        PopupMenuItem(value: 'tomorrow', child: Text('Move to tomorrow')),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Text('Remove from scroll', style: TextStyle(color: AppColors.error)),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
 
-                                // Options Menu
-                                PopupMenuButton<String>(
-                                  icon: Icon(Icons.more_vert, size: 17, color: secondaryMist),
-                                  padding: EdgeInsets.zero,
-                                  onSelected: (val) {
-                                    if (val == 'start') {
-                                      _launchTask(t);
-                                    } else if (val == 'tomorrow') {
-                                      _moveTaskToTomorrow(i);
-                                    } else if (val == 'delete') {
-                                      _removeTask(i);
-                                    }
-                                  },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(value: 'start', child: Text('Begin session')),
-                                    PopupMenuItem(value: 'tomorrow', child: Text('Move to tomorrow')),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text('Remove from scroll', style: TextStyle(color: AppColors.error)),
+                                    // Checkbox Toggle
+                                    InkWell(
+                                      onTap: () {
+                                        HapticFeedback.selectionClick();
+                                        _toggleTask(i);
+                                      },
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(2),
+                                        child: isDone
+                                            ? Container(
+                                                width: 22,
+                                                height: 22,
+                                                decoration: BoxDecoration(
+                                                  color: redSeal,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                alignment: Alignment.center,
+                                                child: const Icon(
+                                                  Icons.check_rounded,
+                                                  size: 15,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : Container(
+                                                width: 20,
+                                                height: 20,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: isUpNext
+                                                        ? redSeal
+                                                        : (isDark ? const Color(0xFF44403C) : const Color(0xFFD6D3D1)),
+                                                    width: 1.6,
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 6),
 
-                                // Checkbox Toggle with Tactile Haptics
-                                InkWell(
-                                  onTap: () {
-                                    HapticFeedback.selectionClick();
-                                    _toggleTask(i);
-                                  },
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(2),
-                                    child: isDone
-                                        ? Container(
-                                            width: 22,
-                                            height: 22,
-                                            decoration: BoxDecoration(
+                                // Bottom Metadata Line: Subject Tag + Duration + Mastered Stamp on Right
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 40),
+                                  child: Row(
+                                    children: [
+                                      // Subject Wash Tag
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: chipStyle.background,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          subjectTitle,
+                                          style: TextStyle(
+                                            fontFamilyFallback: ZenTypography.sansFallbacks,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: chipStyle.text,
+                                            letterSpacing: -0.1,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '·  $mins min',
+                                        style: TextStyle(
+                                          fontFamilyFallback: ZenTypography.sansFallbacks,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: secondaryMist,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      if (isDone) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: redWash,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: redSeal.withOpacity(0.5), width: 0.8),
+                                          ),
+                                          child: Text(
+                                            '完 Mastered',
+                                            style: TextStyle(
+                                              fontFamilyFallback: ZenTypography.serifFallbacks,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
                                               color: redSeal,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: const Icon(
-                                              Icons.check_rounded,
-                                              size: 15,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : Container(
-                                            width: 20,
-                                            height: 20,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: isUpNext
-                                                    ? redSeal
-                                                    : (isDark ? const Color(0xFF44403C) : const Color(0xFFD6D3D1)),
-                                                width: 1.6,
-                                              ),
+                                              letterSpacing: 0.2,
                                             ),
                                           ),
+                                        ),
+                                      ] else if (isUpNext) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? ZenColors.darkVermilion : ZenColors.sumiInk,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.play_arrow_rounded, size: 12, color: Colors.white),
+                                              SizedBox(width: 2),
+                                              Text(
+                                                'Focus',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
                               ],
@@ -1220,7 +1205,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // 5. Sage Mindful Reflection Scroll
               Container(
@@ -1291,8 +1276,147 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 22),
+
+              // 6. Scholar's Sanctum (Mindful Study Hub — Eliminates empty lower screen void)
+              Text(
+                "Scholar's Sanctum",
+                style: ZenTypography.editorialHeadline.copyWith(
+                  fontSize: 17,
+                  color: primaryInk,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SanctumTile(
+                      icon: Icons.quiz_outlined,
+                      title: 'Practice Quiz',
+                      subtitle: 'Active recall',
+                      color: isDark ? ZenColors.darkVermilion : ZenColors.vermilionSeal,
+                      surfaceBg: surfaceBg,
+                      hairlineBorder: hairlineBorder,
+                      primaryInk: primaryInk,
+                      secondaryMist: secondaryMist,
+                      onTap: () => context.go('/practice'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SanctumTile(
+                      icon: Icons.style_outlined,
+                      title: 'Flashcards',
+                      subtitle: 'Spaced memory',
+                      color: isDark ? const Color(0xFFFBBF24) : ZenColors.calculusInk,
+                      surfaceBg: surfaceBg,
+                      hairlineBorder: hairlineBorder,
+                      primaryInk: primaryInk,
+                      secondaryMist: secondaryMist,
+                      onTap: () => context.push('/flashcards'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SanctumTile(
+                      icon: Icons.auto_stories_outlined,
+                      title: 'Library Vault',
+                      subtitle: 'Notes & sources',
+                      color: isDark ? const Color(0xFF86EFAC) : ZenColors.microbioInk,
+                      surfaceBg: surfaceBg,
+                      hairlineBorder: hairlineBorder,
+                      primaryInk: primaryInk,
+                      secondaryMist: secondaryMist,
+                      onTap: () => context.go('/library'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SanctumTile(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'Ask Sage',
+                      subtitle: 'AI study tutor',
+                      color: isDark ? const Color(0xFFC4B5FD) : ZenColors.csInk,
+                      surfaceBg: surfaceBg,
+                      hairlineBorder: hairlineBorder,
+                      primaryInk: primaryInk,
+                      secondaryMist: secondaryMist,
+                      onTap: () => context.push('/chat'),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SanctumTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final Color surfaceBg;
+  final Color hairlineBorder;
+  final Color primaryInk;
+  final Color secondaryMist;
+  final VoidCallback onTap;
+
+  const _SanctumTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.surfaceBg,
+    required this.hairlineBorder,
+    required this.primaryInk,
+    required this.secondaryMist,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: surfaceBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: hairlineBorder, width: 0.8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontFamilyFallback: ZenTypography.sansFallbacks,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: primaryInk,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontFamilyFallback: ZenTypography.sansFallbacks,
+                fontSize: 11,
+                color: secondaryMist,
+              ),
+            ),
+          ],
         ),
       ),
     );

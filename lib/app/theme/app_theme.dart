@@ -9,7 +9,7 @@ class AppTheme {
     const colorScheme = ColorScheme.light(
       primary: AppColors.accent,
       onPrimary: Colors.white,
-      primaryContainer: Color(0xFFEFF6FF),
+      primaryContainer: ZenColors.vermilionSoft,
       onPrimaryContainer: AppColors.accent,
       surface: AppColors.surface,
       onSurface: AppColors.textPrimary,
@@ -33,8 +33,17 @@ class AppTheme {
         bodyLarge: TextStyle(color: AppColors.textPrimary, fontSize: 16),
         bodyMedium: TextStyle(color: AppColors.textPrimary, fontSize: 14),
         bodySmall: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        titleLarge: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
-        titleMedium: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+        titleLarge: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          fontFamilyFallback: ZenTypography.serifFallbacks,
+        ),
+        titleMedium: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
@@ -44,10 +53,11 @@ class AppTheme {
         centerTitle: false,
         iconTheme: IconThemeData(color: AppColors.textPrimary, size: 24),
         titleTextStyle: TextStyle(
-          fontFamily: AppTypography.fontFamily,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
+          fontFamilyFallback: ZenTypography.serifFallbacks,
+          fontSize: 21,
+          fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
+          letterSpacing: -0.3,
         ),
       ),
       cardTheme: CardThemeData(
@@ -158,10 +168,10 @@ class AppTheme {
 
   static ThemeData get darkTheme {
     const colorScheme = ColorScheme.dark(
-      primary: Color(0xFF3B82F6),
+      primary: AppColors.darkAccent,
       onPrimary: Colors.white,
-      primaryContainer: Color(0xFF1E293B),
-      onPrimaryContainer: Color(0xFF93C5FD),
+      primaryContainer: Color(0xFF2E1B1B),
+      onPrimaryContainer: Color(0xFFFCA5A5),
       surface: AppColors.darkSurface,
       onSurface: AppColors.darkTextPrimary,
       onSurfaceVariant: AppColors.darkTextSecondary,
@@ -176,16 +186,25 @@ class AppTheme {
       colorScheme: colorScheme,
       fontFamily: AppTypography.fontFamily,
       scaffoldBackgroundColor: AppColors.darkBackground,
-      primaryColor: const Color(0xFF3B82F6),
+      primaryColor: AppColors.darkAccent,
       dividerColor: AppColors.darkBorder,
-      splashColor: const Color(0xFF3B82F6).withOpacity(0.10),
-      highlightColor: const Color(0xFF3B82F6).withOpacity(0.05),
+      splashColor: AppColors.darkAccent.withOpacity(0.10),
+      highlightColor: AppColors.darkAccent.withOpacity(0.05),
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: AppColors.darkTextPrimary, fontSize: 16),
         bodyMedium: TextStyle(color: AppColors.darkTextPrimary, fontSize: 14),
         bodySmall: TextStyle(color: AppColors.darkTextSecondary, fontSize: 12),
-        titleLarge: TextStyle(color: AppColors.darkTextPrimary, fontSize: 20, fontWeight: FontWeight.w600),
-        titleMedium: TextStyle(color: AppColors.darkTextPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+        titleLarge: TextStyle(
+          color: AppColors.darkTextPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          fontFamilyFallback: ZenTypography.serifFallbacks,
+        ),
+        titleMedium: TextStyle(
+          color: AppColors.darkTextPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.darkBackground,
@@ -195,10 +214,11 @@ class AppTheme {
         centerTitle: false,
         iconTheme: IconThemeData(color: AppColors.darkTextPrimary, size: 24),
         titleTextStyle: TextStyle(
-          fontFamily: AppTypography.fontFamily,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
+          fontFamilyFallback: ZenTypography.serifFallbacks,
+          fontSize: 21,
+          fontWeight: FontWeight.w700,
           color: AppColors.darkTextPrimary,
+          letterSpacing: -0.3,
         ),
       ),
       cardTheme: CardThemeData(

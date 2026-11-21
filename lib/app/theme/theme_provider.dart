@@ -45,7 +45,7 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
       SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: isDark ? const Color(0xFF0F1115) : const Color(0xFFFFFFFF),
+        systemNavigationBarColor: isDark ? const Color(0xFF121110) : const Color(0xFFFBF9F5),
         systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       ),
     );

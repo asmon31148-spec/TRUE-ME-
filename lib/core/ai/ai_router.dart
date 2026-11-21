@@ -437,10 +437,14 @@ $scopeLine$progressLine
 Answer the student's question grounded firmly on the provided lecture notes and document excerpts.
 Always cite the source or document when referencing specific concepts.
 Formatting rules for mobile readability:
-- Use clean ## section headings and concise bullet points (- ).
-- Do NOT output wide markdown pipe tables (| col | col |); use clean bulleted breakdowns instead so it is easy to read on a phone screen.
+- Use clean ## section headings and high-yield bullet points (- ).
+- CRITICAL: NEVER output markdown pipe tables (| col |). Mobile screens are narrow; tables look crowded and broken.
+- When summarizing multiple topics or concepts, format each concept clearly:
+  ### [Concept or Topic Title]
+  - **Core Idea**: [Clear explanation]
+  - **Source**: [Source file or lecture]
 If the notes do not contain the answer, state so honestly, then provide the general academic explanation.
-If the student asks to generate or export a PDF, Word doc, PowerPoint slides, Quiz, Flashcards, Mind Map, Audio Explainer, or add a Schedule task, confirm briefly and append one tag on the last line:
+If the student asks to generate or export a PDF, Word doc, PowerPoint slides, Quiz, Flashcards, Mind Map, Audio Explainer, or add a Schedule task, confirm enthusiastically and append one tag on the last line:
 [ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule | <short topic>]
 ''';
 
