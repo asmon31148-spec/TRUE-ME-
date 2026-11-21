@@ -295,14 +295,66 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     }
   }
 
-  String _formattedDate() {
+  String _greetingText() {
+    final hour = DateTime.now().hour;
+    final prefix = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
+    final name = _userName.trim().isNotEmpty ? _userName.trim() : 'Student';
+    return '$prefix, $name';
+  }
+
+  String _shortFormattedDate() {
     final now = DateTime.now();
-    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const weekdays = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
+    // weekday 1 is Monday in DateTime
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return '${days[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}';
+  }
+
+  String _toTitleCase(String text) {
+    if (text.isEmpty) return text;
+    return text.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      return w[0].toUpperCase() + w.substring(1).toLowerCase();
+    }).join(' ');
+  }
+
+  _SubjectChipStyle _getSubjectChipStyle(String subject, bool isDark) {
+    final s = subject.toLowerCase();
+    if (s.contains('micro') || s.contains('bio') || s.contains('med') || s.contains('chem') || s.contains('life')) {
+      // Soft Emerald
+      return _SubjectChipStyle(
+        background: isDark ? const Color(0xFF064E3B).withOpacity(0.5) : const Color(0xFFDCFCE7),
+        text: isDark ? const Color(0xFF86EFAC) : const Color(0xFF15803D),
+      );
+    } else if (s.contains('cs') || s.contains('comp') || s.contains('data') || s.contains('code') || s.contains('algo') || s.contains('soft')) {
+      // Soft Violet
+      return _SubjectChipStyle(
+        background: isDark ? const Color(0xFF4C1D95).withOpacity(0.5) : const Color(0xFFEDE9FE),
+        text: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF7C3AED),
+      );
+    } else if (s.contains('math') || s.contains('calc') || s.contains('stat') || s.contains('phys') || s.contains('geom')) {
+      // Soft Amber
+      return _SubjectChipStyle(
+        background: isDark ? const Color(0xFF78350F).withOpacity(0.5) : const Color(0xFFFEF3C7),
+        text: isDark ? const Color(0xFFFDE68A) : const Color(0xFFB45309),
+      );
+    } else if (s.contains('hist') || s.contains('lit') || s.contains('eng') || s.contains('art') || s.contains('phil')) {
+      // Soft Rose
+      return _SubjectChipStyle(
+        background: isDark ? const Color(0xFF881337).withOpacity(0.5) : const Color(0xFFFFE4E6),
+        text: isDark ? const Color(0xFFFDA4AF) : const Color(0xFFBE123C),
+      );
+    } else {
+      // Soft Slate Blue
+      return _SubjectChipStyle(
+        background: isDark ? const Color(0xFF1E293B) : const Color(0xFFE0F2FE),
+        text: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
+      );
+    }
   }
 
   IconData _taskIcon(String type) {
@@ -322,15 +374,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   Widget build(BuildContext context) {
     final totalMinutes = _tasks.fold<int>(0, (sum, t) => sum + ((t['duration'] as num? ?? 20).toInt()));
     final completedCount = _tasks.where((t) => t['completed'] == true).length;
+    final remainingMinutes = _tasks
+        .where((t) => t['completed'] != true)
+        .fold<int>(0, (sum, t) => sum + ((t['duration'] as num? ?? 20).toInt()));
     final double planProgress = _tasks.isNotEmpty ? completedCount / _tasks.length : 0.0;
 
     final int upNextIdx = _tasks.indexWhere((t) => t['completed'] != true);
     final Map<String, dynamic>? upNextTask = upNextIdx >= 0 ? _tasks[upNextIdx] : null;
-
-    final double examElapsedRatio = _totalExamSpanDays > 0
-        ? ((_totalExamSpanDays - _daysLeft) / _totalExamSpanDays).clamp(0.08, 1.0)
-        : 0.1;
-    final int filledSegments = (examElapsedRatio * 10).round().clamp(1, 10);
 
     final taskSubjects = _tasks
         .map((t) => (t['subject'] as String? ?? 'Study').trim())
@@ -362,48 +412,108 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
           },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, kBottomNavigationBarHeight + 28),
             children: [
-              // 1. Custom Clean Greeting Header + Streak Pill + Avatar
+              // 1. Editorial Header + Subtitle (with inline Exam Countdown) + Streak Capsule + Avatar
               Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hi, $_userName',
+                          _greetingText(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
                             color: context.textPrimary,
-                            letterSpacing: -0.4,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _formattedDate(),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: context.textSecondary,
+                        const SizedBox(height: 3),
+                        InkWell(
+                          onTap: _pickExamDeadline,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _shortFormattedDate(),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: context.textSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  '  ·  ',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: context.textSecondary.withOpacity(0.4),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: context.isDarkMode
+                                        ? const Color(0xFF1E293B)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: context.borderColor,
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('🎓', style: TextStyle(fontSize: 11)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _daysLeft == 0
+                                            ? 'Exam today!'
+                                            : 'Final Exams in ${_daysLeft}d',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.accentColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // Streak Pill
+                  const SizedBox(width: 8),
+
+                  // Streak Capsule
                   InkWell(
                     onTap: () => context.go('/progress'),
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: context.surfaceColor,
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFFF97316).withOpacity(0.18),
+                            const Color(0xFFEA580C).withOpacity(0.08),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: context.borderColor, width: 1),
+                        border: Border.all(
+                          color: const Color(0xFFF97316).withOpacity(0.35),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -415,18 +525,21 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '$_streak',
+                            '$_streak ${_streak == 1 ? 'Day' : 'Days'} Streak',
                             style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: context.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: context.isDarkMode
+                                  ? const Color(0xFFFDBA74)
+                                  : const Color(0xFFC2410C),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
+
                   // User Avatar -> Account
                   InkWell(
                     onTap: () async {
@@ -435,17 +548,18 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     },
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
-                      width: 38,
-                      height: 38,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: context.accentTint,
                         shape: BoxShape.circle,
+                        border: Border.all(color: context.borderColor, width: 1),
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         initialLetter,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: context.accentColor,
                         ),
@@ -454,134 +568,227 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
-              // 2. Royal Blue Hero Card
+              // 2. 'Today's Plan' Hero Card (The Focus Engine — Asymmetric 2-Column + Pill CTA)
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(18),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB).withOpacity(0.24),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: Column(
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Circular Progress Indicator Ring
+                        // Left: Thick accent progress ring with rounded endpoints
                         SizedBox(
-                          width: 62,
-                          height: 62,
+                          width: 68,
+                          height: 68,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
                               CircularProgressIndicator(
                                 value: _tasks.isEmpty ? 0.0 : planProgress,
-                                strokeWidth: 5.5,
+                                strokeWidth: 6.5,
+                                strokeCap: StrokeCap.round,
                                 backgroundColor: Colors.white.withOpacity(0.22),
                                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                               Center(
-                                child: Text(
-                                  '$completedCount/${_tasks.length}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _tasks.isEmpty ? '0%' : '${(planProgress * 100).toInt()}%',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$completedCount/${_tasks.length}',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.82),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
+
+                        // Right: Active Task Metadata
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                "Today's plan",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.white.withOpacity(0.85),
+                              if (upNextTask != null) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'UP NEXT · ${upNextTask['duration'] ?? 20} MIN',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.6,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _tasks.isNotEmpty
-                                    ? '$totalMinutes min, ${_tasks.length} ${_tasks.length == 1 ? 'task' : 'tasks'}'
-                                    : 'No tasks scheduled',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  letterSpacing: -0.3,
+                                const SizedBox(height: 5),
+                                Text(
+                                  upNextTask['title'] as String? ?? 'Next Topic',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: -0.3,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _tasks.isEmpty
-                                    ? 'Let Sage build your study plan'
-                                    : (upNextTask != null
-                                        ? 'Up next: ${upNextTask['title']}'
-                                        : 'All tasks complete today!'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.white.withOpacity(0.9),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$remainingMinutes mins remaining today',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white.withOpacity(0.85),
+                                  ),
                                 ),
-                              ),
+                              ] else if (_tasks.isNotEmpty) ...[
+                                const Text(
+                                  '🎉 All Done For Today!',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'You crushed all $completedCount tasks on your schedule.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white.withOpacity(0.85),
+                                  ),
+                                ),
+                              ] else ...[
+                                const Text(
+                                  "Today's Study Cockpit",
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Let Sage build a high-momentum plan',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white.withOpacity(0.85),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    // Inner Full-Width White CTA Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 46,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.accent,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: _isGeneratingPlan
-                            ? null
-                            : () {
-                                if (upNextTask != null) {
-                                  _launchTask(upNextTask);
-                                } else if (_tasks.isNotEmpty) {
-                                  context.go('/practice');
-                                } else {
-                                  _generateAiPlan();
-                                }
-                              },
-                        child: _isGeneratingPlan
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
-                              )
-                            : Text(
-                                upNextTask != null
-                                    ? 'Start ${upNextTask['duration'] ?? 20} min session'
-                                    : (_tasks.isNotEmpty ? 'Explore more practice' : 'Generate plan with Sage'),
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.accent,
+                    // Ergonomic Pill Action Trigger
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        InkWell(
+                          onTap: _isGeneratingPlan
+                              ? null
+                              : () {
+                                  if (upNextTask != null) {
+                                    _launchTask(upNextTask);
+                                  } else if (_tasks.isNotEmpty) {
+                                    context.go('/practice');
+                                  } else {
+                                    _generateAiPlan();
+                                  }
+                                },
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.12),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
                                 ),
-                              ),
-                      ),
+                              ],
+                            ),
+                            child: _isGeneratingPlan
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        upNextTask != null
+                                            ? Icons.play_arrow_rounded
+                                            : (_tasks.isNotEmpty ? Icons.explore_rounded : Icons.auto_awesome),
+                                        size: 18,
+                                        color: AppColors.accent,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        upNextTask != null
+                                            ? 'Start Focus'
+                                            : (_tasks.isNotEmpty ? 'Explore Practice' : 'Generate Plan'),
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.accent,
+                                          letterSpacing: -0.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
+
               if (_isGeneratingPlan) ...[
                 const GenerationProgressView(
                   compact: true,
@@ -596,104 +803,108 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 const SizedBox(height: 14),
               ],
 
-              // 3. Exam Countdown Segmented Card (tappable to change date)
-              InkWell(
-                onTap: _pickExamDeadline,
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: context.surfaceColor,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: context.borderColor, width: 1),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Exam countdown',
-                            style: TextStyle(fontSize: 14, color: context.textSecondary),
-                          ),
-                          Text(
-                            _daysLeft == 0 ? 'Today!' : '$_daysLeft ${_daysLeft == 1 ? 'day' : 'days'} left',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: context.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: List.generate(10, (i) {
-                          final isFilled = i < filledSegments;
-                          return Expanded(
-                            child: Container(
-                              height: 6,
-                              margin: EdgeInsets.only(right: i < 9 ? 4 : 0),
-                              decoration: BoxDecoration(
-                                color: isFilled
-                                    ? context.accentColor
-                                    : (context.isDarkMode ? const Color(0xFF262B33) : const Color(0xFFE5E7EB)),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // 4. Today's Tasks Header
+              // 3. Today's Tasks Header & Actions (Sparkle + Calendar)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "Today's tasks",
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: context.textPrimary,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        "Today's tasks",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: context.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      if (_tasks.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: context.surfaceColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: context.borderColor, width: 0.8),
+                          ),
+                          child: Text(
+                            '$completedCount/${_tasks.length}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: completedCount == _tasks.length
+                                  ? const Color(0xFF16A34A)
+                                  : context.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   Row(
                     children: [
                       if (_tasks.isNotEmpty)
-                        TextButton(
-                          onPressed: _isGeneratingPlan ? null : _generateAiPlan,
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'Refresh AI',
-                            style: TextStyle(fontSize: 13, color: context.textSecondary),
+                        Tooltip(
+                          message: 'Regenerate study plan with Sage',
+                          child: InkWell(
+                            onTap: _isGeneratingPlan ? null : _generateAiPlan,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: context.surfaceColor,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: context.borderColor, width: 0.8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.auto_awesome, size: 14, color: AppColors.accent),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'AI Plan',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      const SizedBox(width: 4),
-                      TextButton(
-                        onPressed: () async {
-                          await context.push('/schedule');
-                          if (mounted) _loadData();
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'See schedule',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: context.accentColor,
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: 'See schedule',
+                        child: InkWell(
+                          onTap: () async {
+                            await context.push('/schedule');
+                            if (mounted) _loadData();
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: context.accentTint,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: context.accentColor.withOpacity(0.3), width: 0.8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.calendar_month_rounded, size: 14, color: context.accentColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Schedule',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: context.accentColor,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -703,25 +914,25 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Task Cards List or Clean Empty Card
+              // 4. Task Cards List (3 Explicit States + Color-Coded Subject Chips)
               if (_tasks.isEmpty) ...[
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: context.surfaceColor,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: context.borderColor, width: 1),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'No tasks added for today yet.',
+                        'No tasks scheduled for today yet.',
                         style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.textPrimary),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Tap "Generate plan with Sage" above or add custom tasks in your schedule.',
+                        'Tap "Generate Plan" above or add custom tasks to your schedule.',
                         style: TextStyle(fontSize: 13, color: context.textSecondary),
                       ),
                       const SizedBox(height: 12),
@@ -746,7 +957,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: AppChip(
-                            label: sub,
+                            label: _toTitleCase(sub),
                             isSelected: _subjectFilter == sub,
                             onTap: () => setState(() => _subjectFilter = sub),
                           ),
@@ -756,13 +967,16 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
+
                 ...visibleIndices.map((i) {
                   final t = _tasks[i];
                   final isDone = t['completed'] == true;
-                  final isUpNext = i == upNextIdx;
+                  final isUpNext = (i == upNextIdx) && !isDone;
                   final isHighPriority = (t['priority'] as String? ?? 'Normal') == 'High';
                   final type = t['type'] as String? ?? 'reading';
-                  final subject = t['subject'] as String? ?? 'Study';
+                  final rawSubject = (t['subject'] as String? ?? 'Study').trim();
+                  final subjectTitle = _toTitleCase(rawSubject);
+                  final chipStyle = _getSubjectChipStyle(rawSubject, context.isDarkMode);
                   final mins = (t['duration'] as num? ?? 20).toInt();
 
                   return Padding(
@@ -770,16 +984,33 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     child: InkWell(
                       onTap: () => _launchTask(t),
                       onLongPress: () => _moveTaskToTomorrow(i),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: context.bgColor,
-                          borderRadius: BorderRadius.circular(14),
+                          color: isDone
+                              ? (context.isDarkMode ? const Color(0xFF14171D) : const Color(0xFFF9FAFB))
+                              : (isUpNext
+                                  ? (context.isDarkMode ? const Color(0xFF131E33) : const Color(0xFFF0F6FF))
+                                  : context.bgColor),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isUpNext ? context.accentColor : context.borderColor,
-                            width: isUpNext ? 1.5 : 1.0,
+                            color: isUpNext
+                                ? AppColors.accent
+                                : (isDone
+                                    ? context.borderColor.withOpacity(0.5)
+                                    : context.borderColor),
+                            width: isUpNext ? 1.6 : 1.0,
                           ),
+                          boxShadow: isUpNext
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.accent.withOpacity(0.08),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : null,
                         ),
                         child: Row(
                           children: [
@@ -788,19 +1019,23 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: isDone ? context.surfaceColor : context.accentTint,
-                                borderRadius: BorderRadius.circular(10),
+                                color: isDone
+                                    ? context.surfaceColor
+                                    : (isUpNext ? AppColors.accent.withOpacity(0.12) : context.accentTint),
+                                borderRadius: BorderRadius.circular(11),
                               ),
                               alignment: Alignment.center,
                               child: Icon(
                                 _taskIcon(type),
                                 size: 20,
-                                color: isDone ? context.textSecondary : context.accentColor,
+                                color: isDone
+                                    ? context.textSecondary.withOpacity(0.4)
+                                    : (isUpNext ? AppColors.accent : context.accentColor),
                               ),
                             ),
                             const SizedBox(width: 12),
 
-                            // Title + Metadata
+                            // Title + Color-Coded Subject Chip + Duration
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -826,47 +1061,80 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                           style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: isDone ? context.textSecondary : context.textPrimary,
+                                            color: isDone
+                                                ? context.textSecondary.withOpacity(0.6)
+                                                : context.textPrimary,
                                             decoration: isDone ? TextDecoration.lineThrough : null,
+                                            decorationColor: context.textSecondary.withOpacity(0.6),
                                           ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '$subject · $mins min',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: context.textSecondary,
-                                    ),
+                                  const SizedBox(height: 5),
+                                  Row(
+                                    children: [
+                                      // Color-Coded Subject Chip
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: chipStyle.background,
+                                          borderRadius: BorderRadius.circular(5),
+                                        ),
+                                        child: Text(
+                                          subjectTitle,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: chipStyle.text,
+                                            letterSpacing: -0.1,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '·  $mins min',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: context.textSecondary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 6),
 
+                            // Up Next Pill
                             if (isUpNext) ...[
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: context.accentTint,
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: AppColors.accent,
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Text(
-                                  'Up next',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: context.accentColor,
-                                  ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.play_arrow_rounded, size: 12, color: Colors.white),
+                                    SizedBox(width: 2),
+                                    Text(
+                                      'Up next',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(width: 4),
                             ],
 
+                            // More Vert Options Menu
                             PopupMenuButton<String>(
                               icon: Icon(Icons.more_vert, size: 18, color: context.textSecondary),
                               padding: EdgeInsets.zero,
@@ -889,17 +1157,26 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               ],
                             ),
 
-                            // Circular Check Button
+                            // Checkbox with visual dopamine reward (Soft Emerald Green check on Done)
                             InkWell(
                               onTap: () => _toggleTask(i),
                               borderRadius: BorderRadius.circular(16),
                               child: Padding(
                                 padding: const EdgeInsets.all(2),
                                 child: isDone
-                                    ? Icon(
-                                        Icons.check_circle,
-                                        size: 24,
-                                        color: context.accentColor,
+                                    ? Container(
+                                        width: 24,
+                                        height: 24,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF16A34A),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: const Icon(
+                                          Icons.check_rounded,
+                                          size: 16,
+                                          color: Colors.white,
+                                        ),
                                       )
                                     : Container(
                                         width: 22,
@@ -907,7 +1184,11 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: context.isDarkMode ? const Color(0xFF4B5563) : const Color(0xFFD1D5DB),
+                                            color: isUpNext
+                                                ? AppColors.accent
+                                                : (context.isDarkMode
+                                                    ? const Color(0xFF4B5563)
+                                                    : const Color(0xFFD1D5DB)),
                                             width: 1.8,
                                           ),
                                         ),
@@ -921,14 +1202,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   );
                 }),
               ],
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
 
               // 5. Sage Dynamic Insight Card (Real backend state — ZERO fake text)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: context.surfaceColor,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: context.borderColor, width: 1),
                 ),
                 child: Row(
@@ -996,4 +1277,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
       ),
     );
   }
+}
+
+class _SubjectChipStyle {
+  final Color background;
+  final Color text;
+  const _SubjectChipStyle({required this.background, required this.text});
 }
