@@ -297,7 +297,37 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     ];
   }
 
-  Future<void> _exportStudyFile(String format) async {
+  String _getPdfStyleDisplayName(String id) {
+    switch (id) {
+      case 'handwritten':
+        return '📝 Handwritten Notebook';
+      case 'minimalCute':
+        return '🌸 Minimal Cute';
+      case 'zenPaperInk':
+        return '📜 Zen Paper & Ink';
+      case 'modernClean':
+        return '⚡ Modern High-Yield';
+      default:
+        return '📝 Handwritten Notebook';
+    }
+  }
+
+  String _getPptxStyleDisplayName(String id) {
+    switch (id) {
+      case 'minimalCute':
+        return '🌸 Minimal Cute Deck';
+      case 'handwrittenNotebook':
+        return '📝 Cornell Notebook';
+      case 'zenPaperInk':
+        return '📜 Zen Paper & Ink';
+      case 'modernHighYield':
+        return '⚡ Modern High-Yield';
+      default:
+        return '🌸 Minimal Cute Deck';
+    }
+  }
+
+  Future<void> _exportStudyFile(String format, {String? chosenStyle}) async {
     final title = _notebook?['title'] as String? ?? 'Study Guide';
     final combinedText = OfflineCacheService.getNotebookCombinedText(widget.notebookId);
     if (combinedText.trim().isEmpty) {
@@ -314,6 +344,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       final dir = await getApplicationDocumentsDirectory();
 
       if (format == 'pdf') {
+        final styleKey = chosenStyle ?? OfflineCacheService.getPreferredPdfStyle();
+        PdfStudyStyle pdfStyle;
+        if (styleKey == 'minimalCute') {
+          pdfStyle = PdfStudyStyle.minimalCute;
+        } else if (styleKey == 'zenPaperInk') {
+          pdfStyle = PdfStudyStyle.zenPaperInk;
+        } else if (styleKey == 'modernClean') {
+          pdfStyle = PdfStudyStyle.modernClean;
+        } else {
+          pdfStyle = PdfStudyStyle.handwritten;
+        }
+
         final synthesized = await aiRouter.executeHeavyReasoning(
           prompt: 'Create a structured, high-yield exam study guide summarizing these notes for "$title". Use clear markdown headings (#, ##) and bullet points (- ).\n\nNotes:\n$combinedText',
         );
@@ -321,8 +363,14 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
           title: '$title Study Guide',
           subject: title,
           content: synthesized,
+          style: pdfStyle,
         );
-        final fileName = '${safeBase}_Study_Guide.pdf';
+        final styleTag = pdfStyle == PdfStudyStyle.handwritten
+            ? 'Handwritten_Notebook'
+            : (pdfStyle == PdfStudyStyle.minimalCute
+                ? 'Minimal_Cute'
+                : (pdfStyle == PdfStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
+        final fileName = '${safeBase}_${styleTag}_Study_Guide.pdf';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pdfBytes, flush: true);
 
@@ -369,6 +417,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
           );
         }
       } else if (format == 'pptx') {
+        final styleKey = chosenStyle ?? OfflineCacheService.getPreferredPptxStyle();
+        PptxStudyStyle pptxStyle;
+        if (styleKey == 'handwrittenNotebook') {
+          pptxStyle = PptxStudyStyle.handwrittenNotebook;
+        } else if (styleKey == 'zenPaperInk') {
+          pptxStyle = PptxStudyStyle.zenPaperInk;
+        } else if (styleKey == 'modernHighYield') {
+          pptxStyle = PptxStudyStyle.modernHighYield;
+        } else {
+          pptxStyle = PptxStudyStyle.minimalCute;
+        }
+
         final rawSlides = await aiRouter.executeHeavyReasoning(
           prompt: 'Create a 6 to 8 slide study presentation for "$title" from these notes. Return ONLY a valid JSON array where each element has {"title": "Slide title", "bullets": ["concise point 1", "concise point 2", "concise point 3"]}.\n\nNotes:\n$combinedText',
         );
@@ -376,8 +436,14 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final pptxBytes = PptxExporter.createPresentation(
           presentationTitle: '$title Slides',
           slides: slides,
+          style: pptxStyle,
         );
-        final fileName = '${safeBase}_Slides.pptx';
+        final styleTag = pptxStyle == PptxStudyStyle.minimalCute
+            ? 'Cute_Minimal'
+            : (pptxStyle == PptxStudyStyle.handwrittenNotebook
+                ? 'Handwritten_Notebook'
+                : (pptxStyle == PptxStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
+        final fileName = '${safeBase}_${styleTag}_Slides.pptx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pptxBytes, flush: true);
 
@@ -411,6 +477,256 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     } finally {
       if (mounted) setState(() => _exportingFormat = null);
     }
+  }
+
+  void _showExportStylePicker(String format) {
+    final isPdf = format == 'pdf';
+    final currentPref = isPdf
+        ? OfflineCacheService.getPreferredPdfStyle()
+        : OfflineCacheService.getPreferredPptxStyle();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final options = isPdf
+            ? [
+                {
+                  'id': 'handwritten',
+                  'title': 'Handwritten Cornell Notebook',
+                  'desc': 'Warm cream paper, red margin line, yellow highlighter & sticky notes',
+                  'icon': Icons.edit_note_rounded,
+                  'accent': const Color(0xFFFBBF24),
+                  'badge': '📝 NOTEBOOK',
+                },
+                {
+                  'id': 'minimalCute',
+                  'title': 'Study-Friendly Minimal Cute',
+                  'desc': 'Soft pastel Sakura palette, rounded cards, floral & sparkle chips',
+                  'icon': Icons.auto_awesome,
+                  'accent': const Color(0xFFF472B6),
+                  'badge': '🌸 CUTE',
+                },
+                {
+                  'id': 'zenPaperInk',
+                  'title': 'Zen Paper & Sumi Ink',
+                  'desc': 'Traditional Washi paper, charcoal calligraphy & Vermilion Hanko seal',
+                  'icon': Icons.brush_outlined,
+                  'accent': const Color(0xFFE11D48),
+                  'badge': '📜 ZEN INK',
+                },
+                {
+                  'id': 'modernClean',
+                  'title': 'Modern High-Yield',
+                  'desc': 'Clean executive editorial layout with blue accents and crisp typography',
+                  'icon': Icons.article_outlined,
+                  'accent': const Color(0xFF38BDF8),
+                  'badge': '⚡ HIGH-YIELD',
+                },
+              ]
+            : [
+                {
+                  'id': 'minimalCute',
+                  'title': 'Study-Friendly Minimal Cute',
+                  'desc': 'Pastel Sakura cards, rounded bubble containers & aesthetic pill tags',
+                  'icon': Icons.auto_awesome,
+                  'accent': const Color(0xFFF472B6),
+                  'badge': '🌸 CUTE DECK',
+                },
+                {
+                  'id': 'handwrittenNotebook',
+                  'title': 'Handwritten Cornell Notebook',
+                  'desc': 'Warm cream notebook slides, red margin line, highlighter title strip',
+                  'icon': Icons.edit_note_rounded,
+                  'accent': const Color(0xFFFBBF24),
+                  'badge': '📝 CORNELL',
+                },
+                {
+                  'id': 'zenPaperInk',
+                  'title': 'Zen Paper & Sumi Ink',
+                  'desc': 'Washi parchment slide background, Sumi charcoal & Vermilion Hanko stamps',
+                  'icon': Icons.brush_outlined,
+                  'accent': const Color(0xFFE11D48),
+                  'badge': '📜 ZEN INK',
+                },
+                {
+                  'id': 'modernHighYield',
+                  'title': 'Modern High-Yield (Dark Deck)',
+                  'desc': 'Obsidian slate presentation deck, glowing cyan accents & structured cards',
+                  'icon': Icons.slideshow_outlined,
+                  'accent': const Color(0xFF38BDF8),
+                  'badge': '⚡ EXECUTIVE',
+                },
+              ];
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 20,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isPdf
+                          ? Colors.redAccent.withOpacity(0.15)
+                          : Colors.orangeAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isPdf ? Icons.picture_as_pdf_rounded : Icons.slideshow_rounded,
+                      color: isPdf ? Colors.redAccent : Colors.orangeAccent,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isPdf ? 'Choose PDF Study Style' : 'Choose Presentation Deck Style',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Pick an aesthetic theme for your generated study material',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              ...options.map((opt) {
+                final id = opt['id'] as String;
+                final isSelected = currentPref == id;
+                final accent = opt['accent'] as Color;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Material(
+                    color: isSelected
+                        ? accent.withOpacity(0.12)
+                        : Theme.of(ctx).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        if (isPdf) {
+                          await OfflineCacheService.savePreferredPdfStyle(id);
+                        } else {
+                          await OfflineCacheService.savePreferredPptxStyle(id);
+                        }
+                        setState(() {});
+                        _exportStudyFile(format, chosenStyle: id);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected ? accent : Colors.white10,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: accent.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(opt['icon'] as IconData, color: accent, size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        opt['title'] as String,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: isSelected ? accent : null,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: accent.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          opt['badge'] as String,
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: accent,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    opt['desc'] as String,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                              color: isSelected ? accent : Colors.grey[600],
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -596,8 +912,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                     ? const SizedBox(width: 38, height: 38, child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
                     : const AppIconBadge(icon: Icons.picture_as_pdf_outlined, size: 38, iconSize: 19),
                 title: _exportingFormat == 'pdf' ? 'Generating PDF...' : 'Make a PDF study sheet',
-                subtitle: 'Synthesize sources into a shareable PDF guide',
-                onTap: _exportingFormat != null ? null : () => _exportStudyFile('pdf'),
+                subtitle: _exportingFormat == 'pdf'
+                    ? 'Synthesizing sources into PDF...'
+                    : 'Style: ${_getPdfStyleDisplayName(OfflineCacheService.getPreferredPdfStyle())}',
+                onTap: _exportingFormat != null ? null : () => _showExportStylePicker('pdf'),
               ),
               const SizedBox(height: 10),
               AppListRow(
@@ -614,8 +932,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                     ? const SizedBox(width: 38, height: 38, child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
                     : const AppIconBadge(icon: Icons.slideshow_outlined, size: 38, iconSize: 19),
                 title: _exportingFormat == 'pptx' ? 'Generating Slides (.pptx)...' : 'Make a PowerPoint deck (.pptx)',
-                subtitle: 'Turn your notes into presentation slides',
-                onTap: _exportingFormat != null ? null : () => _exportStudyFile('pptx'),
+                subtitle: _exportingFormat == 'pptx'
+                    ? 'Creating presentation slides...'
+                    : 'Style: ${_getPptxStyleDisplayName(OfflineCacheService.getPreferredPptxStyle())}',
+                onTap: _exportingFormat != null ? null : () => _showExportStylePicker('pptx'),
               ),
             ],
           ),

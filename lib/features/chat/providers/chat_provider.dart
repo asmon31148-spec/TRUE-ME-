@@ -238,12 +238,39 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     switch (type) {
       case SageActionType.exportPdf:
+        PdfStudyStyle pdfStyle = PdfStudyStyle.handwritten;
+        final lower = '$topic $contentForExport'.toLowerCase();
+        if (lower.contains('cute') || lower.contains('pastel') || lower.contains('minimal')) {
+          pdfStyle = PdfStudyStyle.minimalCute;
+        } else if (lower.contains('zen') || lower.contains('ink') || lower.contains('parchment')) {
+          pdfStyle = PdfStudyStyle.zenPaperInk;
+        } else if (lower.contains('modern') || lower.contains('clean')) {
+          pdfStyle = PdfStudyStyle.modernClean;
+        } else {
+          final pref = OfflineCacheService.getPreferredPdfStyle();
+          if (pref == 'minimalCute') {
+            pdfStyle = PdfStudyStyle.minimalCute;
+          } else if (pref == 'zenPaperInk') {
+            pdfStyle = PdfStudyStyle.zenPaperInk;
+          } else if (pref == 'modernClean') {
+            pdfStyle = PdfStudyStyle.modernClean;
+          } else {
+            pdfStyle = PdfStudyStyle.handwritten;
+          }
+        }
+
         final bytes = await PdfExporter.generateStudyGuidePdf(
           title: '$subject — $topic',
           subject: subject,
           content: contentForExport,
+          style: pdfStyle,
         );
-        final fileName = '${safeBase}_Sage_Guide.pdf';
+        final styleTag = pdfStyle == PdfStudyStyle.handwritten
+            ? 'Handwritten_Notebook'
+            : (pdfStyle == PdfStudyStyle.minimalCute
+                ? 'Minimal_Cute'
+                : (pdfStyle == PdfStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
+        final fileName = '${safeBase}_${styleTag}_Guide.pdf';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
         if (DriveService.instance.isSignedIn) {
@@ -290,6 +317,29 @@ class ChatNotifier extends StateNotifier<ChatState> {
         );
 
       case SageActionType.exportPptx:
+        PptxStudyStyle pptxStyle = PptxStudyStyle.minimalCute;
+        final lowerPpt = '$topic $contentForExport'.toLowerCase();
+        if (lowerPpt.contains('handwritten') || lowerPpt.contains('notebook') || lowerPpt.contains('cornell')) {
+          pptxStyle = PptxStudyStyle.handwrittenNotebook;
+        } else if (lowerPpt.contains('zen') || lowerPpt.contains('ink') || lowerPpt.contains('parchment')) {
+          pptxStyle = PptxStudyStyle.zenPaperInk;
+        } else if (lowerPpt.contains('modern') || lowerPpt.contains('dark') || lowerPpt.contains('slate')) {
+          pptxStyle = PptxStudyStyle.modernHighYield;
+        } else if (lowerPpt.contains('cute') || lowerPpt.contains('pastel') || lowerPpt.contains('minimal')) {
+          pptxStyle = PptxStudyStyle.minimalCute;
+        } else {
+          final pref = OfflineCacheService.getPreferredPptxStyle();
+          if (pref == 'handwrittenNotebook') {
+            pptxStyle = PptxStudyStyle.handwrittenNotebook;
+          } else if (pref == 'zenPaperInk') {
+            pptxStyle = PptxStudyStyle.zenPaperInk;
+          } else if (pref == 'modernHighYield') {
+            pptxStyle = PptxStudyStyle.modernHighYield;
+          } else {
+            pptxStyle = PptxStudyStyle.minimalCute;
+          }
+        }
+
         final slidesRaw = await _aiRouter.executeHeavyReasoning(
           prompt:
               'Convert this study material for "$subject" into 6 concise PowerPoint slides. Return ONLY a JSON array [{"title": "...", "bullets": ["...", "..."]}].\n\nMaterial:\n$contentForExport',
@@ -298,8 +348,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final bytes = PptxExporter.createPresentation(
           presentationTitle: '$subject Slides',
           slides: slides,
+          style: pptxStyle,
         );
-        final fileName = '${safeBase}_Sage_Slides.pptx';
+        final styleTag = pptxStyle == PptxStudyStyle.minimalCute
+            ? 'Cute_Minimal'
+            : (pptxStyle == PptxStudyStyle.handwrittenNotebook
+                ? 'Handwritten_Notebook'
+                : (pptxStyle == PptxStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
+        final fileName = '${safeBase}_${styleTag}_Slides.pptx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
         if (DriveService.instance.isSignedIn) {
@@ -314,7 +370,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
         return SageAction(
           type: SageActionType.exportPptx,
-          label: 'Open PowerPoint (.pptx)',
+          label: 'Open PowerPoint ($fileName)',
           topic: topic,
           filePath: outFile.path,
         );

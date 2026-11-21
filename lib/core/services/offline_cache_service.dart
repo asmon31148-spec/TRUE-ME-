@@ -222,6 +222,39 @@ class OfflineCacheService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // STUDY EXPORT STYLE PREFERENCES (Handwritten, Minimal Cute, Zen, Modern)
+  // ---------------------------------------------------------------------------
+  static String getPreferredPdfStyle() {
+    try {
+      final val = Hive.box(userProfileBox).get('preferred_pdf_style') as String?;
+      return (val != null && val.isNotEmpty) ? val : 'handwritten';
+    } catch (_) {
+      return 'handwritten';
+    }
+  }
+
+  static Future<void> savePreferredPdfStyle(String style) async {
+    try {
+      await Hive.box(userProfileBox).put('preferred_pdf_style', style);
+    } catch (_) {}
+  }
+
+  static String getPreferredPptxStyle() {
+    try {
+      final val = Hive.box(userProfileBox).get('preferred_pptx_style') as String?;
+      return (val != null && val.isNotEmpty) ? val : 'minimalCute';
+    } catch (_) {
+      return 'minimalCute';
+    }
+  }
+
+  static Future<void> savePreferredPptxStyle(String style) async {
+    try {
+      await Hive.box(userProfileBox).put('preferred_pptx_style', style);
+    } catch (_) {}
+  }
+
   static Future<void> saveThemeMode(String mode) async {
     final box = Hive.box(userProfileBox);
     await box.put('theme_mode', mode);
