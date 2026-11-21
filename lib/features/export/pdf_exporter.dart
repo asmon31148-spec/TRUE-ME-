@@ -137,7 +137,7 @@ class PdfExporter {
         return pw.Container(
           margin: const pw.EdgeInsets.only(top: 14, bottom: 8),
           padding: const pw.EdgeInsets.only(bottom: 4),
-          decoration: const pw.BoxDecoration(
+          decoration: pw.BoxDecoration(
             border: pw.Border(
               bottom: pw.BorderSide(color: PdfColor.fromHex('#1C1917'), width: 1.2),
             ),
@@ -211,7 +211,7 @@ class PdfExporter {
               pw.Container(
                 width: 6,
                 height: 6,
-                decoration: const pw.BoxDecoration(
+                decoration: pw.BoxDecoration(
                   color: PdfColor.fromHex('#F472B6'),
                   shape: pw.BoxShape.circle,
                 ),
@@ -305,7 +305,7 @@ class PdfExporter {
           margin: const pw.EdgeInsets.only(top: 4, right: 6),
           width: 4,
           height: 4,
-          decoration: const pw.BoxDecoration(
+          decoration: pw.BoxDecoration(
             color: PdfColor.fromHex('#DC2626'),
             shape: pw.BoxShape.circle,
           ),
@@ -316,7 +316,7 @@ class PdfExporter {
           margin: const pw.EdgeInsets.only(top: 4, right: 6),
           width: 4,
           height: 4,
-          decoration: const pw.BoxDecoration(
+          decoration: pw.BoxDecoration(
             color: PdfColor.fromHex('#2563EB'),
             shape: pw.BoxShape.circle,
           ),
@@ -505,7 +505,7 @@ class PdfExporter {
       case PdfStudyStyle.handwritten:
         return pw.Container(
           padding: const pw.EdgeInsets.only(bottom: 12),
-          decoration: const pw.BoxDecoration(
+          decoration: pw.BoxDecoration(
             border: pw.Border(
               bottom: pw.BorderSide(color: PdfColor.fromHex('#E2E8F0'), width: 1.5),
             ),
@@ -622,7 +622,7 @@ class PdfExporter {
       case PdfStudyStyle.zenPaperInk:
         return pw.Container(
           padding: const pw.EdgeInsets.only(bottom: 12),
-          decoration: const pw.BoxDecoration(
+          decoration: pw.BoxDecoration(
             border: pw.Border(
               bottom: pw.BorderSide(color: PdfColor.fromHex('#1C1917'), width: 1.5),
             ),
@@ -674,7 +674,7 @@ class PdfExporter {
       case PdfStudyStyle.modernClean:
         return pw.Container(
           padding: const pw.EdgeInsets.only(bottom: 12),
-          decoration: const pw.BoxDecoration(
+          decoration: pw.BoxDecoration(
             border: pw.Border(
               bottom: pw.BorderSide(color: PdfColor.fromHex('#2563EB'), width: 2),
             ),
@@ -788,7 +788,7 @@ class PdfExporter {
   static pw.Widget _buildFooterStamp(String subject, PdfStudyStyle style) {
     return pw.Container(
       padding: const pw.EdgeInsets.only(top: 8),
-      decoration: const pw.BoxDecoration(
+      decoration: pw.BoxDecoration(
         border: pw.Border(
           top: pw.BorderSide(color: PdfColor.fromHex('#E2E8F0'), width: 0.8),
         ),
