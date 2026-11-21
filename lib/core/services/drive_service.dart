@@ -31,22 +31,35 @@ class DriveService {
 
   String _formatSignInError(Object error) {
     final raw = error.toString();
-    if (raw.contains('ApiException: 10') || raw.contains('DEVELOPER_ERROR')) {
-      return 'Google OAuth config mismatch (Error 10). Register Android package "com.trueme.study.trueme" with release SHA-1 DA:F8:48:4B:5B:07:4F:AF:CF:C4:57:0D:D1:DB:34:FF:B0:FD:61:AB in Google Cloud Console.';
+    if (raw.contains('ApiException: 10') || raw.contains('DEVELOPER_ERROR') || raw.contains('code: 10')) {
+      return 'Google OAuth Error 10 (DEVELOPER_ERROR)\n\n'
+          'Cause: In Google Cloud Console, a "Web application" client was created instead of an "Android" client.\n\n'
+          'Quick 1-Minute Fix in console.cloud.google.com:\n'
+          '1. Go to "Credentials" > click "+ CREATE CREDENTIALS" > "OAuth client ID".\n'
+          '2. Select Application type: "Android" (NOT Web application!).\n'
+          '3. Package name: com.trueme.study.trueme\n'
+          '4. SHA-1 certificate fingerprint:\n'
+          'DA:F8:48:4B:5B:07:4F:AF:CF:C4:57:0D:D1:DB:34:FF:B0:FD:61:AB\n'
+          '5. Click "CREATE".';
     }
-    if (raw.contains('ApiException: 12500') || raw.contains('SIGN_IN_FAILED')) {
-      return 'Google Sign-In failed (Error 12500). Configure the OAuth Consent Screen, add your Gmail as a Test User, and enable Google Drive API in Google Cloud Console.';
+    if (raw.contains('ApiException: 12500') || raw.contains('SIGN_IN_FAILED') || raw.contains('code: 12500')) {
+      return 'Google Sign-In Error 12500\n\n'
+          'Cause: Your OAuth Consent Screen is in "Testing" mode and your Gmail is not added as a Test User.\n\n'
+          'Quick Fix in console.cloud.google.com:\n'
+          '1. Go to "OAuth consent screen" > "Test users".\n'
+          '2. Click "+ ADD USERS" and enter your personal Gmail.\n'
+          '3. Click "Save".';
     }
-    if (raw.contains('ApiException: 12501') || raw.contains('sign_in_canceled')) {
+    if (raw.contains('ApiException: 12501') || raw.contains('sign_in_canceled') || raw.contains('code: 12501')) {
       return 'Google Drive sign-in was cancelled.';
     }
     if (raw.contains('ApiException: 7') || raw.contains('network_error') || raw.contains('SocketException')) {
-      return 'Network error while connecting to Google Drive. Check your internet connection.';
+      return 'Network error connecting to Google Drive. Check your internet connection.';
     }
     if (raw.contains('accessNotConfigured') || raw.contains('403')) {
-      return 'Google Drive API is not enabled or access was denied in Google Cloud Console ($raw).';
+      return 'Google Drive API is not enabled in Google Cloud Console. Go to "Enabled APIs & Services" and click "ENABLE" on Google Drive API.\n\n($raw)';
     }
-    return 'Google Drive error: $raw';
+    return 'Google Drive error:\n$raw';
   }
 
   /// Attempts silent sign-in on startup/resume if previously connected.

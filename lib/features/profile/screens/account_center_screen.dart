@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -119,6 +120,15 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
             title: const Text('Google Drive Connection Error', style: AppTypography.sectionHeading),
             content: SelectableText(err, style: AppTypography.body),
             actions: [
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: err));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Details copied to clipboard')),
+                  );
+                },
+                child: const Text('Copy Details'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('OK'),
