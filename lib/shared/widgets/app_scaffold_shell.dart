@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/theme/colors.dart';
 import '../../app/theme/theme_provider.dart';
 import '../../core/services/update_service.dart';
 
@@ -76,6 +77,8 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   Widget build(BuildContext context) {
     final showBar = _shouldShowBottomBar(context);
     final selectedIdx = _calculateSelectedIndex(context);
+    final navBg = context.isDarkMode ? ZenColors.darkCanvas : ZenColors.washiCanvas;
+    final navBorder = context.isDarkMode ? ZenColors.darkBorder : ZenColors.washiBorder;
 
     return Scaffold(
       backgroundColor: context.bgColor,
@@ -83,9 +86,9 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
       bottomNavigationBar: showBar
           ? Container(
               decoration: BoxDecoration(
-                color: context.bgColor,
+                color: navBg,
                 border: Border(
-                  top: BorderSide(color: context.borderColor, width: 1.0),
+                  top: BorderSide(color: navBorder, width: 0.8),
                 ),
               ),
               child: SafeArea(
@@ -98,6 +101,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                         icon: Icons.check_circle_outline,
                         activeIcon: Icons.check_circle,
                         label: 'Today',
+                        subLabel: '日',
                         isSelected: selectedIdx == 0,
                         onTap: () => _onItemTapped(0, context),
                       ),
@@ -105,6 +109,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                         icon: Icons.auto_stories_outlined,
                         activeIcon: Icons.auto_stories,
                         label: 'Library',
+                        subLabel: '書',
                         isSelected: selectedIdx == 1,
                         onTap: () => _onItemTapped(1, context),
                       ),
@@ -112,6 +117,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                         icon: Icons.psychology_outlined,
                         activeIcon: Icons.psychology,
                         label: 'Practice',
+                        subLabel: '練',
                         isSelected: selectedIdx == 2,
                         onTap: () => _onItemTapped(2, context),
                       ),
@@ -119,6 +125,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                         icon: Icons.bar_chart_outlined,
                         activeIcon: Icons.bar_chart,
                         label: 'Progress',
+                        subLabel: '道',
                         isSelected: selectedIdx == 3,
                         onTap: () => _onItemTapped(3, context),
                       ),
@@ -136,6 +143,7 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
+  final String subLabel;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -143,41 +151,48 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.activeIcon,
     required this.label,
+    required this.subLabel,
     required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? context.accentColor : context.textSecondary;
+    final activeColor = context.isDarkMode ? ZenColors.darkInk : ZenColors.sumiInk;
+    final inactiveColor = context.isDarkMode ? ZenColors.darkMist : ZenColors.stoneMist;
+    final dotColor = context.isDarkMode ? ZenColors.darkVermilion : ZenColors.vermilionSeal;
 
     return Expanded(
       child: InkWell(
         onTap: onTap,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: isSelected ? context.accentTint : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                isSelected ? activeIcon : icon,
-                size: 21,
-                color: color,
-              ),
+            Icon(
+              isSelected ? activeIcon : icon,
+              size: 20,
+              color: isSelected ? activeColor : inactiveColor,
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: color,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? activeColor : inactiveColor,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 3),
+            // Calligraphic vermilion dot or empty spacer
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isSelected ? dotColor : Colors.transparent,
+                shape: BoxShape.circle,
               ),
             ),
           ],

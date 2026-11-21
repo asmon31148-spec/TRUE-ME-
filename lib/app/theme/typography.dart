@@ -66,3 +66,39 @@ class AppTypography {
   static const TextStyle labelMedium = smallLabel;
   static const TextStyle labelSmall = smallLabel;
 }
+
+/// Zen Typography: Serif Editorial Headlines paired with Clean Sans Body
+class ZenTypography {
+  ZenTypography._();
+
+  static const List<String> serifFallbacks = ['Georgia', 'Garamond', 'Times New Roman', 'serif'];
+  static const List<String> sansFallbacks = ['Inter', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'];
+
+  static const TextStyle editorialTitle = TextStyle(
+    fontFamilyFallback: serifFallbacks,
+    fontSize: 26,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+  );
+
+  static const TextStyle editorialHeadline = TextStyle(
+    fontFamilyFallback: serifFallbacks,
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.3,
+  );
+
+  static const TextStyle subtitleMist = TextStyle(
+    fontFamilyFallback: sansFallbacks,
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.1,
+  );
+
+  static const TextStyle hankoSeal = TextStyle(
+    fontFamilyFallback: serifFallbacks,
+    fontSize: 11,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 0.2,
+  );
+}
