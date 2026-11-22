@@ -6,11 +6,13 @@ import '../../features/auth/screens/splash_screen.dart';
 import '../../features/chat/screens/chat_screen.dart';
 import '../../features/explainer/screens/explainer_player_screen.dart';
 import '../../features/flashcards/screens/deck_list_screen.dart';
+import '../../features/focus/screens/focus_timer_screen.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/notebook_detail_screen.dart';
 import '../../features/mindmap/screens/mindmap_screen.dart';
 import '../../features/notes/screens/note_editor_screen.dart';
 import '../../features/planner/screens/schedule_screen.dart';
+import '../../features/practice/screens/mistake_vault_screen.dart';
 import '../../features/practice/screens/practice_screen.dart';
 import '../../features/profile/screens/account_center_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
@@ -70,6 +72,27 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/voice-tutor',
       builder: (context, state) => const VoiceSessionScreen(),
+    ),
+    GoRoute(
+      path: '/focus',
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        final mins = int.tryParse(qp['minutes'] ?? '');
+        return FocusTimerScreen(
+          subject: qp['subject'],
+          topic: qp['topic'],
+          initialMinutes: mins,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/mistake-vault',
+      builder: (context, state) {
+        final qp = state.uri.queryParameters;
+        return MistakeVaultScreen(
+          initialSubject: qp['subject'],
+        );
+      },
     ),
     GoRoute(
       path: '/explainer',

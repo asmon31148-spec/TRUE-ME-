@@ -153,6 +153,40 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
     );
   }
 
+  /// Updates an individual card's front or back text and saves to Hive.
+  Future<void> updateCard({
+    required String deckId,
+    required String cardId,
+    required String front,
+    required String back,
+  }) async {
+    final updatedDecks = state.decks.map((deck) {
+      if (deck.id != deckId) return deck;
+
+      final updatedCards = deck.cards.map((card) {
+        if (card.id != cardId) return card;
+        return card.copyWith(
+          front: front.trim(),
+          back: back.trim(),
+        );
+      }).toList();
+
+      final updated = FlashcardDeckModel(
+        id: deck.id,
+        notebookId: deck.notebookId,
+        subject: deck.subject,
+        topic: deck.topic,
+        cards: updatedCards,
+        createdAt: deck.createdAt,
+      );
+
+      OfflineCacheService.cacheDeck(deck.id, updated.toMap());
+      return updated;
+    }).toList();
+
+    state = state.copyWith(decks: updatedDecks);
+  }
+
   /// Rates a card and applies SuperMemo SM-2 algorithm to reschedule review.
   void recordCardRating({
     required String deckId,

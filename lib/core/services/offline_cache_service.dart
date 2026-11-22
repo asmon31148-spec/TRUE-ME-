@@ -818,6 +818,119 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
+  // MISTAKE VAULT & ERROR NOTEBOOK
+  // ---------------------------------------------------------------------------
+  static Future<void> saveMistakes({
+    required String subject,
+    required String topic,
+    required List<Map<String, dynamic>> questions,
+  }) async {
+    try {
+      final box = Hive.box(analyticsBox);
+      final raw = box.get('mistake_vault') as List? ?? [];
+      final list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+      for (final q in questions) {
+        final qText = (q['question'] as String? ?? '').trim();
+        if (qText.isEmpty) continue;
+
+        // Deduplicate: replace if question statement already exists
+        list.removeWhere((item) => (item['question'] as String? ?? '').trim() == qText);
+
+        final now = DateTime.now();
+        list.insert(0, {
+          'id': 'err_${now.millisecondsSinceEpoch}_${list.length}',
+          'subject': subject,
+          'topic': topic,
+          'question': qText,
+          'options': q['options'] ?? [],
+          'correctOptionIndex': q['correctOptionIndex'] ?? 0,
+          'explanation': q['explanation'] ?? '',
+          'savedAt': now.toIso8601String(),
+        });
+      }
+
+      if (list.length > 200) list.removeRange(200, list.length);
+      await box.put('mistake_vault', list);
+    } catch (_) {}
+  }
+
+  static List<Map<String, dynamic>> getMistakes({String? subject}) {
+    try {
+      final box = Hive.box(analyticsBox);
+      final raw = box.get('mistake_vault') as List? ?? [];
+      final list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (subject != null && subject.trim().isNotEmpty) {
+        final lower = subject.trim().toLowerCase();
+        return list.where((m) => (m['subject'] as String? ?? '').toLowerCase() == lower).toList();
+      }
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> removeMistake(String mistakeId) async {
+    try {
+      final box = Hive.box(analyticsBox);
+      final raw = box.get('mistake_vault') as List? ?? [];
+      final list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      list.removeWhere((item) => item['id'] == mistakeId);
+      await box.put('mistake_vault', list);
+    } catch (_) {}
+  }
+
+  static Future<String?> convertMistakesToDeck({
+    required String subject,
+    String? topic,
+    List<Map<String, dynamic>>? specificMistakes,
+  }) async {
+    final mistakes = specificMistakes ?? getMistakes(subject: subject);
+    if (mistakes.isEmpty) return null;
+
+    final deckId = 'deck_mistakes_${DateTime.now().millisecondsSinceEpoch}';
+    final deckTopic = topic ?? '$subject Mistake Review';
+    final now = DateTime.now();
+
+    final cards = mistakes.map((m) {
+      final qText = m['question'] as String? ?? 'Concept';
+      final options = (m['options'] as List? ?? []).map((e) => e.toString()).toList();
+      final correctIdx = (m['correctOptionIndex'] as num? ?? 0).toInt();
+      final correctAnswer = (correctIdx >= 0 && correctIdx < options.length)
+          ? options[correctIdx]
+          : (options.isNotEmpty ? options.first : 'Correct answer');
+      final expl = (m['explanation'] as String? ?? '').trim();
+
+      final backText = expl.isNotEmpty
+          ? '$correctAnswer\n\n📌 Explanation:\n$expl'
+          : correctAnswer;
+
+      return {
+        'id': 'card_${DateTime.now().microsecondsSinceEpoch}_${m['id']}',
+        'front': qText,
+        'back': backText,
+        'easeFactor': 2.5,
+        'interval': 1,
+        'repetitions': 0,
+        'nextReviewDate': now.toIso8601String(),
+        'lastReviewDate': null,
+      };
+    }).toList();
+
+    final deckMap = {
+      'id': deckId,
+      'subject': subject,
+      'topic': deckTopic,
+      'cards': cards,
+      'createdAt': now.toIso8601String(),
+      'updatedAt': now.toIso8601String(),
+    };
+
+    await cacheDeck(deckId, deckMap);
+    return deckId;
+  }
+
+  // ---------------------------------------------------------------------------
   // STUDY ACTIVITY, STREAK & RECENT SESSIONS + SUPABASE SYNC
   // ---------------------------------------------------------------------------
   static Future<void> logStudySession({

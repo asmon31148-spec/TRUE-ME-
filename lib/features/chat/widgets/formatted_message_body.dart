@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme/theme_provider.dart';
+import '../../../core/utils/stem_formula_formatter.dart';
 
 /// Renders AI markdown responses cleanly on mobile:
 /// - Headings (#, ##, ###)
-/// - Inline **bold**, *italic*, and `code`
+/// - Inline **bold**, *italic*, `code`, and `$math$`
 /// - Bulleted (- / *) and numbered (1.) lists
 /// - Clean bordered scrollable tables instead of raw `|---|---|` pipes
 /// - Fenced code blocks (```)
+/// - STEM LaTeX Math display blocks ($$...$$ / \[...\])
 class FormattedMessageBody extends StatelessWidget {
   final String text;
   final Color textColor;
@@ -127,6 +129,34 @@ class FormattedMessageBody extends StatelessWidget {
             style: TextStyle(
               fontFamily: 'monospace',
               fontSize: 12.5,
+              height: 1.4,
+              color: textColor,
+            ),
+          ),
+        );
+
+      case _BlockKind.mathBlock:
+        final formattedFormula = StemFormulaFormatter.format(block.text);
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: context.accentColor.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: context.accentColor.withOpacity(0.25),
+              width: 1,
+            ),
+          ),
+          child: SelectableText(
+            formattedFormula,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'serif',
+              letterSpacing: 0.5,
               height: 1.4,
               color: textColor,
             ),
@@ -264,7 +294,7 @@ class FormattedMessageBody extends StatelessWidget {
 
   TextSpan _parseInlineSpans(String input, TextStyle baseStyle, BuildContext context) {
     final spans = <InlineSpan>[];
-    final pattern = RegExp(r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)');
+    final pattern = RegExp(r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$)');
     int lastEnd = 0;
 
     for (final match in pattern.allMatches(input)) {
@@ -289,6 +319,18 @@ class FormattedMessageBody extends StatelessWidget {
             fontFamily: 'monospace',
             fontSize: (baseStyle.fontSize ?? 14) - 1,
             backgroundColor: context.borderColor.withOpacity(0.45),
+          ),
+        ));
+      } else if (token.startsWith(r'$') && token.endsWith(r'$') && token.length > 2) {
+        final mathContent = token.substring(1, token.length - 1);
+        final formatted = StemFormulaFormatter.format(mathContent);
+        spans.add(TextSpan(
+          text: formatted,
+          style: baseStyle.copyWith(
+            fontFamily: 'serif',
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w600,
+            color: context.accentColor,
           ),
         ));
       }
@@ -323,6 +365,33 @@ class FormattedMessageBody extends StatelessWidget {
         }
         i++;
         blocks.add(_MdBlock(_BlockKind.code, text: codeLines.join('\n')));
+        continue;
+      }
+
+      // Fenced display math block ($$...$$ or \[...\])
+      if (line.startsWith(r'$$') || line.startsWith(r'\[')) {
+        final mathLines = <String>[];
+        final isDoubleDollar = line.startsWith(r'$$');
+        if (isDoubleDollar && line.length > 4 && line.endsWith(r'$$')) {
+          blocks.add(_MdBlock(_BlockKind.mathBlock, text: line));
+          i++;
+          continue;
+        } else if (!isDoubleDollar && line.length > 4 && line.endsWith(r'\]')) {
+          blocks.add(_MdBlock(_BlockKind.mathBlock, text: line));
+          i++;
+          continue;
+        }
+
+        mathLines.add(line);
+        i++;
+        while (i < lines.length) {
+          final cur = lines[i].trim();
+          mathLines.add(lines[i]);
+          i++;
+          if (isDoubleDollar && cur.endsWith(r'$$')) break;
+          if (!isDoubleDollar && cur.endsWith(r'\]')) break;
+        }
+        blocks.add(_MdBlock(_BlockKind.mathBlock, text: mathLines.join('\n')));
         continue;
       }
 
@@ -404,7 +473,7 @@ class FormattedMessageBody extends StatelessWidget {
   }
 }
 
-enum _BlockKind { heading, bullet, numbered, code, table, paragraph }
+enum _BlockKind { heading, bullet, numbered, code, mathBlock, table, paragraph }
 
 class _MdBlock {
   final _BlockKind kind;

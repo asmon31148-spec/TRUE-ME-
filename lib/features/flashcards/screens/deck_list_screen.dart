@@ -6,6 +6,8 @@ import '../../../app/theme/typography.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../core/services/tts_service.dart';
+import '../../../core/utils/stem_formula_formatter.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
 import '../providers/flashcard_provider.dart';
@@ -25,6 +27,8 @@ class DeckListScreen extends ConsumerStatefulWidget {
 }
 
 class _DeckListScreenState extends ConsumerState<DeckListScreen> {
+  final TtsService _tts = TtsService();
+  bool _isSpeaking = false;
   FlashcardDeckModel? _activeDeck;
   List<FlashcardModel> _sessionCards = [];
   final Set<String> _requeuedCardIds = {};
@@ -40,6 +44,108 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
         ref.read(flashcardProvider.notifier).refreshFromCache();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _tts.dispose();
+    super.dispose();
+  }
+
+  Future<void> _speakCurrentCard() async {
+    if (_activeDeck == null || _sessionCards.isEmpty) return;
+    final card = _sessionCards[_cardIndex];
+    final rawText = _isFlipped ? card.back : card.front;
+    final cleanText = StemFormulaFormatter.format(rawText);
+
+    if (_isSpeaking) {
+      await _tts.stop();
+      if (mounted) setState(() => _isSpeaking = false);
+    } else {
+      if (mounted) setState(() => _isSpeaking = true);
+      await _tts.speak(cleanText);
+      if (mounted) setState(() => _isSpeaking = false);
+    }
+  }
+
+  void _showEditCardDialog(FlashcardModel card) {
+    if (_activeDeck == null) return;
+    final frontCtrl = TextEditingController(text: card.front);
+    final backCtrl = TextEditingController(text: card.back);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.surfaceColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.edit_note, color: context.accentColor, size: 22),
+            const SizedBox(width: 8),
+            const Text('Edit card', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppInput(
+                label: 'Question (Front)',
+                hintText: 'Enter question, term, or formula',
+                controller: frontCtrl,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 14),
+              AppInput(
+                label: 'Answer (Back)',
+                hintText: 'Enter answer or key explanation',
+                controller: backCtrl,
+                maxLines: 4,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.accentColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final newFront = frontCtrl.text.trim();
+              final newBack = backCtrl.text.trim();
+              if (newFront.isEmpty || newBack.isEmpty) return;
+
+              Navigator.pop(ctx);
+
+              await ref.read(flashcardProvider.notifier).updateCard(
+                    deckId: _activeDeck!.id,
+                    cardId: card.id,
+                    front: newFront,
+                    back: newBack,
+                  );
+
+              if (mounted) {
+                setState(() {
+                  _sessionCards[_cardIndex] = card.copyWith(
+                    front: newFront,
+                    back: newBack,
+                  );
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Card updated successfully')),
+                );
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
   }
 
   String _previewInterval(FlashcardModel card, int rating) {
@@ -59,7 +165,9 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
       return;
     }
 
+    _tts.stop();
     setState(() {
+      _isSpeaking = false;
       _activeDeck = deck;
       _sessionCards = List<FlashcardModel>.from(cardsToStudy);
       _requeuedCardIds.clear();
@@ -84,6 +192,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
 
   void _rateCard(int sm2Rating) {
     if (_activeDeck == null) return;
+    _tts.stop();
+    _isSpeaking = false;
     final card = _sessionCards[_cardIndex];
     ref.read(flashcardProvider.notifier).recordCardRating(
           deckId: _activeDeck!.id,
@@ -341,12 +451,34 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.close, size: 24),
-            onPressed: () => setState(() => _activeDeck = null),
+            onPressed: () {
+              _tts.stop();
+              setState(() {
+                _isSpeaking = false;
+                _activeDeck = null;
+              });
+            },
           ),
           title: Text(
             'Card ${_cardIndex + 1} of $total',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: context.textPrimary),
           ),
+          actions: [
+            IconButton(
+              icon: Icon(
+                _isSpeaking ? Icons.volume_up : Icons.volume_up_outlined,
+                color: _isSpeaking ? context.accentColor : context.textPrimary,
+              ),
+              tooltip: _isSpeaking ? 'Stop audio' : 'Listen with Speech',
+              onPressed: _speakCurrentCard,
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              tooltip: 'Edit card',
+              onPressed: () => _showEditCardDialog(card),
+            ),
+            const SizedBox(width: 4),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(6),
             child: AppProgressBar(value: (_cardIndex + 1) / total),
@@ -359,7 +491,13 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                   child: GestureDetector(
-                    onTap: () => setState(() => _isFlipped = !_isFlipped),
+                    onTap: () {
+                      _tts.stop();
+                      setState(() {
+                        _isSpeaking = false;
+                        _isFlipped = !_isFlipped;
+                      });
+                    },
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
@@ -374,18 +512,44 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                           key: ValueKey(_isFlipped),
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              _isFlipped ? 'ANSWER' : 'QUESTION',
-                              style: AppTypography.smallLabel.copyWith(
-                                letterSpacing: 1.0,
-                                fontWeight: FontWeight.w600,
-                                color: _isFlipped ? context.accentColor : context.textSecondary,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _isFlipped ? 'ANSWER' : 'QUESTION',
+                                  style: AppTypography.smallLabel.copyWith(
+                                    letterSpacing: 1.0,
+                                    fontWeight: FontWeight.w600,
+                                    color: _isFlipped ? context.accentColor : context.textSecondary,
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        _isSpeaking ? Icons.volume_up : Icons.volume_up_outlined,
+                                        size: 19,
+                                        color: _isSpeaking ? context.accentColor : context.textSecondary,
+                                      ),
+                                      tooltip: 'Read aloud',
+                                      onPressed: _speakCurrentCard,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.edit_outlined, size: 19, color: context.textSecondary),
+                                      tooltip: 'Edit card',
+                                      onPressed: () => _showEditCardDialog(card),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 14),
                             SingleChildScrollView(
                               child: Text(
-                                _isFlipped ? card.back : card.front,
+                                StemFormulaFormatter.format(_isFlipped ? card.back : card.front),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: _isFlipped ? 17 : 20,

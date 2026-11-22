@@ -269,6 +269,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final type = (task['type'] as String? ?? 'reading').toLowerCase();
     final rawSubject = task['subject'] as String? ?? '';
     final rawTitle = task['title'] as String? ?? '';
+    final duration = (task['duration'] as num? ?? 25).toInt();
     final subject = Uri.encodeComponent(rawSubject);
     final topic = Uri.encodeComponent(rawTitle);
 
@@ -277,9 +278,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     } else if (type == 'flashcard') {
       context.push('/flashcards?subject=$subject');
     } else {
-      context.push(
-        '/chat?scope=$subject&prompt=${Uri.encodeComponent('Help me study: $rawTitle ($rawSubject)')}',
-      );
+      context.push('/focus?subject=$subject&topic=$topic&minutes=$duration');
     }
   }
 
@@ -1057,6 +1056,15 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                       onSelected: (val) {
                                         if (val == 'start') {
                                           _launchTask(t);
+                                        } else if (val == 'focus') {
+                                          final sub = Uri.encodeComponent(t['subject'] as String? ?? '');
+                                          final top = Uri.encodeComponent(t['title'] as String? ?? '');
+                                          final dur = (t['duration'] as num? ?? 25).toInt();
+                                          context.push('/focus?subject=$sub&topic=$top&minutes=$dur');
+                                        } else if (val == 'chat') {
+                                          final sub = Uri.encodeComponent(t['subject'] as String? ?? '');
+                                          final top = Uri.encodeComponent(t['title'] as String? ?? '');
+                                          context.push('/chat?scope=$sub&prompt=${Uri.encodeComponent('Help me study: ${t['title']} (${t['subject']})')}');
                                         } else if (val == 'tomorrow') {
                                           _moveTaskToTomorrow(i);
                                         } else if (val == 'delete') {
@@ -1065,6 +1073,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                       },
                                       itemBuilder: (_) => const [
                                         PopupMenuItem(value: 'start', child: Text('Begin session')),
+                                        PopupMenuItem(value: 'focus', child: Text('Focus timer')),
+                                        PopupMenuItem(value: 'chat', child: Text('Ask Sage about this')),
                                         PopupMenuItem(value: 'tomorrow', child: Text('Move to tomorrow')),
                                         PopupMenuItem(
                                           value: 'delete',

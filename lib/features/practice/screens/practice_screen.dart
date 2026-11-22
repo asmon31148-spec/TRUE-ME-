@@ -168,6 +168,58 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+
+            // 5. Focus Flow Timer Card
+            AppCard(
+              showChevron: true,
+              onTap: () async {
+                await context.push('/focus');
+                if (mounted) _loadRecent();
+              },
+              child: const Row(
+                children: [
+                  AppIconBadge(icon: Icons.timer_outlined, size: 42, iconSize: 22),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Focus flow', style: AppTypography.sectionHeading),
+                        SizedBox(height: 2),
+                        Text('Deep immersion Pomodoro study sprints', style: AppTypography.secondary),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // 6. Mistake Vault Card
+            AppCard(
+              showChevron: true,
+              onTap: () async {
+                await context.push('/mistake-vault');
+                if (mounted) _loadRecent();
+              },
+              child: const Row(
+                children: [
+                  AppIconBadge(icon: Icons.history_edu_outlined, size: 42, iconSize: 22),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Mistake vault', style: AppTypography.sectionHeading),
+                        SizedBox(height: 2),
+                        Text('Review and master missed quiz concepts', style: AppTypography.secondary),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 28),
 
             // Recent Sessions (REAL)
@@ -205,6 +257,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
                         await context.push('/quiz?subject=$subject');
                       } else if (activity == 'flashcards') {
                         await context.push('/flashcards?subject=$subject');
+                      } else if (activity == 'focus') {
+                        await context.push('/focus?subject=$subject');
                       } else {
                         await context.push('/voice-tutor');
                       }

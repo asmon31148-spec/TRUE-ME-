@@ -169,6 +169,13 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
         total: quiz.questions.length,
         missedTopics: _missedQuestions.map((q) => q.question).toList(),
       );
+      if (_missedQuestions.isNotEmpty) {
+        await OfflineCacheService.saveMistakes(
+          subject: quiz.subject,
+          topic: quiz.topic,
+          questions: _missedQuestions.map((q) => q.toMap()).toList(),
+        );
+      }
       if (mounted) {
         setState(() => _isFinished = true);
       }
@@ -423,6 +430,24 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                       _reviewIdx = 0;
                       _reviewingMissed = true;
                     }),
+                  ),
+                  const SizedBox(height: 8),
+                  AppSecondaryButton(
+                    label: 'Convert Missed to Flashcards',
+                    icon: const Icon(Icons.style_outlined, size: 18),
+                    onPressed: () async {
+                      final deckId = await OfflineCacheService.convertMistakesToDeck(
+                        subject: quiz.subject,
+                        topic: '${quiz.topic} Mistakes',
+                        specificMistakes: _missedQuestions.map((q) => q.toMap()).toList(),
+                      );
+                      if (context.mounted && deckId != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Created spaced flashcards from missed questions! 🃏')),
+                        );
+                        context.push('/flashcards?subject=${Uri.encodeComponent(quiz.subject)}');
+                      }
+                    },
                   ),
                   const SizedBox(height: 10),
                 ] else ...[
