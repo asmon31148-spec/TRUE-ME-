@@ -281,6 +281,7 @@ class AppInput extends StatelessWidget {
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final ValueChanged<String>? onChanged;
+  final int maxLines;
 
   const AppInput({
     super.key,
@@ -294,6 +295,7 @@ class AppInput extends StatelessWidget {
     this.prefixIcon,
     this.suffixIcon,
     this.onChanged,
+    this.maxLines = 1,
   });
 
   @override
@@ -317,6 +319,7 @@ class AppInput extends StatelessWidget {
           obscureText: obscureText,
           autofocus: autofocus,
           keyboardType: keyboardType,
+          maxLines: obscureText ? 1 : maxLines,
           onChanged: onChanged,
           style: TextStyle(fontSize: 16, color: context.textPrimary),
           decoration: InputDecoration(
