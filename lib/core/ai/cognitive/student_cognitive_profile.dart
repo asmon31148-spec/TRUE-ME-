@@ -1,3 +1,4 @@
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../services/offline_cache_service.dart';
 
 /// The student's current cognitive mastery tier for a subject or overall.
@@ -32,6 +33,7 @@ class StudentCognitiveProfile {
   final String studentName;
   final int overallMasteryPercentage;
   final CognitiveTier tier;
+  CognitiveTier get overallTier => tier;
   final int daysToExam;
   final ExamUrgencyTier urgencyTier;
   final List<Map<String, dynamic>> weakTopics;
