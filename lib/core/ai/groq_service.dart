@@ -34,6 +34,7 @@ class GroqService {
     String? systemPrompt,
     bool jsonMode = false,
     double temperature = 0.3,
+    int? maxTokens,
   }) async {
     try {
       return await _callChatCompletion(
@@ -43,6 +44,7 @@ class GroqService {
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
         temperature: temperature,
+        maxTokens: maxTokens,
       );
     } catch (_) {
       return await _callChatCompletion(
@@ -52,6 +54,7 @@ class GroqService {
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
         temperature: temperature,
+        maxTokens: maxTokens,
       );
     }
   }
@@ -62,6 +65,7 @@ class GroqService {
     String? systemPrompt,
     bool jsonMode = false,
     double temperature = 0.3,
+    int? maxTokens,
   }) async {
     try {
       return await _callChatCompletion(
@@ -71,6 +75,7 @@ class GroqService {
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
         temperature: temperature,
+        maxTokens: maxTokens,
       );
     } catch (_) {
       return await _callChatCompletion(
@@ -80,6 +85,7 @@ class GroqService {
         systemPrompt: systemPrompt,
         jsonMode: jsonMode,
         temperature: temperature,
+        maxTokens: maxTokens,
       );
     }
   }
@@ -91,6 +97,7 @@ class GroqService {
     String? systemPrompt,
     bool jsonMode = false,
     double temperature = 0.3,
+    int? maxTokens,
   }) async {
     if (!isConfigured) {
       throw StateError('GROQ_API_KEY is not configured in .env');
@@ -111,6 +118,7 @@ class GroqService {
       'model': model,
       'messages': messages,
       'temperature': temperature,
+      if (maxTokens != null) 'max_tokens': maxTokens,
       if (jsonMode) 'response_format': {'type': 'json_object'},
     };
 

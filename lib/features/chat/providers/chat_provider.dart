@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/cognitive/app_capabilities_manifest.dart';
+import '../../../core/ai/cognitive/student_cognitive_profile.dart';
 import '../../../core/ai/rag_service.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -21,6 +23,7 @@ enum SageActionType {
   mindmap,
   explainer,
   schedule,
+  voiceTutor,
 }
 
 class SageAction {
@@ -181,6 +184,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
         RegExp(r'\b(add|schedule|put|plan)\b').hasMatch(q)) {
       return SageActionType.schedule;
     }
+    if (RegExp(r'\b(voice tutor|live tutor|oral exam|talk with sage|speak with sage|voice mode)\b').hasMatch(q) ||
+        (RegExp(r'\b(talk|speak|voice)\b').hasMatch(q) && RegExp(r'\b(sage|tutor|me|practice)\b').hasMatch(q))) {
+      return SageActionType.voiceTutor;
+    }
     return null;
   }
 
@@ -221,6 +228,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
         break;
       case 'schedule':
         type = SageActionType.schedule;
+        break;
+      case 'voice_tutor':
+      case 'voicetutor':
+      case 'voice':
+        type = SageActionType.voiceTutor;
         break;
     }
     return (clean, type, topic.isNotEmpty ? topic : defaultTopic);
@@ -427,6 +439,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
           label: 'Play Audio Explainer',
           topic: topic,
         );
+
+      case SageActionType.voiceTutor:
+        return SageAction(
+          type: SageActionType.voiceTutor,
+          label: 'Start Live Voice Session: $topic',
+          topic: topic,
+        );
     }
   }
 
@@ -600,19 +619,29 @@ class ChatNotifier extends StateNotifier<ChatState> {
       } else {
         try {
           if (retrievedExcerpts.isEmpty) {
+            final cognitiveProfile = StudentCognitiveProfile.buildLive(
+              subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
+            );
+            final cognitiveContext = cognitiveProfile.toSageContextString();
+            final manifest = AppCapabilitiesManifest.manifestPrompt;
+
             final scopeInstruction = effectiveSubject.isNotEmpty
-                ? 'You are scoped STRICTLY to the subject "$effectiveSubject". Only track and answer for "$effectiveSubject".\nStudent Progress in $effectiveSubject:\n$progressSummary'
-                : 'General study mode.';
+                ? 'You are scoped to the subject "$effectiveSubject". Track and mentor for "$effectiveSubject".\nStudent Progress in $effectiveSubject:\n$progressSummary'
+                : 'General study mentor mode.';
             final systemPrompt = '''
-You are Sage, the personal AI study mentor for $name in the True Me app.
+You are Sage, the autonomous cognitive study companion, diagnostic mentor, and academic co-pilot for $name in the True Me app.
 $scopeInstruction
-Format with clean ## headings and high-yield bullet points (- ).
-CRITICAL: NEVER output markdown pipe tables (| col |). Format concepts as:
-### [Concept Title]
-- **Core Idea**: [Clear explanation]
-- **Source**: [Source note]
-If the student asks to export a PDF/Word/PPTX, or open Quiz/Flashcards/Mind Map/Audio Explainer/Schedule, confirm enthusiastically and append on the last line:
-[ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule | <short topic>]
+
+$cognitiveContext
+
+$manifest
+
+### RESPONSE DIRECTIVES:
+- Empathic, proactive diagnosis. Meet the student at their verified cognitive level (${cognitiveProfile.activeSubjectTier.name.toUpperCase()}).
+- When you detect gaps, recommend concrete action and append the corresponding action tag on its own line:
+  [ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule|voice_tutor | <short topic>]
+- Format with clean ## headings and high-yield bullet points (- ).
+- CRITICAL: NEVER output markdown pipe tables (| col |).
 ''';
             rawAnswer = await _aiRouter.executeRealtimeChat(
               prompt: cleanQuestion,

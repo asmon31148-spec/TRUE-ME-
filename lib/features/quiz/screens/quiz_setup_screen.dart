@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/ai/cognitive/student_cognitive_profile.dart';
 import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -69,6 +70,23 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
     if (widget.initialTopic != null) {
       _topicCtrl.text = widget.initialTopic!;
+    }
+
+    _adaptDifficultyToStudent();
+  }
+
+  void _adaptDifficultyToStudent() {
+    final profile = StudentCognitiveProfile.buildLive(subjectScope: _effectiveSubject);
+    switch (profile.activeSubjectTier) {
+      case CognitiveTier.mastery:
+        _selectedDifficulty = 'Hard';
+        break;
+      case CognitiveTier.reinforcing:
+        _selectedDifficulty = 'Medium';
+        break;
+      case CognitiveTier.foundational:
+        _selectedDifficulty = 'Easy';
+        break;
     }
   }
 
@@ -638,7 +656,12 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                                 child: Text('Custom topic (no notebook)'),
                               ),
                             ],
-                            onChanged: (v) => setState(() => _selectedNotebookId = v),
+                            onChanged: (v) {
+                              setState(() {
+                                _selectedNotebookId = v;
+                                _adaptDifficultyToStudent();
+                              });
+                            },
                           ),
                         ),
                       ),
@@ -661,7 +684,28 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    const Text('Difficulty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    Row(
+                      children: [
+                        const Text('Difficulty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: context.accentColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: context.accentColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            'Sage Adaptive: $_selectedDifficulty',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: context.accentColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: ['Easy', 'Medium', 'Hard'].map((diff) {

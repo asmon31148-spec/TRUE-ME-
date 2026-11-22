@@ -103,7 +103,7 @@ class VoiceTutorNotifier extends StateNotifier<VoiceTutorState> {
           (n) => (n['title'] as String? ?? '').toLowerCase() == subject.toLowerCase(),
         );
         if (match.isNotEmpty) {
-          contextSnippet = OfflineCacheService.getNotebookCombinedText(match.first['id'] as String, maxChars: 6000);
+          contextSnippet = OfflineCacheService.getNotebookCombinedText(match.first['id'] as String, maxChars: 2500);
         }
       }
 

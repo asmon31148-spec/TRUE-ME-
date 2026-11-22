@@ -136,6 +136,9 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
       case SageActionType.schedule:
         if (mounted) context.push('/schedule');
         break;
+      case SageActionType.voiceTutor:
+        if (mounted) context.push('/voice-tutor?${nbQuery}subject=$subEncoded&topic=$topicEncoded');
+        break;
     }
   }
 
@@ -197,6 +200,8 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
         return Icons.play_circle_outline;
       case SageActionType.schedule:
         return Icons.calendar_today_outlined;
+      case SageActionType.voiceTutor:
+        return Icons.record_voice_over_outlined;
     }
   }
 

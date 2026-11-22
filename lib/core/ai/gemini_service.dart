@@ -28,6 +28,8 @@ class GeminiService {
     String prompt, {
     String? systemInstruction,
     bool jsonMode = false,
+    int? maxOutputTokens,
+    double? temperature,
   }) async {
     if (!isConfigured) {
       throw StateError('GEMINI_API_KEY is not configured in .env');
@@ -47,8 +49,8 @@ class GeminiService {
           systemInstruction:
               systemInstruction != null ? Content.system(systemInstruction) : null,
           generationConfig: GenerationConfig(
-            temperature: systemInstruction != null ? 0.3 : 0.4,
-            maxOutputTokens: 8192,
+            temperature: temperature ?? (systemInstruction != null ? 0.3 : 0.4),
+            maxOutputTokens: maxOutputTokens ?? (jsonMode ? 2048 : 4096),
             responseMimeType: jsonMode ? 'application/json' : 'text/plain',
           ),
         );

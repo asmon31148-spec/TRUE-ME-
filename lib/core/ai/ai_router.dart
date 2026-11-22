@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import '../utils/rate_limiter.dart';
 import 'cloudflare_service.dart';
+import 'cognitive/app_capabilities_manifest.dart';
+import 'cognitive/student_cognitive_profile.dart';
 import 'cohere_service.dart';
 import 'gemini_service.dart';
 import 'groq_service.dart';
@@ -164,6 +166,8 @@ class AiRouter {
         return await _groq.complete8B(
           prompt: prompt,
           systemPrompt: systemPrompt,
+          maxTokens: 250,
+          temperature: 0.4,
         );
       } catch (e) {
         RateLimitGuardian.trip('groq_speed');
@@ -190,6 +194,8 @@ class AiRouter {
         return await _gemini.generateContent(
           prompt,
           systemInstruction: systemPrompt,
+          maxOutputTokens: 250,
+          temperature: 0.4,
         );
       } catch (e) {
         RateLimitGuardian.trip('gemini_flash');
@@ -217,13 +223,21 @@ class AiRouter {
     int count = 10,
   }) async {
     final systemPrompt = '''
-You are an expert study assistant. Generate exactly $count high-yield flashcards from the provided content.
+You are an expert cognitive study companion. Generate exactly $count high-yield active recall flashcards from the provided content.
+CRITICAL PEDAGOGY:
+- Do NOT generate passive definitions or robotic copy-paste text.
+- Formulate the front as an active recall question, scenario challenge, or "Why/How does X happen?".
+- On the back, provide:
+  • Clear, high-yield answer (concise)
+  • 💡 Mnemonic / Mental Anchor (to lock it in memory)
+  • ⚠️ Common Exam Trap (what students usually get wrong on this)
+
 Return ONLY valid JSON matching this schema:
 {
   "cards": [
     {
-      "front": "Question or prompt",
-      "back": "Concise, complete answer",
+      "front": "Active recall question or diagnostic prompt",
+      "back": "High-yield answer\\n\\n💡 Anchor: [Mnemonic/Memory hook]\\n⚠️ Trap: [Common mistake]",
       "topic": "Specific subtopic"
     }
   ]
@@ -239,6 +253,8 @@ Return ONLY valid JSON matching this schema:
           prompt: prompt,
           systemPrompt: systemPrompt,
           jsonMode: true,
+          maxTokens: 1000,
+          temperature: 0.3,
         );
       } catch (e) {
         RateLimitGuardian.trip('groq_speed');
@@ -252,6 +268,8 @@ Return ONLY valid JSON matching this schema:
           prompt,
           systemInstruction: systemPrompt,
           jsonMode: true,
+          maxOutputTokens: 1000,
+          temperature: 0.3,
         );
       } catch (e) {
         RateLimitGuardian.trip('gemini_flash');
@@ -279,22 +297,46 @@ Return ONLY valid JSON matching this schema:
     ).timeout(const Duration(seconds: 50));
   }
 
-  /// High-volume quiz generation
+  /// High-volume adaptive quiz generation
   Future<String> generateQuiz({
     required String content,
     int count = 5,
     String difficulty = 'medium',
   }) async {
+    final diffLower = difficulty.toLowerCase().trim();
+    final isHard = diffLower == 'hard' || diffLower == 'mastery';
+    final isEasy = diffLower == 'easy' || diffLower == 'foundational';
+
+    final levelDirective = isHard
+        ? '''
+COGNITIVE LEVEL: HIGH-YIELD MASTERY / BOARD EXAM LEVEL
+- Format questions as case scenarios, clinical vignettes, or multi-step problem solving.
+- Distractors MUST be plausible high-probability exam traps.
+- Explanation MUST explain: (1) Correct principle, (2) Why distractors fail, (3) High-yield trap to avoid.'''
+        : (isEasy
+            ? '''
+COGNITIVE LEVEL: FOUNDATIONAL SCAFFOLDING
+- Focus on first-principles comprehension, definitions, and core intuition.
+- Distractors should test fundamental distinctions without obscure tricks.
+- Explanation MUST include a clear, memorable real-world analogy.'''
+            : '''
+COGNITIVE LEVEL: INTERMEDIATE REINFORCING
+- Test active recall, process mechanisms, and comparative distinctions (X vs Y).
+- Explanation must clearly contrast the correct mechanism against close alternatives.''');
+
     final systemPrompt = '''
-You are an adaptive test designer. Generate $count $difficulty level multiple choice questions from the content.
+You are an expert cognitive exam designer. Generate exactly $count multiple choice questions tailored to the student's mastery level from the study material.
+
+$levelDirective
+
 Return ONLY valid JSON matching this schema:
 {
   "questions": [
     {
-      "question": "Clear problem statement",
+      "question": "Clear problem statement or scenario",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctOptionIndex": 0,
-      "explanation": "Why this option is correct and others are wrong"
+      "explanation": "Detailed pedagogical breakdown"
     }
   ]
 }
@@ -309,6 +351,8 @@ Return ONLY valid JSON matching this schema:
           prompt: prompt,
           systemPrompt: systemPrompt,
           jsonMode: true,
+          maxTokens: 1100,
+          temperature: 0.2,
         );
       } catch (e) {
         RateLimitGuardian.trip('groq_speed');
@@ -322,6 +366,8 @@ Return ONLY valid JSON matching this schema:
           prompt,
           systemInstruction: systemPrompt,
           jsonMode: true,
+          maxOutputTokens: 1100,
+          temperature: 0.2,
         );
       } catch (e) {
         RateLimitGuardian.trip('gemini_flash');
@@ -425,15 +471,21 @@ Return ONLY valid JSON matching this schema:
     }
 
     final contextText = optimalChunks.join('\n---\n');
+    final cognitive = StudentCognitiveProfile.buildLive(subjectScope: subjectScope);
     final scopeLine = (subjectScope != null && subjectScope.isNotEmpty)
-        ? 'You are scoped STRICTLY to the subject "$subjectScope". Only discuss and track progress for "$subjectScope".'
+        ? 'You are scoped to the subject "$subjectScope". Prioritize topics, weaknesses, and progress in "$subjectScope".'
         : '';
     final progressLine = (subjectProgressSummary != null && subjectProgressSummary.isNotEmpty)
-        ? '\nStudent Progress in $subjectScope:\n$subjectProgressSummary'
+        ? '\nDetailed Progress in $subjectScope:\n$subjectProgressSummary'
         : '';
     final systemPrompt = '''
-You are Sage, the personal AI study mentor for $studentName in the True Me app.
+You are Sage, the omniscient cognitive study companion and mentor for $studentName in the True Me app.
 $scopeLine$progressLine
+
+${cognitive.toSageContextString()}
+
+${AppCapabilitiesManifest.manifestPrompt}
+
 Answer the student's question grounded firmly on the provided lecture notes and document excerpts.
 Always cite the source or document when referencing specific concepts.
 Formatting rules for mobile readability:
@@ -441,11 +493,11 @@ Formatting rules for mobile readability:
 - CRITICAL: NEVER output markdown pipe tables (| col |). Mobile screens are narrow; tables look crowded and broken.
 - When summarizing multiple topics or concepts, format each concept clearly:
   ### [Concept or Topic Title]
-  - **Core Idea**: [Clear explanation]
+  - **Core Idea**: [Clear explanation adapted to student's cognitive tier]
   - **Source**: [Source file or lecture]
 If the notes do not contain the answer, state so honestly, then provide the general academic explanation.
-If the student asks to generate or export a PDF, Word doc, PowerPoint slides, Quiz, Flashcards, Mind Map, Audio Explainer, or add a Schedule task, confirm enthusiastically and append one tag on the last line:
-[ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule | <short topic>]
+Whenever it benefits the student, proactively recommend an interactive next action and append the tag on the last line:
+[ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|voice_tutor|schedule | <short topic>]
 ''';
 
     final userPrompt = '''
@@ -462,6 +514,7 @@ $question
         return await _groq.complete8B(
           prompt: userPrompt,
           systemPrompt: systemPrompt,
+          maxTokens: 1500,
         );
       } catch (e) {
         RateLimitGuardian.trip('groq_speed');
@@ -473,6 +526,7 @@ $question
         return await _groq.complete70B(
           prompt: userPrompt,
           systemPrompt: systemPrompt,
+          maxTokens: 1500,
         );
       } catch (e) {
         RateLimitGuardian.trip('groq_heavy');
@@ -484,6 +538,7 @@ $question
         return await _gemini.generateContent(
           userPrompt,
           systemInstruction: systemPrompt,
+          maxOutputTokens: 1500,
         );
       } catch (e) {
         RateLimitGuardian.trip('gemini_flash');
@@ -621,25 +676,31 @@ $question
     String? content,
   }) async {
     final systemPrompt = '''
-You are an expert educational mind-map architect.
-Generate a clear, hierarchical concept map for the given topic (and study content if provided).
+You are an expert cognitive mind-map architect.
+Generate a structured, hierarchical concept map for the given topic and study material.
+Organize the branches across 4 distinct cognitive dimensions:
+1. Core Foundations & First Principles
+2. Key Mechanisms & Processes
+3. High-Yield Exam / Practical Applications
+4. Common Traps, Edge Cases & Danger Zones
+
 Return ONLY valid JSON matching this schema:
 {
   "root": "$topic",
   "branches": [
     {
-      "title": "Main sub-concept 1",
-      "summary": "Clear 1-2 sentence explanation of this sub-concept.",
+      "title": "Branch Title",
+      "summary": "Clear 1-2 sentence core concept explanation.",
       "children": [
         {
-          "title": "Detail 1.1",
-          "summary": "Clear 1-2 sentence explanation."
+          "title": "Sub-concept",
+          "summary": "High-yield detail, formula or critical distinction."
         }
       ]
     }
   ]
 }
-Provide 3 to 4 main branches, each with 2 to 3 concise children.
+Provide exactly 4 main branches, each with 2 to 3 concise children.
 ''';
     final prompt = (content != null && content.trim().isNotEmpty)
         ? 'Topic: $topic\n\nStudy Material:\n$content'

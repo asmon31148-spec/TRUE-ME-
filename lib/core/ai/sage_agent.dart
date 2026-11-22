@@ -1,32 +1,42 @@
 import '../models/study_plan_model.dart';
 import '../models/user_model.dart';
 import 'ai_router.dart';
+import 'cognitive/app_capabilities_manifest.dart';
+import 'cognitive/student_cognitive_profile.dart';
 
 class SageAgent {
   final AiRouter _aiRouter;
 
   SageAgent({AiRouter? aiRouter}) : _aiRouter = aiRouter ?? AiRouter();
 
+  /// Builds Sage's master companion prompt injecting the live student cognitive profile
+  /// and the full app capabilities knowledge graph.
+  static String buildMasterCompanionPrompt({String? subjectScope}) {
+    final cognitive = StudentCognitiveProfile.buildLive(subjectScope: subjectScope);
+    return '''
+${cognitive.toSageContextString()}
+
+${AppCapabilitiesManifest.manifestPrompt}
+''';
+  }
+
   /// Sage System Prompt with live student context injection
   String _buildSystemPrompt({
     required UserModel user,
     required int daysToExam,
     required List<String> weakTopics,
+    String? subjectScope,
   }) {
+    final cognitive = StudentCognitiveProfile.buildLive(subjectScope: subjectScope);
     return '''
-You are Sage — the personal AI study coach for ${user.name} inside True Me.
-You know everything about this student.
+${cognitive.toSageContextString()}
 
-Student Profile:
-- Name: ${user.name}
-- Learning Style: ${user.learningStyle ?? 'Visual & Practical'}
-- Goal: ${user.studyGoal ?? 'Master all core concepts'}
-- Days Until Exam: $daysToExam
-- Subjects: ${user.subjects.join(', ')}
-- Weak / Decaying Topics: ${weakTopics.join(', ')}
+${AppCapabilitiesManifest.manifestPrompt}
 
-Personality: Encouraging, direct, specific — like an elite senior student mentor.
-Never give generic advice. Always prioritize weak topics before exam countdown runs out.
+Student Profile Metadata:
+- Goal: ${user.studyGoal ?? 'Master all core concepts and ace the exam'}
+- Learning Style: ${user.learningStyle ?? 'Visual & High-Yield Active Recall'}
+- Registered Subjects: ${user.subjects.join(', ')}
 ''';
   }
 

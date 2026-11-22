@@ -46,6 +46,7 @@ class OpenRouterService {
     String? systemPrompt,
     String model = modelNemotronLightning,
     bool jsonMode = false,
+    int? maxTokens,
   }) async {
     if (!isConfigured) {
       throw StateError('OPENROUTER_API_KEY is not configured in .env');
@@ -60,6 +61,7 @@ class OpenRouterService {
     final Map<String, dynamic> requestBody = {
       'model': model,
       'messages': messages,
+      if (maxTokens != null) 'max_tokens': maxTokens,
     };
 
     if (jsonMode) {
