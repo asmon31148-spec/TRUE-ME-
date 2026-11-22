@@ -110,9 +110,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
       if (qCount > 0 && sTotalCards > 0) {
         score = (avgQuizScore * 0.60) + ((sMasteredCards / sTotalCards) * 100 * 0.40);
       } else if (qCount > 0) {
-        score = avgQuizScore;
+        score = avgQuizScore.toDouble();
       } else if (sTotalCards > 0 && sMasteredCards > 0) {
-        score = (sMasteredCards / sTotalCards) * 100;
+        score = ((sMasteredCards / sTotalCards) * 100.0);
       } else {
         score = 0.0;
       }
