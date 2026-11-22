@@ -108,6 +108,10 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
           final bytes = await File(action.filePath!).readAsBytes();
           final name = action.filePath!.split(RegExp(r'[/\\]')).last;
           await Printing.sharePdf(bytes: bytes, filename: name);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Study guide file is not available locally. Ask Sage to regenerate it.')),
+          );
         }
         break;
       case SageActionType.exportDocx:
@@ -119,6 +123,10 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
               SnackBar(content: Text('Saved to ${action.filePath} (${res.message})')),
             );
           }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Exported file is not available locally. Ask Sage to regenerate it.')),
+          );
         }
         break;
       case SageActionType.quiz:
@@ -146,9 +154,9 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
     _sttService ??= SttService();
     if (_isListening) {
       await _sttService!.stopListening();
-      setState(() => _isListening = false);
+      if (mounted) setState(() => _isListening = false);
     } else {
-      setState(() => _isListening = true);
+      if (mounted) setState(() => _isListening = true);
       try {
         await _sttService!.startListening(
           onResult: (text) {
@@ -167,7 +175,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent + 120,
+          _scrollCtrl.position.maxScrollExtent,
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
         );

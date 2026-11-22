@@ -1048,23 +1048,31 @@ class OfflineCacheService {
   // NOTE & DOCUMENT CACHING
   // ---------------------------------------------------------------------------
   static Future<void> cacheNote(String noteId, Map<String, dynamic> noteMap) async {
-    final box = Hive.box(notesBox);
-    await box.put(noteId, noteMap);
+    try {
+      final box = Hive.box(notesBox);
+      await box.put(noteId, noteMap);
+    } catch (_) {}
   }
 
   static Map<String, dynamic>? getCachedNote(String noteId) {
-    final box = Hive.box(notesBox);
-    final data = box.get(noteId);
-    if (data is Map) return Map<String, dynamic>.from(data);
+    try {
+      final box = Hive.box(notesBox);
+      final data = box.get(noteId);
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
     return null;
   }
 
   static List<Map<String, dynamic>> getAllCachedNotes() {
-    final box = Hive.box(notesBox);
-    return box.values
-        .whereType<Map>()
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList();
+    try {
+      final box = Hive.box(notesBox);
+      return box.values
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   // ---------------------------------------------------------------------------

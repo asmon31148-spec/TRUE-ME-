@@ -895,7 +895,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Your parchment is clear for today.',
+                        'No study sessions scheduled for today.',
                         style: ZenTypography.editorialHeadline.copyWith(
                           fontSize: 16,
                           color: primaryInk,
@@ -912,7 +912,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                       ),
                       const SizedBox(height: 14),
                       AppSecondaryButton(
-                        label: 'Inscribe task manually',
+                        label: 'Add study task manually',
                         height: 44,
                         onPressed: () async {
                           await context.push('/schedule');
@@ -1081,7 +1081,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                         PopupMenuItem(value: 'tomorrow', child: Text('Move to tomorrow')),
                                         PopupMenuItem(
                                           value: 'delete',
-                                          child: Text('Remove from scroll', style: TextStyle(color: AppColors.error)),
+                                          child: Text('Remove task', style: TextStyle(color: AppColors.error)),
                                         ),
                                       ],
                                     ),

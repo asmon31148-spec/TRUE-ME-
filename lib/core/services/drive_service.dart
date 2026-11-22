@@ -148,7 +148,7 @@ class DriveService {
       spaces: 'drive',
     );
 
-    if (folderList.files != null && folderList.files!.isNotEmpty) {
+    if (folderList.files != null && folderList.files!.isNotEmpty && folderList.files!.first.id != null) {
       _vaultFolderId = folderList.files!.first.id;
       return _vaultFolderId!;
     }
@@ -159,7 +159,8 @@ class DriveService {
 
     final createdFolder = await _driveApi!.files.create(folderMeta);
     _vaultFolderId = createdFolder.id;
-    return _vaultFolderId!;
+    if (_vaultFolderId != null) return _vaultFolderId!;
+    throw StateError('Failed to obtain True Me root folder on Google Drive.');
   }
 
   Future<String> _ensureSubfolder(String name, String parentId) async {
@@ -185,9 +186,12 @@ class DriveService {
       ..mimeType = 'application/vnd.google-apps.folder'
       ..parents = [parentId];
     final created = await _driveApi!.files.create(meta);
-    final id = created.id!;
-    _folderCache[cacheKey] = id;
-    return id;
+    final id = created.id;
+    if (id != null) {
+      _folderCache[cacheKey] = id;
+      return id;
+    }
+    throw StateError('Google Drive returned a null folder ID for $cleanName.');
   }
 
   /// Resolves `True Me / [Subject] / [Section]` folder ID cleanly.

@@ -88,7 +88,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       lastDate: now.add(const Duration(days: 365 * 2)),
     );
     if (picked != null) {
-      setState(() => _deadline = picked);
+      if (mounted) setState(() => _deadline = picked);
     }
   }
 

@@ -31,33 +31,71 @@ class AiRouter {
         _cloudflare = cloudflare ?? CloudflareService(),
         _openRouter = openRouter ?? OpenRouterService();
 
-  /// Strips markdown code fences and surrounding prose from LLM output
-  /// to extract a clean JSON object string.
+  /// Strips markdown code fences, prose, and trailing syntax from LLM output
+  /// to extract a clean JSON object or array string.
   static String extractJsonString(String raw) {
     var text = raw.trim();
+    // 1. Extract content within markdown code fences
     final fenceMatch = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).firstMatch(text);
     if (fenceMatch != null) {
       text = (fenceMatch.group(1) ?? '').trim();
     }
+
+    // 2. Locate outermost JSON root ({...} or [...])
     final firstBrace = text.indexOf('{');
-    final lastBrace = text.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return text.substring(firstBrace, lastBrace + 1);
+    final firstBracket = text.indexOf('[');
+
+    int startIndex = -1;
+    int endIndex = -1;
+
+    if (firstBrace >= 0 && (firstBracket < 0 || firstBrace < firstBracket)) {
+      startIndex = firstBrace;
+      endIndex = text.lastIndexOf('}');
+    } else if (firstBracket >= 0) {
+      startIndex = firstBracket;
+      endIndex = text.lastIndexOf(']');
     }
+
+    if (startIndex >= 0 && endIndex > startIndex) {
+      text = text.substring(startIndex, endIndex + 1);
+    }
+
+    // 3. Remove invalid trailing commas before closing braces/brackets
+    text = text.replaceAll(RegExp(r',\s*([}\]])'), r'$1');
     return text;
   }
 
   /// Safely decodes an LLM response into a JSON object map.
+  /// Gracefully normalizes raw JSON arrays into standardized object wrappers
+  /// so flashcards, quizzes, mindmaps, and explainers never crash on schema variations.
   static Map<String, dynamic> parseJsonObject(String raw) {
     final cleaned = extractJsonString(raw);
-    final decoded = jsonDecode(cleaned);
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(cleaned);
+    } catch (_) {
+      // Secondary fallback: sanitize unescaped line breaks within string literals
+      final sanitized = cleaned.replaceAll(RegExp(r'(?<!\\)\n'), ' ');
+      decoded = jsonDecode(sanitized);
+    }
+
     if (decoded is Map<String, dynamic>) {
       return decoded;
     }
     if (decoded is Map) {
       return Map<String, dynamic>.from(decoded);
     }
-    throw const FormatException('Expected a JSON object from AI response.');
+    if (decoded is List) {
+      // If the LLM returned a direct list of items, wrap into standard collection keys
+      return {
+        'cards': decoded,
+        'questions': decoded,
+        'scenes': decoded,
+        'items': decoded,
+        'nodes': decoded,
+      };
+    }
+    throw const FormatException('Expected a JSON object or array from AI response.');
   }
 
   // ---------------------------------------------------------------------------

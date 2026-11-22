@@ -71,7 +71,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               crossAxisCount: 2,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 1.3,
+              childAspectRatio: 1.22,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [

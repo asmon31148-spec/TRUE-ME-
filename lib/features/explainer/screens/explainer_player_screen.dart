@@ -59,6 +59,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
     if (cleanTopic.isEmpty) return;
 
     await _tts.stop();
+    if (!mounted) return;
     setState(() {
       _isGenerating = true;
       _isPlaying = false;
@@ -330,6 +331,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                           onPressed: _sceneIndex > 0
                               ? () async {
                                   await _tts.stop();
+                                  if (!mounted) return;
                                   setState(() {
                                     _sceneIndex--;
                                     _isPlaying = false;
@@ -359,6 +361,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                           onPressed: _sceneIndex < scenes.length - 1
                               ? () async {
                                   await _tts.stop();
+                                  if (!mounted) return;
                                   setState(() {
                                     _sceneIndex++;
                                     _isPlaying = false;

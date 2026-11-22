@@ -664,7 +664,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                         } else {
                           await OfflineCacheService.savePreferredPptxStyle(id);
                         }
-                        setState(() {});
+                        if (mounted) setState(() {});
                         _exportStudyFile(format, chosenStyle: id);
                       },
                       child: Container(

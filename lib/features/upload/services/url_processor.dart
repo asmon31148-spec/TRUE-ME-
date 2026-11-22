@@ -12,7 +12,11 @@ class UrlProcessor {
 
   /// Fetches an article or web page URL, cleans HTML tags, and summarizes it.
   Future<Map<String, String>> fetchAndSummarize(String url) async {
-    final uri = Uri.tryParse(url);
+    var cleanUrl = url.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://$cleanUrl';
+    }
+    final uri = Uri.tryParse(cleanUrl);
     if (uri == null || !uri.hasScheme) {
       throw ArgumentError('Invalid URL provided: $url');
     }

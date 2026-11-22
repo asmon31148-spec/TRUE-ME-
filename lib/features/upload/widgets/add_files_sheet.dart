@@ -157,6 +157,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       allowedExtensions: ['pdf', 'txt', 'md'],
     );
     if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
 
     setState(() {
       _isBusy = true;
@@ -200,6 +201,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 85);
     if (picked == null) return;
+    if (!mounted) return;
 
     setState(() {
       _isBusy = true;
@@ -320,12 +322,16 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     } else {
       try {
         await _audioProcessor!.startRecording();
-        setState(() {
-          _isRecording = true;
-          _errorText = null;
-        });
+        if (mounted) {
+          setState(() {
+            _isRecording = true;
+            _errorText = null;
+          });
+        }
       } catch (e) {
-        setState(() => _errorText = 'Microphone access denied or unavailable: $e');
+        if (mounted) {
+          setState(() => _errorText = 'Microphone access denied or unavailable: $e');
+        }
       }
     }
   }
