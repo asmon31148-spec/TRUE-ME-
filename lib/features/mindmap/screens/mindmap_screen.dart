@@ -24,6 +24,7 @@ class MindmapScreen extends ConsumerStatefulWidget {
 class _MindmapScreenState extends ConsumerState<MindmapScreen> {
   Graph _graph = Graph()..isTree = true;
   late final BuchheimWalkerConfiguration _builder;
+  late final BuchheimWalkerAlgorithm _algorithm;
   late final TextEditingController _topicCtrl;
   final Map<String, String> _nodeLabels = {};
   final Map<String, String> _nodeSummaries = {};
@@ -43,9 +44,11 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
 
     _builder = BuchheimWalkerConfiguration()
       ..orientation = BuchheimWalkerConfiguration.ORIENTATION_LEFT_RIGHT
-      ..siblingSeparation = 20
-      ..levelSeparation = 48
-      ..subtreeSeparation = 24;
+      ..siblingSeparation = 32
+      ..levelSeparation = 56
+      ..subtreeSeparation = 36;
+
+    _algorithm = BuchheimWalkerAlgorithm(_builder, TreeEdgeRenderer(_builder));
 
     if (initial.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _generateMindmap(initial));
@@ -258,7 +261,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                 padding: const EdgeInsets.all(32),
                                 child: GraphView(
                                   graph: _graph,
-                                  algorithm: BuchheimWalkerAlgorithm(_builder, TreeEdgeRenderer(_builder)),
+                                  algorithm: _algorithm,
                                   paint: Paint()
                                     ..color = context.borderColor
                                     ..strokeWidth = 1.5

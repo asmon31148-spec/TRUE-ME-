@@ -35,6 +35,12 @@ jobs:
             cp -r assets/icons/mipmap-* android/app/src/main/res/ || true
             echo "Installed custom True Me app launcher icons into android/app/src/main/res/"
           fi
+          # Ensure seamless dark launch background during Android cold start
+          for bg in android/app/src/main/res/drawable*/launch_background.xml; do
+            if [ -f "$bg" ]; then
+              sed -i 's/@android:color\/white/#090A0E/g' "$bg" || true
+            fi
+          done
           cp trueme-release.jks android/app/trueme-release.jks || true
           manifest="android/app/src/main/AndroidManifest.xml"
           if [ -f "$manifest" ]; then

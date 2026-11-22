@@ -539,7 +539,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                 const SizedBox(height: 8),
                 Center(
                   child: TextButton(
-                    onPressed: () => setState(() => _mode = 'menu'),
+                    onPressed: () => setState(() {
+                      _mode = 'menu';
+                      _errorText = null;
+                    }),
                     child: const Text('Back to options'),
                   ),
                 ),
@@ -567,7 +570,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                 const SizedBox(height: 8),
                 Center(
                   child: TextButton(
-                    onPressed: () => setState(() => _mode = 'menu'),
+                    onPressed: () => setState(() {
+                      _mode = 'menu';
+                      _errorText = null;
+                    }),
                     child: const Text('Back to options'),
                   ),
                 ),
@@ -605,7 +611,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   const SizedBox(height: 8),
                   Center(
                     child: TextButton(
-                      onPressed: () => setState(() => _mode = 'menu'),
+                      onPressed: () => setState(() {
+                      _mode = 'menu';
+                      _errorText = null;
+                    }),
                       child: const Text('Back to options'),
                     ),
                   ),
@@ -659,7 +668,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                 const SizedBox(height: 12),
                 Center(
                   child: TextButton(
-                    onPressed: () => setState(() => _mode = 'menu'),
+                    onPressed: () => setState(() {
+                      _mode = 'menu';
+                      _errorText = null;
+                    }),
                     child: const Text('Back to options'),
                   ),
                 ),

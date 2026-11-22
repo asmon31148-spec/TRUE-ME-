@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/study_plan_model.dart';
 import '../models/user_model.dart';
+import '../services/offline_cache_service.dart';
 import 'ai_router.dart';
 import 'cohere_service.dart';
 import 'gemini_service.dart';
@@ -31,13 +32,22 @@ final sageAgentProvider = Provider<SageAgent>((ref) {
   return SageAgent(aiRouter: ref.watch(aiRouterProvider));
 });
 
-/// Mock or live daily study plan state
+/// Live daily study plan state powered by real student analytics
 final dailyStudyPlanProvider =
     FutureProvider.family<DailyStudyPlanModel, UserModel>((ref, user) async {
   final sage = ref.watch(sageAgentProvider);
-  final weakTopics = user.subjects.map((s) => '$s Core Synthesis').toList();
+  final realWeak = OfflineCacheService.getWeakTopics()
+      .map((e) => (e['topic'] as String?)?.trim())
+      .whereType<String>()
+      .where((t) => t.isNotEmpty)
+      .toList();
+  final weakTopics = realWeak.isNotEmpty
+      ? realWeak
+      : (user.subjects.isNotEmpty
+          ? user.subjects
+          : ['Core Concepts & High-Yield Review']);
   return sage.generateDailyStudyPlan(
     user: user,
-    weakTopics: weakTopics.isNotEmpty ? weakTopics : ['Foundational Problem Solving'],
+    weakTopics: weakTopics,
   );
 });

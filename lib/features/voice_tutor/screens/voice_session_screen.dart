@@ -111,10 +111,21 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
     if (isProcessing) statusLabel = 'Sage is thinking...';
     if (isSpeaking) statusLabel = 'Sage is speaking (tap to interrupt)';
 
-    return Scaffold(
-      backgroundColor: context.bgColor,
-      appBar: AppBar(
-        title: const Text('Voice tutor', style: AppTypography.screenTitle),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _endSession();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: context.bgColor,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _endSession,
+          ),
+          title: const Text('Voice tutor', style: AppTypography.screenTitle),
         actions: [
           if (subjects.isNotEmpty)
             PopupMenuButton<String>(
@@ -243,6 +254,7 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

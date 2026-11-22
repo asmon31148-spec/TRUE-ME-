@@ -185,9 +185,29 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                       icon: const Icon(Icons.delete_outline, color: AppColors.error),
                       tooltip: 'Remove file',
                       onPressed: () async {
-                        await OfflineCacheService.removeDocumentFromNotebook(widget.notebookId, docId);
-                        _loadNotebook();
-                        if (ctx.mounted) Navigator.pop(ctx);
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (dCtx) => AlertDialog(
+                            title: const Text('Remove File?'),
+                            content: Text('Are you sure you want to remove "$fileName" from this notebook?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, true),
+                                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                                child: const Text('Remove'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await OfflineCacheService.removeDocumentFromNotebook(widget.notebookId, docId);
+                          _loadNotebook();
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        }
                       },
                     ),
                     IconButton(

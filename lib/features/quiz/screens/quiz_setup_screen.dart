@@ -156,6 +156,28 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
     }
   }
 
+  Future<bool> _confirmExitQuiz() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quit Quiz?'),
+        content: const Text('Your current score and answers will be lost. Are you sure?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Continue Quiz'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Quit'),
+          ),
+        ],
+      ),
+    );
+    return shouldExit == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final quizState = ref.watch(quizProvider);
@@ -405,13 +427,27 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
       final total = quiz.questions.length;
       final letters = ['A', 'B', 'C', 'D'];
 
-      return Scaffold(
-        backgroundColor: context.bgColor,
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.close, size: 24),
-            onPressed: () => setState(() => _isPlaying = false),
-          ),
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          final exit = await _confirmExitQuiz();
+          if (exit && mounted) {
+            setState(() => _isPlaying = false);
+          }
+        },
+        child: Scaffold(
+          backgroundColor: context.bgColor,
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.close, size: 24),
+              onPressed: () async {
+                final exit = await _confirmExitQuiz();
+                if (exit && mounted) {
+                  setState(() => _isPlaying = false);
+                }
+              },
+            ),
           title: Text(
             'Question ${_currentIdx + 1} of $total',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: context.textPrimary),
@@ -553,8 +589,9 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
             ],
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
     // 5. Quiz Setup Screen
     return Scaffold(

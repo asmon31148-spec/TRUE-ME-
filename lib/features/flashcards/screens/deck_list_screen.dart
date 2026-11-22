@@ -425,7 +425,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                             () => _rateCard(0),
                           ),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Hard', _previewInterval(card, 2), () => _rateCard(2)),
+                          _buildIntervalButton('Hard', _previewInterval(card, 3), () => _rateCard(3)),
                           const SizedBox(width: 8),
                           _buildIntervalButton('Good', _previewInterval(card, 4), () => _rateCard(4)),
                           const SizedBox(width: 8),
@@ -571,7 +571,29 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                       children: [
                         IconButton(
                           icon: Icon(Icons.delete_outline, size: 18, color: context.textSecondary),
-                          onPressed: () => ref.read(flashcardProvider.notifier).deleteDeck(deck.id),
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Delete Deck?'),
+                                content: Text('Are you sure you want to delete "${deck.topic}"? This cannot be undone.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              ref.read(flashcardProvider.notifier).deleteDeck(deck.id);
+                            }
+                          },
                         ),
                         Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
                       ],

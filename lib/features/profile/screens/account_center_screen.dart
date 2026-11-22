@@ -420,11 +420,33 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                     subtitle: 'Clears locally stored quizzes, cards, and study logs',
                     trailing: Icon(Icons.delete_outline, size: 18, color: context.textSecondary),
                     onTap: () async {
-                      await OfflineCacheService.clearAllCache();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Local cache cleared successfully.')),
-                        );
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Clear Local Cache?'),
+                          content: const Text(
+                            'This will remove cached quizzes, offline flashcards, notes, and study logs from this device. Are you sure?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                              child: const Text('Clear Cache'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await OfflineCacheService.clearAllCache();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Local cache cleared successfully.')),
+                          );
+                        }
                       }
                     },
                   ),
@@ -534,9 +556,29 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
             Center(
               child: TextButton(
                 onPressed: () async {
-                  await OfflineCacheService.logout();
-                  if (mounted) {
-                    context.go('/login');
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Sign Out?'),
+                      content: const Text('Are you sure you want to sign out of True Me?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                          child: const Text('Sign Out'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await OfflineCacheService.logout();
+                    if (mounted) {
+                      context.go('/login');
+                    }
                   }
                 },
                 child: const Text(

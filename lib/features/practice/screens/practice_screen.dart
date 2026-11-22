@@ -48,13 +48,21 @@ class _PracticeScreenState extends State<PracticeScreen> {
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline, size: 22),
             tooltip: 'Ask Sage',
-            onPressed: () => context.push('/chat'),
+            onPressed: () async {
+              await context.push('/chat');
+              if (mounted) _loadRecent();
+            },
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        child: ListView(
+        child: RefreshIndicator(
+          color: context.accentColor,
+          onRefresh: () async {
+            _loadRecent();
+          },
+          child: ListView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
@@ -208,6 +216,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
