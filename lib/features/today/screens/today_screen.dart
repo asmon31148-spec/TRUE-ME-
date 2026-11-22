@@ -782,37 +782,45 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        "Today's Study Plan",
-                        style: ZenTypography.editorialHeadline.copyWith(
-                          fontSize: 18,
-                          color: primaryInk,
-                        ),
-                      ),
-                      if (_tasks.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '·  $completedCount/${_tasks.length}',
-                          style: TextStyle(
-                            fontFamilyFallback: ZenTypography.sansFallbacks,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: secondaryMist,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            "Today's Plan",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ZenTypography.editorialHeadline.copyWith(
+                              fontSize: 18,
+                              color: primaryInk,
+                            ),
                           ),
                         ),
+                        if (_tasks.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '·  $completedCount/${_tasks.length}',
+                            style: TextStyle(
+                              fontFamilyFallback: ZenTypography.sansFallbacks,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: secondaryMist,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       if (_tasks.isNotEmpty)
                         InkWell(
                           onTap: _isGeneratingPlan ? null : _generateAiPlan,
                           borderRadius: BorderRadius.circular(6),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                             decoration: BoxDecoration(
                               color: surfaceBg,
                               borderRadius: BorderRadius.circular(6),
@@ -821,13 +829,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('✦', style: TextStyle(fontSize: 12, color: redSeal)),
-                                const SizedBox(width: 4),
+                                Text('✦', style: TextStyle(fontSize: 11, color: redSeal)),
+                                const SizedBox(width: 3),
                                 Text(
                                   'Re-align',
                                   style: TextStyle(
                                     fontFamilyFallback: ZenTypography.sansFallbacks,
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
                                     color: primaryInk,
                                   ),
@@ -844,7 +852,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                         },
                         borderRadius: BorderRadius.circular(6),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                           decoration: BoxDecoration(
                             color: surfaceBg,
                             borderRadius: BorderRadius.circular(6),
@@ -853,13 +861,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.calendar_month_outlined, size: 13, color: primaryInk),
-                              const SizedBox(width: 4),
+                              Icon(Icons.calendar_month_outlined, size: 12, color: primaryInk),
+                              const SizedBox(width: 3),
                               Text(
                                 'Schedule',
                                 style: TextStyle(
                                   fontFamilyFallback: ZenTypography.sansFallbacks,
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w600,
                                   color: primaryInk,
                                 ),

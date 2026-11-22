@@ -160,8 +160,8 @@ class PdfExporter {
                   borderRadius: pw.BorderRadius.circular(2),
                 ),
                 child: pw.Text(
-                  '印',
-                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.white),
+                  'TRUE ME',
+                  style: const pw.TextStyle(fontSize: 7, color: PdfColors.white),
                 ),
               ),
             ],
@@ -659,7 +659,7 @@ class PdfExporter {
                   borderRadius: pw.BorderRadius.circular(3),
                 ),
                 child: pw.Text(
-                  '印 $subject',
+                  subject,
                   style: const pw.TextStyle(
                     fontSize: 8.5,
                     fontWeight: pw.FontWeight.bold,

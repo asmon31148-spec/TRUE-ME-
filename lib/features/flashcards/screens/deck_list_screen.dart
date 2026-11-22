@@ -503,66 +503,87 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: context.surfaceColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: context.borderColor, width: 1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: context.borderColor, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(context.isDarkMode ? 0.35 : 0.05),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
                         child: Column(
                           key: ValueKey(_isFlipped),
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            // Card Type Indicator Chip
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  _isFlipped ? 'ANSWER' : 'QUESTION',
-                                  style: AppTypography.smallLabel.copyWith(
-                                    letterSpacing: 1.0,
-                                    fontWeight: FontWeight.w600,
-                                    color: _isFlipped ? context.accentColor : context.textSecondary,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: (_isFlipped ? context.accentColor : const Color(0xFF6366F1)).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: (_isFlipped ? context.accentColor : const Color(0xFF6366F1)).withOpacity(0.3),
+                                    ),
                                   ),
-                                ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: Icon(
-                                        _isSpeaking ? Icons.volume_up : Icons.volume_up_outlined,
-                                        size: 19,
-                                        color: _isSpeaking ? context.accentColor : context.textSecondary,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _isFlipped ? Icons.check_circle_outline_rounded : Icons.help_outline_rounded,
+                                        size: 13,
+                                        color: _isFlipped ? context.accentColor : const Color(0xFF6366F1),
                                       ),
-                                      tooltip: 'Read aloud',
-                                      onPressed: _speakCurrentCard,
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    IconButton(
-                                      icon: Icon(Icons.edit_outlined, size: 19, color: context.textSecondary),
-                                      tooltip: 'Edit card',
-                                      onPressed: () => _showEditCardDialog(card),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                  ],
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        _isFlipped ? 'ANSWER' : 'QUESTION',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.8,
+                                          color: _isFlipped ? context.accentColor : const Color(0xFF6366F1),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 14),
+                            const Spacer(),
+                            // Card Body Content
                             SingleChildScrollView(
                               child: Text(
                                 StemFormulaFormatter.format(_isFlipped ? card.back : card.front),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: _isFlipped ? 17 : 20,
-                                  fontWeight: _isFlipped ? FontWeight.w400 : FontWeight.w600,
+                                  fontWeight: _isFlipped ? FontWeight.w500 : FontWeight.w600,
                                   color: context.textPrimary,
-                                  height: 1.45,
+                                  height: 1.5,
                                 ),
                               ),
                             ),
-                            if (!_isFlipped) ...[
-                              const SizedBox(height: 24),
-                              Text('Tap card to reveal answer', style: AppTypography.smallLabel),
-                            ],
+                            const Spacer(),
+                            // Hint
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.touch_app_outlined, size: 14, color: context.textSecondary.withOpacity(0.7)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _isFlipped ? 'Tap to see question' : 'Tap to reveal answer',
+                                  style: AppTypography.smallLabel.copyWith(
+                                    color: context.textSecondary.withOpacity(0.8),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -586,14 +607,15 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
                           _buildIntervalButton(
                             'Again',
                             _requeuedCardIds.contains(card.id) ? '1d' : '< 1m',
+                            const Color(0xFFEF4444),
                             () => _rateCard(0),
                           ),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Hard', _previewInterval(card, 3), () => _rateCard(3)),
+                          _buildIntervalButton('Hard', _previewInterval(card, 3), const Color(0xFFF59E0B), () => _rateCard(3)),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Good', _previewInterval(card, 4), () => _rateCard(4)),
+                          _buildIntervalButton('Good', _previewInterval(card, 4), const Color(0xFF3B82F6), () => _rateCard(4)),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Easy', _previewInterval(card, 5), () => _rateCard(5)),
+                          _buildIntervalButton('Easy', _previewInterval(card, 5), const Color(0xFF10B981), () => _rateCard(5)),
                         ],
                       ),
               ),
@@ -780,23 +802,37 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     );
   }
 
-  Widget _buildIntervalButton(String label, String interval, VoidCallback onTap) {
+  Widget _buildIntervalButton(String label, String interval, Color accent, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: context.surfaceColor,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: context.borderColor, width: 1),
+            color: accent.withOpacity(context.isDarkMode ? 0.12 : 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: accent.withOpacity(0.35), width: 1.2),
           ),
           child: Column(
             children: [
-              Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.textPrimary)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: accent,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(interval, style: TextStyle(fontSize: 11, color: context.textSecondary)),
+              Text(
+                interval,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: accent.withOpacity(0.85),
+                ),
+              ),
             ],
           ),
         ),

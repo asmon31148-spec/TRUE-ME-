@@ -491,7 +491,7 @@ class PptxExporter {
               <a:rPr lang="en-US" sz="1000" b="1">
                 <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
               </a:rPr>
-              <a:t>印</a:t>
+              <a:t>TM</a:t>
             </a:r>
           </a:p>
         </p:txBody>

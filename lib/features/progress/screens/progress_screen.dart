@@ -104,15 +104,17 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
 
       // Weighted mastery formula:
+      // Note: Only proven retrieval practice (quizzes and mastered flashcards) earns mastery score.
+      // Merely uploading notes without testing knowledge awards 0% mastery.
       double score = 0.0;
       if (qCount > 0 && sTotalCards > 0) {
-        score = (avgQuizScore * 0.55) + ((sMasteredCards / sTotalCards) * 100 * 0.35) + (docs.isNotEmpty ? 10 : 0);
+        score = (avgQuizScore * 0.60) + ((sMasteredCards / sTotalCards) * 100 * 0.40);
       } else if (qCount > 0) {
-        score = (avgQuizScore * 0.85) + (docs.isNotEmpty ? 15 : 0);
-      } else if (sTotalCards > 0) {
-        score = ((sMasteredCards / sTotalCards) * 100 * 0.80) + (docs.isNotEmpty ? 20 : 0);
-      } else if (docs.isNotEmpty) {
-        score = 25.0; // Foundation established by syllabus / notes
+        score = avgQuizScore;
+      } else if (sTotalCards > 0 && sMasteredCards > 0) {
+        score = (sMasteredCards / sTotalCards) * 100;
+      } else {
+        score = 0.0;
       }
 
       subjectMastery.add({
@@ -338,9 +340,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     Text(
                       '$_readinessScore%',
                       style: TextStyle(
-                        fontFamily: 'serif',
                         fontSize: 34,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                         color: context.textPrimary,
                         letterSpacing: -0.5,
                       ),
@@ -391,28 +392,46 @@ class _ProgressScreenState extends State<ProgressScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Diagnostic Metrics Row
-          Row(
+          // Diagnostic Metrics Row (Wrapped so it never overflows)
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(Icons.calendar_today_outlined, size: 14, color: context.textSecondary),
-              const SizedBox(width: 5),
-              Text(
-                '$_daysLeft ${_daysLeft == 1 ? 'day' : 'days'} to exam',
-                style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.calendar_today_outlined, size: 14, color: context.textSecondary),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$_daysLeft ${_daysLeft == 1 ? 'day' : 'days'} to exam',
+                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                  ),
+                ],
               ),
-              const Text(' • ', style: AppTypography.smallLabel),
-              Icon(Icons.quiz_outlined, size: 14, color: context.textSecondary),
-              const SizedBox(width: 5),
-              Text(
-                '$_quizzesTaken ${_quizzesTaken == 1 ? 'quiz' : 'quizzes'} taken',
-                style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+              Text('•', style: AppTypography.smallLabel.copyWith(color: context.textSecondary)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.quiz_outlined, size: 14, color: context.textSecondary),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$_quizzesTaken ${_quizzesTaken == 1 ? 'quiz' : 'quizzes'} taken',
+                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                  ),
+                ],
               ),
-              const Text(' • ', style: AppTypography.smallLabel),
-              Icon(Icons.style_outlined, size: 14, color: context.textSecondary),
-              const SizedBox(width: 5),
-              Text(
-                '$_totalCards cards',
-                style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+              Text('•', style: AppTypography.smallLabel.copyWith(color: context.textSecondary)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.style_outlined, size: 14, color: context.textSecondary),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$_totalCards cards',
+                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                  ),
+                ],
               ),
             ],
           ),
@@ -445,14 +464,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(
-                    '智',
-                    style: TextStyle(
-                      fontFamily: 'serif',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: context.accentColor,
-                    ),
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 15,
+                    color: context.accentColor,
                   ),
                 ),
               ),
@@ -690,7 +705,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             children: [
               _buildMemoryBox(context, 'Learning', _learningCards, const Color(0xFFEF4444)),
               const SizedBox(width: 8),
-              _buildMemoryBox(context, 'Developing', _developingCards, const Color(0xFFF59E0B)),
+              _buildMemoryBox(context, 'Review', _developingCards, const Color(0xFFF59E0B)),
               const SizedBox(width: 8),
               _buildMemoryBox(context, 'Strong', _consolidatingCards, const Color(0xFF3B82F6)),
               const SizedBox(width: 8),
@@ -716,7 +731,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   Widget _buildMemoryBox(BuildContext context, String stage, int count, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
           color: context.bgColor,
           borderRadius: BorderRadius.circular(10),
@@ -733,13 +748,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              stage,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.smallLabel.copyWith(
-                fontSize: 11,
-                color: context.textSecondary,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                stage,
+                maxLines: 1,
+                style: AppTypography.smallLabel.copyWith(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: context.textSecondary,
+                ),
               ),
             ),
           ],

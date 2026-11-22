@@ -374,28 +374,39 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
               child: Column(
                 children: [
                   AppListRow(
-                    title: driveConnected ? 'Connected' : 'Not connected',
+                    title: 'Google Drive Sync',
                     subtitle: driveConnected
-                        ? (driveEmail != null ? 'Google Drive: $driveEmail' : 'Google Drive linked')
-                        : 'Files are currently stored only on this phone',
+                        ? (driveEmail != null ? driveEmail : 'Connected to Google Drive')
+                        : 'Local storage only (offline)',
                     trailing: _isConnectingDrive
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : (driveConnected
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  TextButton(
-                                    onPressed: _switchDriveAccount,
-                                    child: Text(
-                                      'Switch',
-                                      style: TextStyle(color: context.accentColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            ? PopupMenuButton<String>(
+                                icon: Icon(Icons.more_vert, size: 20, color: context.textSecondary),
+                                tooltip: 'Drive options',
+                                onSelected: (val) {
+                                  if (val == 'switch') _switchDriveAccount();
+                                  if (val == 'disconnect') _disconnectDrive();
+                                },
+                                itemBuilder: (ctx) => [
+                                  const PopupMenuItem(
+                                    value: 'switch',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.swap_horiz, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Switch Account'),
+                                      ],
                                     ),
                                   ),
-                                  TextButton(
-                                    onPressed: _disconnectDrive,
-                                    child: const Text(
-                                      'Disconnect',
-                                      style: TextStyle(color: AppColors.error, fontSize: 13, fontWeight: FontWeight.w600),
+                                  const PopupMenuItem(
+                                    value: 'disconnect',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.link_off, size: 18, color: AppColors.error),
+                                        SizedBox(width: 8),
+                                        Text('Disconnect', style: TextStyle(color: AppColors.error)),
+                                      ],
                                     ),
                                   ),
                                 ],

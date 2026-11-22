@@ -183,46 +183,27 @@ class _SplashScreenState extends State<SplashScreen>
                     );
                   },
                   child: Container(
-                    width: 124,
-                    height: 124,
+                    width: 110,
+                    height: 110,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      color: const Color(0xFF0F1117),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.09),
-                        width: 1.2,
-                      ),
+                      borderRadius: BorderRadius.circular(26),
                       boxShadow: [
-                        // Ambient multi-hued neon rim glow matching puzzle pieces
                         BoxShadow(
-                          color: const Color(0xFF38BDF8).withOpacity(0.20),
-                          blurRadius: 36,
-                          offset: const Offset(-8, 12),
-                        ),
-                        BoxShadow(
-                          color: const Color(0xFFFB7185).withOpacity(0.22),
-                          blurRadius: 36,
-                          offset: const Offset(8, -10),
-                        ),
-                        BoxShadow(
-                          color: const Color(0xFFFBBF24).withOpacity(0.18),
-                          blurRadius: 28,
-                          offset: const Offset(0, 4),
+                          color: const Color(0xFF6366F1).withOpacity(0.25),
+                          blurRadius: 32,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Image.asset(
-                        'assets/icons/app_icon.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Icon(
-                            Icons.lightbulb_outline_rounded,
-                            color: Color(0xFFFBBF24),
-                            size: 64,
-                          ),
+                    child: Image.asset(
+                      'assets/icons/app_icon.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Color(0xFF818CF8),
+                          size: 56,
                         ),
                       ),
                     ),
@@ -236,37 +217,26 @@ class _SplashScreenState extends State<SplashScreen>
                   position: _textSlide,
                   child: FadeTransition(
                     opacity: _textFade,
-                    child: Column(
+                    child: const Column(
                       children: [
-                        // "TRUE ME" with high-end tracking
-                        ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Color(0xFFE2E8F0),
-                              Color(0xFFCBD5E1),
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ).createShader(bounds),
-                          child: const Text(
-                            'TRUE ME',
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 6.5,
-                              color: Colors.white,
-                            ),
+                        Text(
+                          'TRUE ME',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 5.0,
+                            color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        // Aesthetic Tagline
-                        const Text(
+                        SizedBox(height: 6),
+                        Text(
                           'ENLIGHTEN YOUR POTENTIAL',
                           style: TextStyle(
+                            fontFamily: 'Inter',
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 3.2,
+                            letterSpacing: 2.5,
                             color: Color(0xFF94A3B8),
                           ),
                         ),
@@ -283,8 +253,8 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Column(
                     children: [
                       Container(
-                        width: 170,
-                        height: 3.5,
+                        width: 160,
+                        height: 3,
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(3),
@@ -296,22 +266,19 @@ class _SplashScreenState extends State<SplashScreen>
                             return Align(
                               alignment: Alignment.centerLeft,
                               child: Container(
-                                width: 170 * progress,
+                                width: 160 * progress,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(3),
                                   gradient: const LinearGradient(
                                     colors: [
-                                      Color(0xFF38BDF8), // Cyan
-                                      Color(0xFFFBBF24), // Amber Gold
-                                      Color(0xFFFB7185), // Coral Pink
-                                      Color(0xFFA3E635), // Matcha Lime
+                                      Color(0xFF6366F1), // Smart Indigo
+                                      Color(0xFFA855F7), // Soft Violet
                                     ],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF38BDF8).withOpacity(0.5),
-                                      blurRadius: 8,
-                                      spreadRadius: 0.5,
+                                      color: const Color(0xFF6366F1).withOpacity(0.6),
+                                      blurRadius: 6,
                                     ),
                                   ],
                                 ),
