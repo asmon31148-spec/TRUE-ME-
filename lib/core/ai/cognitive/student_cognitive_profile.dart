@@ -115,9 +115,15 @@ class StudentCognitiveProfile {
     }
 
     // 5. Study momentum
-    final todayKey = OfflineCacheService.dateKey(now);
-    final todayMinutes = OfflineCacheService.getDailyMinutes(todayKey);
-    final streak = OfflineCacheService.getStudyStreak();
+    int todayMinutes = 0;
+    try {
+      final aBox = Hive.box(OfflineCacheService.analyticsBox);
+      final rawDaily = aBox.get('daily_minutes') as Map? ?? {};
+      final todayKey = OfflineCacheService.dateKey(now);
+      final val = rawDaily[todayKey];
+      if (val is num) todayMinutes = val.toInt();
+    } catch (_) {}
+    final streak = OfflineCacheService.getCurrentStreak();
 
     // 6. Subject-specific drill-down if scoped
     int? subjectMastery;
@@ -189,7 +195,7 @@ class StudentCognitiveProfile {
     return '''
 === LIVE STUDENT COGNITIVE PROFILE ===
 Student: $studentName
-$subjectLineCognitive Tier: $tierLabel
+${subjectLine}Cognitive Tier: $tierLabel
 Exam Timeline: $urgencyLabel
 Recorded Weaknesses / Decaying Knowledge: $weakFormatted
 Memory Decay Risk: $dueFlashcardsCount flashcards overdue (out of $totalFlashcardsCount total)

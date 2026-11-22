@@ -637,7 +637,7 @@ $cognitiveContext
 $manifest
 
 ### RESPONSE DIRECTIVES:
-- Empathic, proactive diagnosis. Meet the student at their verified cognitive level (${cognitiveProfile.activeSubjectTier.name.toUpperCase()}).
+- Empathic, proactive diagnosis. Meet the student at their verified cognitive level (${(cognitiveProfile.activeSubjectTier ?? cognitiveProfile.overallTier).name.toUpperCase()}).
 - When you detect gaps, recommend concrete action and append the corresponding action tag on its own line:
   [ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule|voice_tutor | <short topic>]
 - Format with clean ## headings and high-yield bullet points (- ).

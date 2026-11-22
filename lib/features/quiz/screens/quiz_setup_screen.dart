@@ -77,7 +77,8 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
   void _adaptDifficultyToStudent() {
     final profile = StudentCognitiveProfile.buildLive(subjectScope: _effectiveSubject);
-    switch (profile.activeSubjectTier) {
+    final tier = profile.activeSubjectTier ?? profile.overallTier;
+    switch (tier) {
       case CognitiveTier.mastery:
         _selectedDifficulty = 'Hard';
         break;
