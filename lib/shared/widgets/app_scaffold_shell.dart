@@ -40,8 +40,9 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location == '/library') return 1;
-    if (location == '/practice') return 2;
-    if (location == '/progress') return 3;
+    if (location == '/chat') return 2;
+    if (location == '/practice') return 3;
+    if (location == '/progress') return 4;
     return 0; // Default: /today
   }
 
@@ -65,9 +66,12 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
         context.go('/library');
         break;
       case 2:
-        context.go('/practice');
+        context.push('/chat');
         break;
       case 3:
+        context.go('/practice');
+        break;
+      case 4:
         context.go('/progress');
         break;
     }
@@ -94,40 +98,40 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
               child: SafeArea(
                 top: false,
                 child: SizedBox(
-                  height: 60,
+                  height: 62,
                   child: Row(
                     children: [
                       _NavItem(
-                        icon: Icons.check_circle_outline,
-                        activeIcon: Icons.check_circle,
+                        icon: Icons.today_outlined,
+                        activeIcon: Icons.today_rounded,
                         label: 'Today',
-                        subLabel: '日',
                         isSelected: selectedIdx == 0,
                         onTap: () => _onItemTapped(0, context),
                       ),
                       _NavItem(
-                        icon: Icons.auto_stories_outlined,
-                        activeIcon: Icons.auto_stories,
+                        icon: Icons.folder_outlined,
+                        activeIcon: Icons.folder_rounded,
                         label: 'Library',
-                        subLabel: '書',
                         isSelected: selectedIdx == 1,
                         onTap: () => _onItemTapped(1, context),
                       ),
-                      _NavItem(
-                        icon: Icons.psychology_outlined,
-                        activeIcon: Icons.psychology,
-                        label: 'Practice',
-                        subLabel: '練',
+                      _SageCenterButton(
                         isSelected: selectedIdx == 2,
                         onTap: () => _onItemTapped(2, context),
                       ),
                       _NavItem(
-                        icon: Icons.bar_chart_outlined,
-                        activeIcon: Icons.bar_chart,
-                        label: 'Progress',
-                        subLabel: '道',
+                        icon: Icons.psychology_outlined,
+                        activeIcon: Icons.psychology_rounded,
+                        label: 'Practice',
                         isSelected: selectedIdx == 3,
                         onTap: () => _onItemTapped(3, context),
+                      ),
+                      _NavItem(
+                        icon: Icons.insights_outlined,
+                        activeIcon: Icons.insights_rounded,
+                        label: 'Progress',
+                        isSelected: selectedIdx == 4,
+                        onTap: () => _onItemTapped(4, context),
                       ),
                     ],
                   ),
@@ -143,7 +147,6 @@ class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  final String subLabel;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -151,16 +154,14 @@ class _NavItem extends StatelessWidget {
     required this.icon,
     required this.activeIcon,
     required this.label,
-    required this.subLabel,
     required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = context.isDarkMode ? ZenColors.darkInk : ZenColors.sumiInk;
+    final activeColor = context.isDarkMode ? ZenColors.darkVermilion : ZenColors.vermilionSeal;
     final inactiveColor = context.isDarkMode ? ZenColors.darkMist : ZenColors.stoneMist;
-    final dotColor = context.isDarkMode ? ZenColors.darkVermilion : ZenColors.vermilionSeal;
 
     return Expanded(
       child: InkWell(
@@ -172,10 +173,10 @@ class _NavItem extends StatelessWidget {
           children: [
             Icon(
               isSelected ? activeIcon : icon,
-              size: 20,
+              size: 22,
               color: isSelected ? activeColor : inactiveColor,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
@@ -185,14 +186,67 @@ class _NavItem extends StatelessWidget {
                 letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 3),
-            // Calligraphic vermilion dot or empty spacer
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SageCenterButton extends StatelessWidget {
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SageCenterButton({
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             Container(
-              width: 4,
-              height: 4,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: isSelected ? dotColor : Colors.transparent,
                 shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF6366F1), const Color(0xFF8B5CF6)]
+                      : [const Color(0xFF4F46E5), const Color(0xFF7C3AED)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.35),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                size: 19,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Sage',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                letterSpacing: -0.2,
               ),
             ),
           ],

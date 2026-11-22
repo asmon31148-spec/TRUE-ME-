@@ -457,36 +457,32 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                   Row(
                     children: [
-                      // Vermilion Hanko Seal (Square red seal: [ 印 1 Day ])
+                      // Streak Badge: [ 🔥 1 Day ]
                       InkWell(
                         onTap: () => context.go('/progress'),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(16),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: redWash,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: redSeal.withOpacity(0.6), width: 1.2),
+                            color: isDark ? const Color(0xFF2D2310) : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFFF59E0B).withOpacity(0.4) : const Color(0xFFF59E0B).withOpacity(0.5),
+                              width: 1,
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                '印',
-                                style: ZenTypography.hankoSeal.copyWith(
-                                  color: redSeal,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
+                              const Text('🔥', style: TextStyle(fontSize: 12)),
+                              const SizedBox(width: 5),
                               Text(
                                 '$_streak ${_streak == 1 ? 'Day' : 'Days'}',
                                 style: TextStyle(
                                   fontFamilyFallback: ZenTypography.sansFallbacks,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: redSeal,
-                                  letterSpacing: 0.2,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309),
                                 ),
                               ),
                             ],
@@ -662,7 +658,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                       ),
                     ] else if (_tasks.isNotEmpty) ...[
                       Text(
-                        '✦ All Daily Scrolls Mastered',
+                        '🎉 All Goals Completed!',
                         style: ZenTypography.editorialHeadline.copyWith(
                           fontSize: 19,
                           color: primaryInk,
@@ -679,7 +675,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                       ),
                     ] else ...[
                       Text(
-                        'The Mindful Scholar Sanctuary',
+                        'Today\'s Study Focus',
                         style: ZenTypography.editorialHeadline.copyWith(
                           fontSize: 19,
                           color: primaryInk,
@@ -687,7 +683,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Consult Sage to draft your daily focus plan.',
+                        'Consult Sage to draft your personalized daily plan.',
                         style: TextStyle(
                           fontFamilyFallback: ZenTypography.sansFallbacks,
                           fontSize: 12,
@@ -697,7 +693,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     ],
                     const SizedBox(height: 16),
 
-                    // Tactile Pill Action Button: [ 筆 Begin Session • 25m ]
+                    // Tactile Pill Action Button: [ ▶ Begin Session • 25m ]
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -709,7 +705,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                   if (upNextTask != null) {
                                     _launchTask(upNextTask);
                                   } else if (_tasks.isNotEmpty) {
-                                    context.go('/practice');
+                                    context.go('/progress');
                                   } else {
                                     _generateAiPlan();
                                   }
@@ -737,19 +733,18 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                 : Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        upNextTask != null ? '筆' : (_tasks.isNotEmpty ? '道' : '✦'),
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                      Icon(
+                                        upNextTask != null
+                                            ? Icons.play_arrow_rounded
+                                            : (_tasks.isNotEmpty ? Icons.check_circle_outline_rounded : Icons.auto_awesome_rounded),
+                                        color: Colors.white,
+                                        size: 16,
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
                                         upNextTask != null
                                             ? 'Begin Session • ${upNextTask['duration'] ?? 25}m'
-                                            : (_tasks.isNotEmpty ? 'Explore Practice' : 'Draft Plan with Sage'),
+                                            : (_tasks.isNotEmpty ? 'All Done for Today ✓' : 'Plan Day with Sage'),
                                         style: TextStyle(
                                           fontFamilyFallback: ZenTypography.sansFallbacks,
                                           fontSize: 13,
@@ -783,14 +778,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // 3. The Daily Scroll Header + Calligraphic Actions
+              // 3. Today's Study Plan Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
                       Text(
-                        "The Daily Scroll",
+                        "Today's Study Plan",
                         style: ZenTypography.editorialHeadline.copyWith(
                           fontSize: 18,
                           color: primaryInk,
@@ -1164,18 +1159,21 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: redWash,
+                                            color: isDark ? const Color(0xFF064E3B) : const Color(0xFFDCFCE7),
                                             borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: redSeal.withOpacity(0.5), width: 0.8),
+                                            border: Border.all(
+                                              color: isDark ? const Color(0xFF059669).withOpacity(0.5) : const Color(0xFF16A34A).withOpacity(0.4),
+                                              width: 0.8,
+                                            ),
                                           ),
                                           child: Text(
-                                            '完 Mastered',
+                                            '✓ Completed',
                                             style: TextStyle(
-                                              fontFamilyFallback: ZenTypography.serifFallbacks,
+                                              fontFamilyFallback: ZenTypography.sansFallbacks,
                                               fontSize: 10,
-                                              fontWeight: FontWeight.w800,
-                                              color: redSeal,
-                                              letterSpacing: 0.2,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF15803D),
+                                              letterSpacing: 0.1,
                                             ),
                                           ),
                                         ),
@@ -1288,77 +1286,45 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               ),
               const SizedBox(height: 22),
 
-              // 6. Scholar's Sanctum (Mindful Study Hub — Eliminates empty lower screen void)
+              // 6. Quick Study Tools (Light, Non-Intrusive Quick Shortcuts)
               Text(
-                "Scholar's Sanctum",
+                "Quick Study",
                 style: ZenTypography.editorialHeadline.copyWith(
-                  fontSize: 17,
+                  fontSize: 16,
                   color: primaryInk,
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _SanctumTile(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    _QuickStudyChip(
                       icon: Icons.quiz_outlined,
-                      title: 'Practice Quiz',
-                      subtitle: 'Active recall',
-                      color: isDark ? ZenColors.darkVermilion : ZenColors.vermilionSeal,
-                      surfaceBg: surfaceBg,
-                      hairlineBorder: hairlineBorder,
-                      primaryInk: primaryInk,
-                      secondaryMist: secondaryMist,
-                      onTap: () => context.go('/practice'),
+                      label: 'Rapid Quiz',
+                      onTap: () => context.push('/quiz'),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _SanctumTile(
+                    const SizedBox(width: 8),
+                    _QuickStudyChip(
                       icon: Icons.style_outlined,
-                      title: 'Flashcards',
-                      subtitle: 'Spaced memory',
-                      color: isDark ? const Color(0xFFFBBF24) : ZenColors.calculusInk,
-                      surfaceBg: surfaceBg,
-                      hairlineBorder: hairlineBorder,
-                      primaryInk: primaryInk,
-                      secondaryMist: secondaryMist,
+                      label: 'Flashcards',
                       onTap: () => context.push('/flashcards'),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _SanctumTile(
-                      icon: Icons.auto_stories_outlined,
-                      title: 'Library Vault',
-                      subtitle: 'Notes & sources',
-                      color: isDark ? const Color(0xFF86EFAC) : ZenColors.microbioInk,
-                      surfaceBg: surfaceBg,
-                      hairlineBorder: hairlineBorder,
-                      primaryInk: primaryInk,
-                      secondaryMist: secondaryMist,
-                      onTap: () => context.go('/library'),
+                    const SizedBox(width: 8),
+                    _QuickStudyChip(
+                      icon: Icons.timer_outlined,
+                      label: 'Focus Timer',
+                      onTap: () => context.push('/focus'),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _SanctumTile(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      title: 'Ask Sage',
-                      subtitle: 'AI study tutor',
-                      color: isDark ? const Color(0xFFC4B5FD) : ZenColors.csInk,
-                      surfaceBg: surfaceBg,
-                      hairlineBorder: hairlineBorder,
-                      primaryInk: primaryInk,
-                      secondaryMist: secondaryMist,
-                      onTap: () => context.push('/chat'),
+                    const SizedBox(width: 8),
+                    _QuickStudyChip(
+                      icon: Icons.mic_none_rounded,
+                      label: 'Voice Tutor',
+                      onTap: () => context.push('/voice-tutor'),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -1368,62 +1334,52 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   }
 }
 
-class _SanctumTile extends StatelessWidget {
+class _QuickStudyChip extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final Color surfaceBg;
-  final Color hairlineBorder;
-  final Color primaryInk;
-  final Color secondaryMist;
+  final String label;
   final VoidCallback onTap;
 
-  const _SanctumTile({
+  const _QuickStudyChip({
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.surfaceBg,
-    required this.hairlineBorder,
-    required this.primaryInk,
-    required this.secondaryMist,
+    required this.label,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: surfaceBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: hairlineBorder, width: 0.8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontFamilyFallback: ZenTypography.sansFallbacks,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: primaryInk,
-              ),
+          color: isDark ? const Color(0xFF1E2638) : const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2E3A52) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
             ),
-            const SizedBox(height: 2),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: context.accentColor),
+            const SizedBox(width: 6),
             Text(
-              subtitle,
+              label,
               style: TextStyle(
                 fontFamilyFallback: ZenTypography.sansFallbacks,
-                fontSize: 11,
-                color: secondaryMist,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimary,
               ),
             ),
           ],

@@ -4,24 +4,24 @@ import 'package:flutter/material.dart';
 class ZenColors {
   ZenColors._();
 
-  // Light Mode ("Morning Parchment")
-  static const Color washiCanvas = Color(0xFFFBF9F5);      // Warm unbleached paper (zero blue light)
-  static const Color washiSurface = Color(0xFFF4F1EA);     // Subtle tone shift for elevated surfaces
-  static const Color washiBorder = Color(0xFFE7E3D9);      // Faint hairline divider
-  static const Color sumiInk = Color(0xFF1C1917);          // Deep calligraphy black
-  static const Color stoneMist = Color(0xFF78716C);        // Soft charcoal secondary text
+  // Light Mode ("Morning Porcelain")
+  static const Color washiCanvas = Color(0xFFF8FAFC);      // Clean modern soft slate canvas
+  static const Color washiSurface = Color(0xFFFFFFFF);     // Pure clean white card surface
+  static const Color washiBorder = Color(0xFFE2E8F0);      // Soft subtle hairline divider
+  static const Color sumiInk = Color(0xFF0F172A);          // Deep modern slate black
+  static const Color stoneMist = Color(0xFF64748B);        // Clean neutral secondary text
   
-  // Signature Accent: The Vermilion Hanko Seal
-  static const Color vermilionSeal = Color(0xFFDC2626);    // Rich cinnabar red for streaks & stamps
-  static const Color vermilionSoft = Color(0xFFFEE2E2);    // Soft blush wash for seal background
+  // Signature Accent: Smart Indigo (Calming & Focused)
+  static const Color vermilionSeal = Color(0xFF4F46E5);    // Smart Indigo (Focus, Clarity & Intellect)
+  static const Color vermilionSoft = Color(0xFFEEF2FF);    // Soft indigo wash for chips & highlights
 
   // Dark Mode ("Midnight Scholar")
-  static const Color darkCanvas = Color(0xFF121110);       // Smoked charcoal parchment
-  static const Color darkSurface = Color(0xFF1C1A18);      // Elevated ink wash stone
-  static const Color darkBorder = Color(0xFF292524);       // Hairline brush stroke
-  static const Color darkInk = Color(0xFFF5F4F0);          // Warm bone-white text
-  static const Color darkMist = Color(0xFFA8A29E);         // Muted parchment grey
-  static const Color darkVermilion = Color(0xFFEF4444);    // Glowing ember red
+  static const Color darkCanvas = Color(0xFF0B0F19);       // Deep midnight slate canvas
+  static const Color darkSurface = Color(0xFF151B28);      // Elevated obsidian slate card surface
+  static const Color darkBorder = Color(0xFF222B3D);       // Soft hairline border
+  static const Color darkInk = Color(0xFFF8FAFC);          // Bright clean text
+  static const Color darkMist = Color(0xFF94A3B8);         // Muted slate text
+  static const Color darkVermilion = Color(0xFF818CF8);    // Glowing indigo iris accent
 
   // Subject Ink Tags (Pastel Washes)
   static const Color csInk = Color(0xFF7C3AED);           // Violet ink

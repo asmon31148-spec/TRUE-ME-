@@ -66,161 +66,78 @@ class _PracticeScreenState extends State<PracticeScreen> {
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
-            // 1. Quiz Card
-            AppCard(
-              showChevron: true,
-              onTap: () async {
-                await context.push('/quiz');
-                if (mounted) _loadRecent();
-              },
-              child: const Row(
-                children: [
-                  AppIconBadge(icon: Icons.quiz_outlined, size: 42, iconSize: 22),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Quiz', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Test your understanding with AI quizzes', style: AppTypography.secondary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            // 2-Column Practice Tool Grid
+            GridView.count(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _PracticeGridTile(
+                  icon: Icons.quiz_outlined,
+                  title: 'Quiz',
+                  subtitle: 'Adaptive MCQs',
+                  tintColor: const Color(0xFF6366F1),
+                  onTap: () async {
+                    await context.push('/quiz');
+                    if (mounted) _loadRecent();
+                  },
+                ),
+                _PracticeGridTile(
+                  icon: Icons.style_outlined,
+                  title: 'Flashcards',
+                  subtitle: 'Spaced recall',
+                  tintColor: const Color(0xFFF59E0B),
+                  onTap: () async {
+                    await context.push('/flashcards');
+                    if (mounted) _loadRecent();
+                  },
+                ),
+                _PracticeGridTile(
+                  icon: Icons.mic_none_rounded,
+                  title: 'Voice Tutor',
+                  subtitle: 'Oral Socratic exam',
+                  tintColor: const Color(0xFFEC4899),
+                  onTap: () async {
+                    await context.push('/voice-tutor');
+                    if (mounted) _loadRecent();
+                  },
+                ),
+                _PracticeGridTile(
+                  icon: Icons.timer_outlined,
+                  title: 'Focus Flow',
+                  subtitle: 'Pomodoro timer',
+                  tintColor: const Color(0xFF10B981),
+                  onTap: () async {
+                    await context.push('/focus');
+                    if (mounted) _loadRecent();
+                  },
+                ),
+                _PracticeGridTile(
+                  icon: Icons.account_tree_outlined,
+                  title: 'Mind Map',
+                  subtitle: 'Visual concept trees',
+                  tintColor: const Color(0xFF8B5CF6),
+                  onTap: () async {
+                    await context.push('/mindmap');
+                    if (mounted) _loadRecent();
+                  },
+                ),
+                _PracticeGridTile(
+                  icon: Icons.history_edu_outlined,
+                  title: 'Mistake Vault',
+                  subtitle: 'Review weak spots',
+                  tintColor: const Color(0xFFEF4444),
+                  onTap: () async {
+                    await context.push('/mistake-vault');
+                    if (mounted) _loadRecent();
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-
-            // 2. Flashcards Card
-            AppCard(
-              showChevron: true,
-              onTap: () async {
-                await context.push('/flashcards');
-                if (mounted) _loadRecent();
-              },
-              child: const Row(
-                children: [
-                  AppIconBadge(icon: Icons.style_outlined, size: 42, iconSize: 22),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Flashcards', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Active recall spaced-repetition cards', style: AppTypography.secondary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // 3. Voice Tutor Card
-            AppCard(
-              showChevron: true,
-              onTap: () async {
-                await context.push('/voice-tutor');
-                if (mounted) _loadRecent();
-              },
-              child: const Row(
-                children: [
-                  AppIconBadge(icon: Icons.mic_none_outlined, size: 42, iconSize: 22),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Voice tutor', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Talk directly with Sage tutor', style: AppTypography.secondary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // 4. Mind Map Card
-            AppCard(
-              showChevron: true,
-              onTap: () async {
-                await context.push('/mindmap');
-                if (mounted) _loadRecent();
-              },
-              child: const Row(
-                children: [
-                  AppIconBadge(icon: Icons.account_tree_outlined, size: 42, iconSize: 22),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Mind map', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Explore concepts visually', style: AppTypography.secondary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // 5. Focus Flow Timer Card
-            AppCard(
-              showChevron: true,
-              onTap: () async {
-                await context.push('/focus');
-                if (mounted) _loadRecent();
-              },
-              child: const Row(
-                children: [
-                  AppIconBadge(icon: Icons.timer_outlined, size: 42, iconSize: 22),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Focus flow', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Deep immersion Pomodoro study sprints', style: AppTypography.secondary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // 6. Mistake Vault Card
-            AppCard(
-              showChevron: true,
-              onTap: () async {
-                await context.push('/mistake-vault');
-                if (mounted) _loadRecent();
-              },
-              child: const Row(
-                children: [
-                  AppIconBadge(icon: Icons.history_edu_outlined, size: 42, iconSize: 22),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Mistake vault', style: AppTypography.sectionHeading),
-                        SizedBox(height: 2),
-                        Text('Review and master missed quiz concepts', style: AppTypography.secondary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
             // Recent Sessions (REAL)
             const Text('Recent', style: AppTypography.sectionHeading),
@@ -272,5 +189,87 @@ class _PracticeScreenState extends State<PracticeScreen> {
       ),
     ),
   );
+  }
+}
+
+class _PracticeGridTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color tintColor;
+  final VoidCallback onTap;
+
+  const _PracticeGridTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tintColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? const Color(0xFF263044) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: tintColor.withOpacity(isDark ? 0.18 : 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 20, color: tintColor),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: context.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
