@@ -1,15 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:printing/printing.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/liquid_glass_theme.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
 import '../../../shared/widgets/ai_thinking_indicator.dart';
+import '../../../shared/widgets/glass_card.dart';
 import '../providers/chat_provider.dart';
 import 'formatted_message_body.dart';
 
@@ -274,6 +277,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                     }
 
                     final msg = chatState.messages[idx];
+                    final isDark = context.isDark;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Align(
@@ -286,81 +290,143 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                             crossAxisAlignment:
                                 msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: msg.isUser ? context.accentColor : context.surfaceColor,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: msg.isUser
-                                      ? null
-                                      : Border.all(color: context.borderColor, width: 1),
-                                ),
-                                child: msg.isUser
-                                    ? SelectableText(
-                                        msg.text,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          height: 1.4,
-                                          color: Colors.white,
+                              msg.isUser
+                                  ? CustomPaint(
+                                      foregroundPainter: SpecularBorderPainter(
+                                        borderRadius: 18,
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Colors.white.withOpacity(0.35),
+                                            Colors.white.withOpacity(0.06),
+                                          ],
                                         ),
-                                      )
-                                    : SelectionArea(
-                                        child: FormattedMessageBody(
-                                          text: msg.text,
-                                          textColor: context.textPrimary,
+                                        borderWidth: 1.0,
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: LiquidGlassTheme.electricIndigo,
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(18),
+                                            topRight: Radius.circular(18),
+                                            bottomLeft: Radius.circular(18),
+                                            bottomRight: Radius.circular(4),
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: LiquidGlassTheme.electricIndigo.withOpacity(0.32),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: SelectableText(
+                                          msg.text,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            height: 1.4,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
-                              ),
+                                    )
+                                  : GlassCard(
+                                      borderRadius: 18,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      glowColor: LiquidGlassTheme.electricIndigo,
+                                      child: SelectionArea(
+                                        child: FormattedMessageBody(
+                                          text: msg.text,
+                                          textColor: context.liquidTextPrimary,
+                                        ),
+                                      ),
+                                    ),
                               if (!msg.isUser && msg.action != null) ...[
                                 const SizedBox(height: 8),
                                 InkWell(
                                   onTap: () => _runAction(msg.action!),
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(12),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: context.accentTint,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: context.accentColor.withOpacity(0.45)),
+                                      color: LiquidGlassTheme.electricIndigo.withOpacity(isDark ? 0.20 : 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: LiquidGlassTheme.electricIndigo.withOpacity(0.40),
+                                        width: 1,
+                                      ),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(_actionIcon(msg.action!.type), size: 18, color: context.accentColor),
+                                        Icon(_actionIcon(msg.action!.type), size: 18, color: LiquidGlassTheme.electricIndigo),
                                         const SizedBox(width: 8),
                                         Flexible(
                                           child: Text(
                                             msg.action!.label,
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                               fontSize: 13.5,
-                                              fontWeight: FontWeight.w600,
-                                              color: context.accentColor,
+                                              fontWeight: FontWeight.w700,
+                                              color: LiquidGlassTheme.electricIndigo,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward_ios, size: 13, color: context.accentColor),
+                                        const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: LiquidGlassTheme.electricIndigo),
                                       ],
                                     ),
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 5),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (!msg.isUser && msg.citation != null) ...[
-                                    Text(
-                                      msg.citation!,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: context.accentColor,
-                                        fontWeight: FontWeight.w500,
+                                    GestureDetector(
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        _showCitationSheet(context, msg.citation!);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          color: LiquidGlassTheme.electricIndigo.withOpacity(isDark ? 0.20 : 0.10),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: LiquidGlassTheme.electricIndigo.withOpacity(0.35),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.menu_book_rounded, size: 11, color: LiquidGlassTheme.electricIndigo),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              msg.citation!,
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                color: LiquidGlassTheme.electricIndigo,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    const Text(' • ', style: AppTypography.smallLabel),
+                                    const SizedBox(width: 6),
                                   ],
-                                  Text(_formatTime(msg.timestamp), style: AppTypography.smallLabel),
+                                  Text(
+                                    _formatTime(msg.timestamp),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.liquidTextMuted,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -375,10 +441,15 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
         // Quick Study Feature Command Chips
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.only(top: 6, bottom: 2),
+          padding: const EdgeInsets.only(top: 6, bottom: 4),
           decoration: BoxDecoration(
-            color: context.bgColor,
-            border: Border(top: BorderSide(color: context.borderColor, width: 1)),
+            color: context.liquidCanvas,
+            border: Border(
+              top: BorderSide(
+                color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.06),
+                width: 1,
+              ),
+            ),
           ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -396,12 +467,21 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
           ),
         ),
 
-        // Input Bar
+        // Elevated Floating Glass Input Bar
         Container(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-          color: context.bgColor,
+          color: context.liquidCanvas,
           child: Row(
             children: [
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 24),
+                color: LiquidGlassTheme.electricIndigo,
+                tooltip: 'Attach study notes or files',
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  context.push('/library');
+                },
+              ),
               Expanded(
                 child: TextField(
                   controller: _textCtrl,
@@ -409,26 +489,32 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                   maxLines: 4,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _sendMessage(),
-                  style: TextStyle(color: context.textPrimary, fontSize: 15),
+                  style: TextStyle(color: context.liquidTextPrimary, fontSize: 15),
                   decoration: InputDecoration(
                     hintText: _isListening
-                        ? 'Listening...'
-                        : (hasSubject ? 'Ask Sage about $subjectTitle...' : 'Ask Sage...'),
-                    hintStyle: TextStyle(color: context.textSecondary),
+                        ? 'Listening to your voice...'
+                        : (hasSubject ? 'Ask Sage about $subjectTitle...' : 'Ask Sage anything...'),
+                    hintStyle: TextStyle(color: context.liquidTextSecondary),
                     filled: true,
-                    fillColor: context.surfaceColor,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    fillColor: context.liquidGlassFill,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(color: context.borderColor, width: 1),
+                      borderSide: BorderSide(
+                        color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.10),
+                        width: 1,
+                      ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(color: context.borderColor, width: 1),
+                      borderSide: BorderSide(
+                        color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.10),
+                        width: 1,
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(color: context.accentColor, width: 1.5),
+                      borderSide: const BorderSide(color: LiquidGlassTheme.electricIndigo, width: 1.5),
                     ),
                   ),
                 ),
@@ -437,14 +523,19 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
               IconButton(
                 icon: Icon(
                   _isListening ? Icons.mic : Icons.mic_none_outlined,
-                  size: 22,
-                  color: _isListening ? AppColors.error : context.textSecondary,
+                  size: 23,
+                  color: _isListening ? LiquidGlassTheme.roseAlert : context.liquidTextSecondary,
                 ),
-                tooltip: 'Voice input',
+                tooltip: 'Voice speech input',
                 onPressed: _toggleVoiceInput,
               ),
               IconButton(
-                icon: Icon(Icons.send_rounded, size: 22, color: context.accentColor),
+                icon: const Icon(Icons.arrow_upward_rounded, size: 22, color: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: LiquidGlassTheme.electricIndigo,
+                  shape: const CircleBorder(),
+                  padding: const EdgeInsets.all(8),
+                ),
                 onPressed: chatState.isThinking ? null : () => _sendMessage(),
               ),
             ],
@@ -463,27 +554,124 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: context.surfaceColor,
+            color: context.liquidGlassFill,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.borderColor),
+            border: Border.all(
+              color: context.isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: context.accentColor),
+              Icon(icon, size: 14, color: LiquidGlassTheme.electricIndigo),
               const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: context.textPrimary,
+                  color: context.liquidTextPrimary,
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showCitationSheet(BuildContext context, String citation) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.liquidCanvas,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: LiquidGlassTheme.electricIndigo.withOpacity(0.18),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.menu_book_rounded, color: LiquidGlassTheme.electricIndigo, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Verified Source Citation',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            'Extracted from your uploaded course notes',
+                            style: TextStyle(fontSize: 12, color: context.liquidTextSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: context.liquidGlassFill,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: context.isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.article_outlined, size: 20, color: LiquidGlassTheme.electricIndigo),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          citation,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: context.liquidTextPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: LiquidGlassTheme.electricIndigo,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.push('/library');
+                    },
+                    child: const Text('View Source in Library', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

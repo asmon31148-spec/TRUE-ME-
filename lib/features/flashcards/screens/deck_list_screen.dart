@@ -1,6 +1,9 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/colors.dart';
+import '../../../app/theme/liquid_glass_theme.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
@@ -10,6 +13,7 @@ import '../../../core/services/tts_service.dart';
 import '../../../core/utils/stem_formula_formatter.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/glass_card.dart';
 import '../providers/flashcard_provider.dart';
 
 class DeckListScreen extends ConsumerStatefulWidget {
@@ -26,7 +30,7 @@ class DeckListScreen extends ConsumerStatefulWidget {
   ConsumerState<DeckListScreen> createState() => _DeckListScreenState();
 }
 
-class _DeckListScreenState extends ConsumerState<DeckListScreen> {
+class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTickerProviderStateMixin {
   final TtsService _tts = TtsService();
   bool _isSpeaking = false;
   FlashcardDeckModel? _activeDeck;
@@ -35,10 +39,19 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
   int _cardIndex = 0;
   bool _isFlipped = false;
   int _reviewedCount = 0;
+  late final AnimationController _flipController;
+  late final Animation<double> _flipAnimation;
 
   @override
   void initState() {
     super.initState();
+    _flipController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _flipAnimation = Tween<double>(begin: 0.0, end: math.pi).animate(
+      CurvedAnimation(parent: _flipController, curve: Curves.easeInOutCubic),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(flashcardProvider.notifier).refreshFromCache();
@@ -48,8 +61,23 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
 
   @override
   void dispose() {
+    _flipController.dispose();
     _tts.dispose();
     super.dispose();
+  }
+
+  void _toggleCardFlip() {
+    _tts.stop();
+    HapticFeedback.lightImpact();
+    setState(() {
+      _isSpeaking = false;
+      _isFlipped = !_isFlipped;
+    });
+    if (_isFlipped) {
+      _flipController.forward();
+    } else {
+      _flipController.reverse();
+    }
   }
 
   Future<void> _speakCurrentCard() async {
@@ -166,6 +194,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
     }
 
     _tts.stop();
+    _flipController.reset();
     setState(() {
       _isSpeaking = false;
       _activeDeck = deck;
@@ -210,6 +239,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
       _reviewedCount++;
     }
 
+    _flipController.reset();
     if (_cardIndex < _sessionCards.length - 1) {
       setState(() {
         _cardIndex++;
@@ -491,133 +521,56 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
             children: [
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                  child: GestureDetector(
-                    onTap: () {
-                      _tts.stop();
-                      setState(() {
-                        _isSpeaking = false;
-                        _isFlipped = !_isFlipped;
-                      });
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: context.surfaceColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: context.borderColor, width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(context.isDarkMode ? 0.35 : 0.05),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Column(
-                          key: ValueKey(_isFlipped),
-                          children: [
-                            // Card Type Indicator Chip
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: (_isFlipped ? context.accentColor : const Color(0xFF6366F1)).withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: (_isFlipped ? context.accentColor : const Color(0xFF6366F1)).withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        _isFlipped ? Icons.check_circle_outline_rounded : Icons.help_outline_rounded,
-                                        size: 13,
-                                        color: _isFlipped ? context.accentColor : const Color(0xFF6366F1),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        _isFlipped ? 'ANSWER' : 'QUESTION',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.8,
-                                          color: _isFlipped ? context.accentColor : const Color(0xFF6366F1),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Spacer(),
-                            // Card Body Content
-                            SingleChildScrollView(
-                              child: Text(
-                                StemFormulaFormatter.format(_isFlipped ? card.back : card.front),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: _isFlipped ? 17 : 20,
-                                  fontWeight: _isFlipped ? FontWeight.w500 : FontWeight.w600,
-                                  color: context.textPrimary,
-                                  height: 1.5,
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            // Hint
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.touch_app_outlined, size: 14, color: context.textSecondary.withOpacity(0.7)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _isFlipped ? 'Tap to see question' : 'Tap to reveal answer',
-                                  style: AppTypography.smallLabel.copyWith(
-                                    color: context.textSecondary.withOpacity(0.8),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  child: _build3dFlippableCard(card),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: BoxDecoration(
-                  color: context.bgColor,
-                  border: Border(top: BorderSide(color: context.borderColor, width: 1)),
+                  color: context.liquidCanvas,
+                  border: Border(
+                    top: BorderSide(
+                      color: context.isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.08),
+                      width: 1,
+                    ),
+                  ),
                 ),
                 child: !_isFlipped
                     ? AppPrimaryButton(
-                        label: 'Show answer',
-                        onPressed: () => setState(() => _isFlipped = true),
+                        label: 'Reveal Answer',
+                        backgroundColor: LiquidGlassTheme.electricIndigo,
+                        onPressed: _toggleCardFlip,
                       )
                     : Row(
                         children: [
                           _buildIntervalButton(
                             'Again',
                             _requeuedCardIds.contains(card.id) ? '1d' : '< 1m',
-                            const Color(0xFFEF4444),
+                            LiquidGlassTheme.roseAlert,
                             () => _rateCard(0),
                           ),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Hard', _previewInterval(card, 3), const Color(0xFFF59E0B), () => _rateCard(3)),
+                          _buildIntervalButton(
+                            'Hard',
+                            _previewInterval(card, 3),
+                            LiquidGlassTheme.amberStreak,
+                            () => _rateCard(3),
+                          ),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Good', _previewInterval(card, 4), const Color(0xFF3B82F6), () => _rateCard(4)),
+                          _buildIntervalButton(
+                            'Good',
+                            _previewInterval(card, 4),
+                            LiquidGlassTheme.electricIndigo,
+                            () => _rateCard(4),
+                          ),
                           const SizedBox(width: 8),
-                          _buildIntervalButton('Easy', _previewInterval(card, 5), const Color(0xFF10B981), () => _rateCard(5)),
+                          _buildIntervalButton(
+                            'Easy',
+                            _previewInterval(card, 5),
+                            LiquidGlassTheme.emeraldFocus,
+                            () => _rateCard(5),
+                          ),
                         ],
                       ),
               ),
@@ -800,6 +753,133 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _build3dFlippableCard(FlashcardModel card) {
+    return GestureDetector(
+      onTap: _toggleCardFlip,
+      child: AnimatedBuilder(
+        animation: _flipAnimation,
+        builder: (context, child) {
+          final angle = _flipAnimation.value;
+          final isBack = angle > (math.pi / 2);
+
+          return Transform(
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.0012)
+              ..rotateY(angle),
+            alignment: Alignment.center,
+            child: isBack
+                ? Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()..rotateY(math.pi),
+                    child: _buildCardFace(card, isAnswer: true),
+                  )
+                : _buildCardFace(card, isAnswer: false),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCardFace(FlashcardModel card, {required bool isAnswer}) {
+    final isDark = context.isDark;
+    final accentColor = isAnswer ? LiquidGlassTheme.emeraldFocus : LiquidGlassTheme.electricIndigo;
+    final text = isAnswer ? card.back : card.front;
+
+    return GlassCard(
+      borderRadius: 22,
+      padding: const EdgeInsets.all(22),
+      surfaceColor: isDark
+          ? const Color(0xFF131824)
+          : Colors.white.withOpacity(0.92),
+      glowColor: accentColor,
+      child: Column(
+        children: [
+          // Header Chip: QUESTION vs ANSWER
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(isDark ? 0.22 : 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: accentColor.withOpacity(0.35),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isAnswer ? Icons.check_circle_outline_rounded : Icons.help_outline_rounded,
+                      size: 13,
+                      color: accentColor,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isAnswer ? 'ANSWER' : 'QUESTION',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _isSpeaking ? Icons.volume_up_rounded : Icons.volume_up_outlined,
+                  size: 20,
+                  color: _isSpeaking ? accentColor : context.liquidTextSecondary,
+                ),
+                onPressed: _speakCurrentCard,
+              ),
+            ],
+          ),
+
+          const Spacer(),
+
+          // Card Text Content with Stem Formula formatting
+          SingleChildScrollView(
+            child: Text(
+              StemFormulaFormatter.format(text),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: isAnswer ? 17.5 : 20,
+                fontWeight: isAnswer ? FontWeight.w500 : FontWeight.w700,
+                color: context.liquidTextPrimary,
+                height: 1.45,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Tap to flip hint
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.touch_app_outlined, size: 14, color: context.liquidTextMuted),
+              const SizedBox(width: 4),
+              Text(
+                isAnswer ? 'Tap card to flip to question' : 'Tap card to reveal answer',
+                style: TextStyle(
+                  color: context.liquidTextMuted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
