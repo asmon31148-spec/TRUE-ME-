@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:printing/printing.dart';
-import '../../../app/theme/colors.dart';
 import '../../../app/theme/liquid_glass_theme.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../app/theme/liquid_glass_theme.dart';
-import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
 import 'glass_card.dart';
 

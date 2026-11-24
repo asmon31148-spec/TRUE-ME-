@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../app/theme/liquid_glass_theme.dart';
-import '../../app/theme/theme_provider.dart';
 
 /// Reusable Apple-grade Liquid Glass Container.
 ///

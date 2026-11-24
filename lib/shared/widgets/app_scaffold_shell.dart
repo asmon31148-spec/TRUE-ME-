@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme/liquid_glass_theme.dart';
-import '../../app/theme/theme_provider.dart';
 import '../../core/services/update_service.dart';
 import 'glass_card.dart';
 

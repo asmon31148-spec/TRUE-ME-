@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/liquid_glass_theme.dart';
-import '../../../app/theme/theme_provider.dart';
-import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../providers/chat_provider.dart';

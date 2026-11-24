@@ -1,8 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../app/theme/liquid_glass_theme.dart';
-import '../../app/theme/theme_provider.dart';
-import 'glass_card.dart';
 
 /// Floating Frosted Liquid Glass Navigation Bar.
 ///
