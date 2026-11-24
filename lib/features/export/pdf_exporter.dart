@@ -608,7 +608,7 @@ class PdfExporter {
                 ),
                 child: pw.Text(
                   subject,
-                  style: const pw.TextStyle(
+                  style: pw.TextStyle(
                     fontSize: 9,
                     fontWeight: pw.FontWeight.bold,
                     color: PdfColors.white,
@@ -660,7 +660,7 @@ class PdfExporter {
                 ),
                 child: pw.Text(
                   subject,
-                  style: const pw.TextStyle(
+                  style: pw.TextStyle(
                     fontSize: 8.5,
                     fontWeight: pw.FontWeight.bold,
                     color: PdfColors.white,

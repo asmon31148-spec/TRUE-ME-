@@ -218,6 +218,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
     final chatState = ref.watch(chatProvider(_scopeKey));
     final hasSubject = widget.subject != null && widget.subject!.trim().isNotEmpty;
     final subjectTitle = hasSubject ? widget.subject!.trim() : 'your studies';
