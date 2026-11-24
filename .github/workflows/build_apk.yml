@@ -154,7 +154,15 @@ jobs:
           }
 
       - name: Build Android APK (Release)
-        run: flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }} > build.log 2>&1 || {
+            gh release delete debug-build --yes || true
+            gh release create debug-build -t "Debug Build" -F build.log || true
+            cat build.log
+            exit 1
+          }
 
       - name: Prepare APK for Direct Release
         run: |
