@@ -18,9 +18,12 @@ class AppFormatters {
   }
 
   static String formatExamCountdown(DateTime examDate) {
-    final diff = examDate.difference(DateTime.now()).inDays;
-    if (diff <= 0) return 'Exam Day Today!';
-    if (diff == 1) return 'Exam Tomorrow!';
-    return '$diff days until Exam';
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final examMidnight = DateTime(examDate.year, examDate.month, examDate.day);
+    final days = examMidnight.difference(todayMidnight).inDays;
+    if (days <= 0) return 'Exam Day Today!';
+    if (days == 1) return 'Exam Tomorrow!';
+    return '$days days until Exam';
   }
 }

@@ -27,16 +27,30 @@ class AchievementService {
     final sessions = OfflineCacheService.getRecentPracticeSessions();
     final decks = OfflineCacheService.getAllCachedDecks();
 
-    int totalReviewedCards = 0;
+    // Persistent reviewed card counting (prevents Decay Slayer from relocking)
+    int deckReviewedCards = 0;
+    for (final d in decks) {
+      final cards = (d['cards'] as List? ?? []);
+      for (final c in cards) {
+        if (c is Map && ((c['repetitions'] as num? ?? 0) > 0 || (c['interval'] as num? ?? 0) > 0)) {
+          deckReviewedCards++;
+        }
+      }
+    }
+
+    final lifetimeCards = OfflineCacheService.getLifetimeReviewedCards();
+    int sessionReviewedCards = 0;
     for (final s in sessions.where((e) => e['activity'] == 'flashcards')) {
       final sub = (s['subtitle'] as String? ?? '');
       final match = RegExp(r'(\d+)\s*cards?', caseSensitive: false).firstMatch(sub);
       if (match != null) {
-        totalReviewedCards += int.tryParse(match.group(1) ?? '0') ?? 0;
+        sessionReviewedCards += int.tryParse(match.group(1) ?? '0') ?? 0;
       }
     }
+    final totalReviewedCards = [deckReviewedCards, lifetimeCards, sessionReviewedCards].reduce((a, b) => a > b ? a : b);
 
-    final hasVoiceSession = sessions.any((e) => e['activity'] == 'voice');
+    final hasVoiceSession = OfflineCacheService.hasUsedVoiceTutor() ||
+        sessions.any((e) => e['activity'] == 'voice');
     final hasPerfectQuiz = quizzes.any((q) => (q['percentage'] as num? ?? 0) >= 100);
 
     return [

@@ -127,6 +127,7 @@ class AiRouter {
     // 1. Groq OSS 120B (Ultra-fast LPU inference: typically 1.5 - 4s)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_heavy')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_heavy');
         return await _groq
             .complete70B(
               prompt: prompt,
@@ -142,6 +143,7 @@ class AiRouter {
     // 2. Gemini Flash (Large context fallback)
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
+        await RateLimitGuardian.recordRequest('gemini_flash');
         return await _gemini
             .generateContent(
               prompt,
@@ -201,6 +203,7 @@ class AiRouter {
     // 1. Groq OSS 20B (Extreme speed 500-800 tokens/sec on LPUs)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_speed');
         return await _groq.complete8B(
           prompt: prompt,
           systemPrompt: systemPrompt,
@@ -229,6 +232,7 @@ class AiRouter {
     // 3. Gemini 2.5 Flash
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
+        await RateLimitGuardian.recordRequest('gemini_flash');
         return await _gemini.generateContent(
           prompt,
           systemInstruction: systemPrompt,
@@ -287,6 +291,7 @@ Return ONLY valid JSON matching this schema:
     // 1. Groq (High daily quota: 14,400 requests/day)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_speed');
         return await _groq.complete8B(
           prompt: prompt,
           systemPrompt: systemPrompt,
@@ -302,6 +307,7 @@ Return ONLY valid JSON matching this schema:
     // 2. Gemini 2.5 Flash
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
+        await RateLimitGuardian.recordRequest('gemini_flash');
         return await _gemini.generateContent(
           prompt,
           systemInstruction: systemPrompt,
@@ -385,6 +391,7 @@ Return ONLY valid JSON matching this schema:
     // 1. Groq
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_speed');
         return await _groq.complete8B(
           prompt: prompt,
           systemPrompt: systemPrompt,
@@ -400,6 +407,7 @@ Return ONLY valid JSON matching this schema:
     // 2. Gemini 2.5 Flash
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
+        await RateLimitGuardian.recordRequest('gemini_flash');
         return await _gemini.generateContent(
           prompt,
           systemInstruction: systemPrompt,
@@ -549,6 +557,7 @@ $question
     // RAG synthesis priority: Groq 8B (blazing fast sub-second) -> Groq 70B -> Gemini Flash -> OpenRouter Lightning
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_speed');
         return await _groq.complete8B(
           prompt: userPrompt,
           systemPrompt: systemPrompt,
@@ -561,6 +570,7 @@ $question
 
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_heavy')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_heavy');
         return await _groq.complete70B(
           prompt: userPrompt,
           systemPrompt: systemPrompt,
@@ -573,6 +583,7 @@ $question
 
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
+        await RateLimitGuardian.recordRequest('gemini_flash');
         return await _gemini.generateContent(
           userPrompt,
           systemInstruction: systemPrompt,
@@ -615,6 +626,7 @@ $question
     // 1. Groq (Fastest: 1-3s LPU inference)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
+        await RateLimitGuardian.recordRequest('groq_speed');
         return await _groq
             .complete8B(
               prompt: prompt,
@@ -630,6 +642,7 @@ $question
     // 2. Gemini Flash
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
+        await RateLimitGuardian.recordRequest('gemini_flash');
         return await _gemini
             .generateContent(
               prompt,

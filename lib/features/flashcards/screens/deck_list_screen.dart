@@ -201,9 +201,11 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> {
           rating: sm2Rating,
         );
 
+    final updatedCard = Sm2Algorithm.calculateNextReview(card: card, rating: sm2Rating);
+
     if (sm2Rating == 0 && !_requeuedCardIds.contains(card.id)) {
       _requeuedCardIds.add(card.id);
-      _sessionCards.add(card);
+      _sessionCards.add(updatedCard);
     } else {
       _reviewedCount++;
     }

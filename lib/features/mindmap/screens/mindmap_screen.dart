@@ -44,9 +44,9 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
 
     _builder = BuchheimWalkerConfiguration()
       ..orientation = BuchheimWalkerConfiguration.ORIENTATION_LEFT_RIGHT
-      ..siblingSeparation = 32
-      ..levelSeparation = 56
-      ..subtreeSeparation = 36;
+      ..siblingSeparation = 48
+      ..levelSeparation = 80
+      ..subtreeSeparation = 48;
 
     _algorithm = BuchheimWalkerAlgorithm(_builder, TreeEdgeRenderer(_builder));
 
@@ -273,6 +273,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                     return GestureDetector(
                                       onTap: () => _showNodeSheet(nodeId),
                                       child: Container(
+                                        constraints: const BoxConstraints(minWidth: 90, maxWidth: 220),
                                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                         decoration: BoxDecoration(
                                           color: context.surfaceColor,

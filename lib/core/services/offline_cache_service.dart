@@ -962,6 +962,16 @@ class OfflineCacheService {
       });
       if (recent.length > 20) recent.removeRange(20, recent.length);
       await box.put('recent_sessions', recent);
+
+      // Cumulative lifetime counters for badges to prevent spontaneous relocking
+      if (activity == 'flashcards') {
+        final match = RegExp(r'(\d+)\s*cards?', caseSensitive: false).firstMatch(subtitle ?? '');
+        final count = match != null ? (int.tryParse(match.group(1) ?? '0') ?? 0) : 1;
+        final currentTotal = (box.get('lifetime_reviewed_cards') as num? ?? 0).toInt();
+        await box.put('lifetime_reviewed_cards', currentTotal + count);
+      } else if (activity == 'voice') {
+        await box.put('has_used_voice_tutor', true);
+      }
     }
 
     SupabaseService.instance.insertStudySession(
@@ -988,10 +998,11 @@ class OfflineCacheService {
       final box = Hive.box(analyticsBox);
       final rawDaily = box.get('daily_minutes') as Map? ?? {};
       final now = DateTime.now();
-      final monday = now.subtract(Duration(days: now.weekday - 1));
+      // DST-safe: use calendar midnight subtraction
+      final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
       final List<int> week = [];
       for (int i = 0; i < 7; i++) {
-        final d = monday.add(Duration(days: i));
+        final d = DateTime(monday.year, monday.month, monday.day + i);
         final key = dateKey(d);
         final val = rawDaily[key];
         week.add(val is num ? val.toInt() : 0);
@@ -1013,9 +1024,11 @@ class OfflineCacheService {
       if (rawDaily.isEmpty) return 0;
 
       int streak = 0;
-      DateTime checkDay = DateTime.now();
+      final now = DateTime.now();
+      // DST-safe: use explicit calendar midnight
+      DateTime checkDay = DateTime(now.year, now.month, now.day);
       if ((rawDaily[dateKey(checkDay)] as num? ?? 0) == 0) {
-        checkDay = checkDay.subtract(const Duration(days: 1));
+        checkDay = DateTime(checkDay.year, checkDay.month, checkDay.day - 1);
       }
 
       while (true) {
@@ -1023,7 +1036,7 @@ class OfflineCacheService {
         final mins = (rawDaily[key] as num? ?? 0).toInt();
         if (mins > 0) {
           streak++;
-          checkDay = checkDay.subtract(const Duration(days: 1));
+          checkDay = DateTime(checkDay.year, checkDay.month, checkDay.day - 1);
         } else {
           break;
         }
@@ -1031,6 +1044,24 @@ class OfflineCacheService {
       return streak;
     } catch (_) {
       return 0;
+    }
+  }
+
+  static int getLifetimeReviewedCards() {
+    try {
+      final box = Hive.box(analyticsBox);
+      return (box.get('lifetime_reviewed_cards') as num? ?? 0).toInt();
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static bool hasUsedVoiceTutor() {
+    try {
+      final box = Hive.box(analyticsBox);
+      return box.get('has_used_voice_tutor') == true;
+    } catch (_) {
+      return false;
     }
   }
 

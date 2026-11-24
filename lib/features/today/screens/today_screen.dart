@@ -324,25 +324,35 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
 
   _SubjectChipStyle _getSubjectChipStyle(String subject, bool isDark) {
     final s = subject.toLowerCase();
-    if (s.contains('micro') || s.contains('bio') || s.contains('med') || s.contains('chem') || s.contains('life')) {
+    final words = s.split(RegExp(r'[^a-z0-9]+')).toSet();
+    final isCs = words.contains('cs') ||
+        s.startsWith('cs ') ||
+        s.contains('comp') ||
+        s.contains('data') ||
+        s.contains('code') ||
+        s.contains('algo') ||
+        s.contains('soft') ||
+        s.contains('program');
+
+    if (s.contains('micro') || s.contains('bio') || s.contains('med') || s.contains('chem') || s.contains('life') || s.contains('gene')) {
       // Forest Ink
       return _SubjectChipStyle(
         background: isDark ? const Color(0xFF064E3B).withOpacity(0.4) : ZenColors.microbioWash,
         text: isDark ? const Color(0xFF86EFAC) : ZenColors.microbioInk,
       );
-    } else if (s.contains('cs') || s.contains('comp') || s.contains('data') || s.contains('code') || s.contains('algo') || s.contains('soft')) {
-      // Violet Ink
-      return _SubjectChipStyle(
-        background: isDark ? const Color(0xFF4C1D95).withOpacity(0.4) : ZenColors.csWash,
-        text: isDark ? const Color(0xFFC4B5FD) : ZenColors.csInk,
-      );
-    } else if (s.contains('math') || s.contains('calc') || s.contains('stat') || s.contains('phys') || s.contains('geom')) {
+    } else if (s.contains('math') || s.contains('calc') || s.contains('stat') || s.contains('phys') || s.contains('geom') || s.contains('econ') || s.contains('mech')) {
       // Amber Ink
       return _SubjectChipStyle(
         background: isDark ? const Color(0xFF78350F).withOpacity(0.4) : ZenColors.calculusWash,
         text: isDark ? const Color(0xFFFDE68A) : ZenColors.calculusInk,
       );
-    } else if (s.contains('hist') || s.contains('lit') || s.contains('eng') || s.contains('art') || s.contains('phil')) {
+    } else if (isCs) {
+      // Violet Ink
+      return _SubjectChipStyle(
+        background: isDark ? const Color(0xFF4C1D95).withOpacity(0.4) : ZenColors.csWash,
+        text: isDark ? const Color(0xFFC4B5FD) : ZenColors.csInk,
+      );
+    } else if (s.contains('hist') || s.contains('lit') || s.contains('eng') || s.contains('art') || s.contains('phil') || s.contains('law')) {
       // Vermilion Cinnabar Ink
       return _SubjectChipStyle(
         background: isDark ? const Color(0xFF881337).withOpacity(0.4) : ZenColors.vermilionSoft,

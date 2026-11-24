@@ -149,7 +149,9 @@ class _VoiceSessionScreenState extends ConsumerState<VoiceSessionScreen> {
               onTap: () {
                 final notifier = ref.read(voiceTutorProvider.notifier);
                 if (isListening) {
-                  _turnsCount++;
+                  if (vtState.liveTranscript.trim().isNotEmpty) {
+                    _turnsCount++;
+                  }
                   notifier.stopAndProcessInput(subject: _selectedSubject, isMuted: _isMuted);
                 } else if (isSpeaking) {
                   notifier.stopSpeaking();
