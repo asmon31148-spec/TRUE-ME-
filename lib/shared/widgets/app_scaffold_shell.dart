@@ -1,10 +1,19 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../app/theme/colors.dart';
+import '../../app/theme/liquid_glass_theme.dart';
 import '../../app/theme/theme_provider.dart';
 import '../../core/services/update_service.dart';
+import 'glass_card.dart';
 
+/// Application Shell hosting the Floating Liquid Glass Action Dock.
+///
+/// Features:
+/// - Floating glass dock with 16px selective blur and 1px specular highlight
+/// - 44px+ ergonomic touch target compliance across all navigation items
+/// - Electric Indigo glowing active indicator and ambient Mother AI Sage orb
+/// - Automatic keyboard dismissal handling
 class AppScaffoldShell extends StatefulWidget {
   final Widget child;
 
@@ -39,7 +48,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
 
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    if (location == '/library') return 1;
+    if (location == '/library' || location.startsWith('/notebook/')) return 1;
     if (location == '/chat') return 2;
     if (location == '/practice') return 3;
     if (location == '/progress') return 4;
@@ -57,7 +66,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   }
 
   void _onItemTapped(int index, BuildContext context) {
-    HapticFeedback.selectionClick();
+    HapticFeedback.lightImpact();
     switch (index) {
       case 0:
         context.go('/today');
@@ -81,59 +90,88 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   Widget build(BuildContext context) {
     final showBar = _shouldShowBottomBar(context);
     final selectedIdx = _calculateSelectedIndex(context);
-    final navBg = context.isDarkMode ? ZenColors.darkCanvas : ZenColors.washiCanvas;
-    final navBorder = context.isDarkMode ? ZenColors.darkBorder : ZenColors.washiBorder;
+    final isDark = context.isDark;
 
     return Scaffold(
-      backgroundColor: context.bgColor,
+      backgroundColor: context.liquidCanvas,
+      extendBody: true,
       body: widget.child,
       bottomNavigationBar: showBar
-          ? Container(
-              decoration: BoxDecoration(
-                color: navBg,
-                border: Border(
-                  top: BorderSide(color: navBorder, width: 0.8),
-                ),
+          ? Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                0,
+                16,
+                MediaQuery.paddingOf(context).bottom > 0
+                    ? MediaQuery.paddingOf(context).bottom
+                    : 12,
               ),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  height: 62,
-                  child: Row(
-                    children: [
-                      _NavItem(
-                        icon: Icons.today_outlined,
-                        activeIcon: Icons.today_rounded,
-                        label: 'Today',
-                        isSelected: selectedIdx == 0,
-                        onTap: () => _onItemTapped(0, context),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: LiquidGlassTheme.floatingNavBlurSigma,
+                    sigmaY: LiquidGlassTheme.floatingNavBlurSigma,
+                  ),
+                  child: CustomPaint(
+                    foregroundPainter: SpecularBorderPainter(
+                      borderRadius: 26,
+                      gradient: isDark
+                          ? LiquidGlassTheme.darkSpecularBorder
+                          : LiquidGlassTheme.lightSpecularBorder,
+                      borderWidth: 1.0,
+                    ),
+                    child: Container(
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? LiquidGlassTheme.darkCanvas.withOpacity(0.78)
+                            : LiquidGlassTheme.lightCanvas.withOpacity(0.82),
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: isDark
+                            ? LiquidGlassTheme.darkGlassShadow(
+                                glowColor: LiquidGlassTheme.electricIndigo,
+                              )
+                            : LiquidGlassTheme.lightGlassShadow(),
                       ),
-                      _NavItem(
-                        icon: Icons.folder_outlined,
-                        activeIcon: Icons.folder_rounded,
-                        label: 'Library',
-                        isSelected: selectedIdx == 1,
-                        onTap: () => _onItemTapped(1, context),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Row(
+                        children: [
+                          _FloatingNavItem(
+                            icon: Icons.today_outlined,
+                            activeIcon: Icons.today_rounded,
+                            label: 'Today',
+                            isSelected: selectedIdx == 0,
+                            onTap: () => _onItemTapped(0, context),
+                          ),
+                          _FloatingNavItem(
+                            icon: Icons.folder_outlined,
+                            activeIcon: Icons.folder_rounded,
+                            label: 'Library',
+                            isSelected: selectedIdx == 1,
+                            onTap: () => _onItemTapped(1, context),
+                          ),
+                          _FloatingSageDockButton(
+                            isSelected: selectedIdx == 2,
+                            onTap: () => _onItemTapped(2, context),
+                          ),
+                          _FloatingNavItem(
+                            icon: Icons.psychology_outlined,
+                            activeIcon: Icons.psychology_rounded,
+                            label: 'Practice',
+                            isSelected: selectedIdx == 3,
+                            onTap: () => _onItemTapped(3, context),
+                          ),
+                          _FloatingNavItem(
+                            icon: Icons.insights_outlined,
+                            activeIcon: Icons.insights_rounded,
+                            label: 'Progress',
+                            isSelected: selectedIdx == 4,
+                            onTap: () => _onItemTapped(4, context),
+                          ),
+                        ],
                       ),
-                      _SageCenterButton(
-                        isSelected: selectedIdx == 2,
-                        onTap: () => _onItemTapped(2, context),
-                      ),
-                      _NavItem(
-                        icon: Icons.psychology_outlined,
-                        activeIcon: Icons.psychology_rounded,
-                        label: 'Practice',
-                        isSelected: selectedIdx == 3,
-                        onTap: () => _onItemTapped(3, context),
-                      ),
-                      _NavItem(
-                        icon: Icons.insights_outlined,
-                        activeIcon: Icons.insights_rounded,
-                        label: 'Progress',
-                        isSelected: selectedIdx == 4,
-                        onTap: () => _onItemTapped(4, context),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -143,14 +181,14 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   }
 }
 
-class _NavItem extends StatelessWidget {
+class _FloatingNavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _NavItem({
+  const _FloatingNavItem({
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -160,96 +198,115 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = context.isDarkMode ? ZenColors.darkVermilion : ZenColors.vermilionSeal;
-    final inactiveColor = context.isDarkMode ? ZenColors.darkMist : ZenColors.stoneMist;
+    final isDark = context.isDark;
+    final activeColor = LiquidGlassTheme.electricIndigo;
+    final inactiveColor = isDark
+        ? LiquidGlassTheme.darkTextMuted
+        : LiquidGlassTheme.lightTextSecondary;
 
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 22,
-              color: isSelected ? activeColor : inactiveColor,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? activeColor : inactiveColor,
-                letterSpacing: -0.2,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: LiquidGlassTheme.minTouchTarget),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? activeColor.withOpacity(isDark ? 0.18 : 0.12)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isSelected ? activeIcon : icon,
+                  size: 21,
+                  color: isSelected ? activeColor : inactiveColor,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? activeColor : inactiveColor,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _SageCenterButton extends StatelessWidget {
+class _FloatingSageDockButton extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _SageCenterButton({
+  const _FloatingSageDockButton({
     required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
+    final isDark = context.isDark;
+
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF6366F1), const Color(0xFF8B5CF6)]
-                      : [const Color(0xFF4F46E5), const Color(0xFF7C3AED)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.35),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: LiquidGlassTheme.minTouchTarget),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF6366F1), // Electric Indigo
+                      Color(0xFF8B5CF6), // Purple Iris
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: LiquidGlassTheme.electricIndigo.withOpacity(0.45),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 19,
+                  color: Colors.white,
+                ),
               ),
-              child: const Icon(
-                Icons.auto_awesome_rounded,
-                size: 19,
-                color: Colors.white,
+              const SizedBox(height: 2),
+              Text(
+                'Sage',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFFA5B4FC) : LiquidGlassTheme.electricIndigo,
+                  letterSpacing: -0.2,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Sage',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                letterSpacing: -0.2,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
