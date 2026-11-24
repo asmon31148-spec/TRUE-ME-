@@ -164,11 +164,21 @@ jobs:
 
       - name: Prepare APK for Direct Release
         run: |
-          ls -la build/app/outputs/flutter-apk/
-          FIRST_APK=$(ls build/app/outputs/flutter-apk/*.apk | head -n 1)
-          echo "Found APK: $FIRST_APK"
-          cp "$FIRST_APK" build/app/outputs/flutter-apk/TrueMe-release.apk
-          cp "$FIRST_APK" build/app/outputs/flutter-apk/app-release.apk
+          python3 -c "
+          import glob, shutil, os
+          apks = glob.glob('build/app/outputs/flutter-apk/*.apk')
+          print('Found APK files:', apks)
+          if apks:
+              src = apks[0]
+              dst1 = os.path.abspath('build/app/outputs/flutter-apk/TrueMe-release.apk')
+              dst2 = os.path.abspath('build/app/outputs/flutter-apk/app-release.apk')
+              src_abs = os.path.abspath(src)
+              if src_abs != dst1:
+                  shutil.copy2(src_abs, dst1)
+              if src_abs != dst2:
+                  shutil.copy2(src_abs, dst2)
+              print('Final release APKs ready:', glob.glob('build/app/outputs/flutter-apk/*.apk'))
+          "
 
       - name: Publish Direct APK to GitHub Releases
         uses: softprops/action-gh-release@v2
