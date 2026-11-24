@@ -4,24 +4,24 @@ import 'package:flutter/material.dart';
 class ZenColors {
   ZenColors._();
 
-  // Light Mode ("Morning Porcelain")
-  static const Color washiCanvas = Color(0xFFF8FAFC);      // Clean modern soft slate canvas
+  // Light Mode ("Warm Silk White")
+  static const Color washiCanvas = Color(0xFFF7F9FC);      // Warm Silk White canvas
   static const Color washiSurface = Color(0xFFFFFFFF);     // Pure clean white card surface
   static const Color washiBorder = Color(0xFFE2E8F0);      // Soft subtle hairline divider
   static const Color sumiInk = Color(0xFF0F172A);          // Deep modern slate black
-  static const Color stoneMist = Color(0xFF64748B);        // Clean neutral secondary text
+  static const Color stoneMist = Color(0xFF475569);        // Clean neutral secondary text
   
-  // Signature Accent: Smart Indigo (Calming & Focused)
-  static const Color vermilionSeal = Color(0xFF4F46E5);    // Smart Indigo (Focus, Clarity & Intellect)
+  // Signature Accent: Electric Indigo (#6366F1)
+  static const Color vermilionSeal = Color(0xFF6366F1);    // Electric Indigo (Intellect & Focus)
   static const Color vermilionSoft = Color(0xFFEEF2FF);    // Soft indigo wash for chips & highlights
 
-  // Dark Mode ("Midnight Scholar")
-  static const Color darkCanvas = Color(0xFF0B0F19);       // Deep midnight slate canvas
-  static const Color darkSurface = Color(0xFF151B28);      // Elevated obsidian slate card surface
-  static const Color darkBorder = Color(0xFF222B3D);       // Soft hairline border
+  // Dark Mode ("Deep Space Obsidian")
+  static const Color darkCanvas = Color(0xFF0B0E14);       // Deep Space Obsidian canvas
+  static const Color darkSurface = Color(0xFF141923);      // Elevated obsidian glass card surface
+  static const Color darkBorder = Color(0xFF1E2638);       // Soft specular hairline border
   static const Color darkInk = Color(0xFFF8FAFC);          // Bright clean text
   static const Color darkMist = Color(0xFF94A3B8);         // Muted slate text
-  static const Color darkVermilion = Color(0xFF818CF8);    // Glowing indigo iris accent
+  static const Color darkVermilion = Color(0xFF818CF8);    // Glowing electric iris accent
 
   // Subject Ink Tags (Pastel Washes)
   static const Color csInk = Color(0xFF7C3AED);           // Violet ink
