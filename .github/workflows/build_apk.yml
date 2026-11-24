@@ -142,7 +142,15 @@ jobs:
           "
 
       - name: Analyze Project Code
-        run: flutter analyze --no-fatal-infos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flutter analyze --no-fatal-infos > analyze.log 2>&1 || {
+            gh release delete debug-analyze --yes || true
+            gh release create debug-analyze -t "Debug Analyze" -F analyze.log || true
+            cat analyze.log
+            exit 1
+          }
 
       - name: Build Android APK (Release)
         run: flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }}
