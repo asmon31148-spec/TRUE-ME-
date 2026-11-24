@@ -790,6 +790,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
     final text = isAnswer ? card.back : card.front;
 
     return GlassCard(
+      width: double.infinity,
+      height: double.infinity,
       borderRadius: 22,
       padding: const EdgeInsets.all(22),
       surfaceColor: isDark

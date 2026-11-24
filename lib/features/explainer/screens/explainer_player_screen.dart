@@ -1,7 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/liquid_glass_theme.dart';
@@ -407,10 +405,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                     ],
                                   ),
                                 ),
-                              )
-                                .animate()
-                                .fadeIn(duration: 250.ms)
-                                .slideY(begin: 0.05, end: 0, duration: 250.ms),
+                              ),
               ),
               const SizedBox(height: 16),
 

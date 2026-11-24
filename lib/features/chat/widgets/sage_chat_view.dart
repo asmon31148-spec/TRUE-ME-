@@ -337,11 +337,9 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                                       borderRadius: 18,
                                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                       glowColor: LiquidGlassTheme.electricIndigo,
-                                      child: SelectionArea(
-                                        child: FormattedMessageBody(
-                                          text: msg.text,
-                                          textColor: context.liquidTextPrimary,
-                                        ),
+                                      child: FormattedMessageBody(
+                                        text: msg.text,
+                                        textColor: context.liquidTextPrimary,
                                       ),
                                     ),
                               if (!msg.isUser && msg.action != null) ...[
