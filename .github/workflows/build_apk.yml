@@ -184,17 +184,12 @@ jobs:
           retention-days: 14
 
       - name: Publish Direct APK to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: "TrueMe v1.0.${{ github.run_number }}"
-          make_latest: true
-          body: |
-            ### 📱 TrueMe Android Release (Build #${{ github.run_number }})
-            
-            Direct `.apk` download (ready to install directly on Android, no unzipping required):
-            - **[TrueMe-release.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/TrueMe-release.apk)**
-          files: |
-            build/app/outputs/flutter-apk/*.apk
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf "### TrueMe Android Release (Build #%s)\n\nDirect \`.apk\` download (ready to install directly on Android):\n- **[TrueMe-release.apk](https://github.com/%s/releases/download/v1.0.%s/TrueMe-release.apk)**\n" \
+            "${{ github.run_number }}" "${{ github.repository }}" "${{ github.run_number }}" > release_notes.md
+          gh release create "v1.0.${{ github.run_number }}" build/app/outputs/flutter-apk/TrueMe-release.apk \
+            --title "TrueMe v1.0.${{ github.run_number }}" \
+            -F release_notes.md \
+            --latest
