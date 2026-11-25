@@ -199,11 +199,44 @@ app.post('/mega/login', loginLimiter, async (req, res) => {
     return res.status(400).json({ error: 'MEGA email and password are required.' });
   }
 
+  let storage;
   try {
-    const storage = await getMegaStorage(email, password);
-    await ensureFolder(storage.root, 'True Me');
-    const quota = await getAccountInfo(storage);
+    storage = await getMegaStorage(email, password);
+  } catch (err) {
+    const msg = String(err?.message || err || 'Unknown error');
+    console.error('MEGA login failed:', msg);
 
+    if (/ENOENT|EACCESS|invalid.*password|bad.*password|incorrect/i.test(msg)) {
+      return res.status(401).json({ error: 'Invalid MEGA email or password.' });
+    }
+    if (/2fa|mfa|second.?factor|EMFA/i.test(msg)) {
+      return res.status(403).json({
+        error:
+          '2FA is enabled on this MEGA account. Disable 2FA in MEGA settings or use a MEGA account without 2FA.',
+      });
+    }
+    if (/EBLOCKED|confirm|verify|suspended/i.test(msg)) {
+      return res.status(403).json({
+        error:
+          'MEGA account is not verified yet or is temporarily blocked. Check your email inbox to verify MEGA first.',
+      });
+    }
+    if (/EAGAIN|ETIMEDOUT|ECONNRESET|ENOTFOUND|network/i.test(msg)) {
+      return res.status(503).json({
+        error: 'MEGA servers are temporarily busy. Wait a few seconds and try again.',
+      });
+    }
+    return res.status(400).json({ error: `MEGA login error: ${msg}` });
+  }
+
+  try {
+    await ensureFolder(storage.root, 'True Me');
+  } catch (folderErr) {
+    console.warn('Could not pre-create True Me folder:', folderErr?.message);
+  }
+
+  try {
+    const quota = await getAccountInfo(storage);
     const sealed = encryptCredentials({ email, password });
     const token = jwt.sign(
       { sub: email, cred: sealed },
@@ -220,8 +253,8 @@ app.post('/mega/login', loginLimiter, async (req, res) => {
       storageTotal: quota.total,
     });
   } catch (err) {
-    console.error('MEGA login failed:', err.message);
-    res.status(401).json({ error: 'Invalid MEGA email or password.' });
+    console.error('MEGA post-login setup failed:', err?.message || err);
+    res.status(500).json({ error: 'Logged into MEGA, but failed to initialize session.' });
   }
 });
 

@@ -15,7 +15,11 @@ class MegaConnectSheet extends StatefulWidget {
   static Future<bool> show(BuildContext context) async {
     final res = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
       isScrollControlled: true,
+      enableDrag: false,
+      isDismissible: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const MegaConnectSheet(),
     );
@@ -115,38 +119,36 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
     final connected = MegaVaultService.instance.isSignedIn;
     final email = MegaVaultService.instance.userEmail ?? 'Connected';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: TrueMeAmbientBackground(
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 14,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: context.borderColor,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+    final maxHeight = MediaQuery.of(context).size.height * 0.88;
+
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: TrueMeAmbientBackground(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              child: SafeArea(
+                top: false,
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 18,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
                   ),
-                  const SizedBox(height: 14),
-                  Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                     children: [
                       Container(
                         width: 46,
@@ -342,6 +344,8 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
               ),
             ),
           ),
+        ),
+      ),
         ),
       ),
     );
