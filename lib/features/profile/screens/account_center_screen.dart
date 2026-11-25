@@ -8,13 +8,16 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/drive_service.dart';
+import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
+import '../widgets/mega_connect_sheet.dart';
 
 class AccountCenterScreen extends ConsumerStatefulWidget {
   const AccountCenterScreen({super.key});
@@ -364,8 +367,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
               }
               if (deleteAll) {
                 await SupabaseService.instance.deleteAllUserData(OfflineCacheService.getUserId());
-                await DriveService.instance.deleteVaultFolder();
-                await DriveService.instance.signOut();
+                await CloudVaultService.deleteAllCloudVaults();
               }
               await OfflineCacheService.clearAllCache();
               await OfflineCacheService.logout();
@@ -557,7 +559,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                       ),
                       const SizedBox(height: 22),
 
-                      // 3. Storage Section
+                      // 3. Storage Section (MEGA 20 GB Primary + Google Drive Optional)
                       _SectionTitle(icon: Icons.cloud_rounded, title: 'Storage'),
                       const SizedBox(height: 10),
                       TrueMeCard(
@@ -565,6 +567,32 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                         padding: EdgeInsets.zero,
                         child: Column(
                           children: [
+                            _AccountItemRow(
+                              icon: Icons.cloud_done_rounded,
+                              iconBg: MegaVaultService.instance.isSignedIn
+                                  ? (isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen)
+                                  : (isDark ? AppColors.darkAccentWash : AppColors.accentWash),
+                              iconColor: MegaVaultService.instance.isSignedIn
+                                  ? AppColors.success
+                                  : context.accentColor,
+                              title: 'MEGA 20 GB Vault',
+                              subtitle: MegaVaultService.instance.isSignedIn
+                                  ? (MegaVaultService.instance.userEmail ?? 'Connected (20 GB Free)')
+                                  : 'Free 20 GB personal file backup (Recommended)',
+                              trailing: TrueMeTonalPill(
+                                label: MegaVaultService.instance.isSignedIn ? 'Manage' : 'Connect',
+                                onTap: () async {
+                                  final changed = await MegaConnectSheet.show(context);
+                                  if (changed && mounted) setState(() {});
+                                },
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              ),
+                              onTap: () async {
+                                final changed = await MegaConnectSheet.show(context);
+                                if (changed && mounted) setState(() {});
+                              },
+                            ),
+                            Divider(height: 1, color: context.borderColor),
                             _AccountItemRow(
                               icon: Icons.add_to_drive_rounded,
                               iconBg: driveConnected

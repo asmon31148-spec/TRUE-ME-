@@ -4,6 +4,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
+import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
@@ -64,6 +65,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   }
 
   Future<void> _startBootSequence() async {
+    if (OfflineCacheService.isMegaConnected()) {
+      MegaVaultService.instance.restoreSession();
+    }
     if (OfflineCacheService.isDriveConnected()) {
       DriveService.instance.signInSilently();
     }

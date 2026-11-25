@@ -5,10 +5,12 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
+import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
+import '../../profile/widgets/mega_connect_sheet.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -333,6 +335,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final megaConnected = MegaVaultService.instance.isSignedIn;
     final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
     final filtered = _notebooks.where((nb) {
       final title = (nb['title'] as String? ?? '').toLowerCase();
@@ -488,20 +491,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                       const SizedBox(width: 8),
                       TrueMeTonalPill(
-                        label: _isConnectingDrive
-                            ? 'Connecting...'
-                            : (driveConnected ? 'Drive Connected' : 'Connect Drive'),
-                        icon: driveConnected ? Icons.cloud_done_rounded : Icons.cloud_upload_outlined,
-                        backgroundColor: driveConnected
+                        label: megaConnected
+                            ? 'MEGA 20 GB'
+                            : (_isConnectingDrive
+                                ? 'Connecting...'
+                                : (driveConnected ? 'Drive Connected' : 'Connect 20 GB Vault')),
+                        icon: (megaConnected || driveConnected)
+                            ? Icons.cloud_done_rounded
+                            : Icons.cloud_upload_outlined,
+                        backgroundColor: (megaConnected || driveConnected)
                             ? (isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen)
                             : context.surfaceColor,
-                        foregroundColor: driveConnected
+                        foregroundColor: (megaConnected || driveConnected)
                             ? (isDark ? AppColors.darkSuccess : AppColors.pastelGreenInk)
                             : context.textSecondary,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        onTap: _isConnectingDrive
-                            ? null
-                            : (driveConnected ? _showDriveAccountSheet : _connectDrive),
+                        onTap: () async {
+                          if (driveConnected && !megaConnected) {
+                            _showDriveAccountSheet();
+                          } else {
+                            final changed = await MegaConnectSheet.show(context);
+                            if (changed && mounted) setState(() {});
+                          }
+                        },
                       ),
                     ],
                   ),

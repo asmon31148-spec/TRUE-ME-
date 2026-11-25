@@ -222,6 +222,63 @@ class OfflineCacheService {
     }
   }
 
+  static Future<void> saveMegaStatus(
+    bool connected, {
+    String? email,
+    int? usedBytes,
+    int? totalBytes,
+  }) async {
+    final box = Hive.box(userProfileBox);
+    await box.put('mega_connected', connected);
+    if (email != null) await box.put('mega_email', email);
+    if (usedBytes != null) await box.put('mega_used_bytes', usedBytes);
+    if (totalBytes != null) await box.put('mega_total_bytes', totalBytes);
+  }
+
+  static bool isMegaConnected() {
+    try {
+      return Hive.box(userProfileBox).get('mega_connected') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static String? getMegaEmail() {
+    try {
+      return Hive.box(userProfileBox).get('mega_email') as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static int getMegaUsedBytes() {
+    try {
+      return (Hive.box(userProfileBox).get('mega_used_bytes') as num? ?? 0).toInt();
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static int getMegaTotalBytes() {
+    try {
+      return (Hive.box(userProfileBox).get('mega_total_bytes') as num? ?? 21474836480).toInt();
+    } catch (_) {
+      return 21474836480;
+    }
+  }
+
+  static Future<void> saveMegaBridgeUrl(String url) async {
+    await Hive.box(userProfileBox).put('mega_bridge_url', url.trim());
+  }
+
+  static String getMegaBridgeUrl() {
+    try {
+      return (Hive.box(userProfileBox).get('mega_bridge_url') as String?) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // STUDY EXPORT STYLE PREFERENCES (Handwritten, Minimal Cute, Zen, Modern)
   // ---------------------------------------------------------------------------

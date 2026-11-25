@@ -7,7 +7,7 @@ import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/cognitive/app_capabilities_manifest.dart';
 import '../../../core/ai/cognitive/student_cognitive_profile.dart';
 import '../../../core/ai/rag_service.dart';
-import '../../../core/services/drive_service.dart';
+import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/utils/text_chunker.dart';
 import '../../export/docx_exporter.dart';
@@ -285,9 +285,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final fileName = '${safeBase}_${styleTag}_Guide.pdf';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
-        if (DriveService.instance.isSignedIn) {
+        if (CloudVaultService.isAnyVaultConnected) {
           try {
-            await DriveService.instance.uploadFile(
+            await CloudVaultService.uploadFile(
               outFile,
               customName: fileName,
               subject: subject,
@@ -311,9 +311,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final fileName = '${safeBase}_Sage_Notes.docx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
-        if (DriveService.instance.isSignedIn) {
+        if (CloudVaultService.isAnyVaultConnected) {
           try {
-            await DriveService.instance.uploadFile(
+            await CloudVaultService.uploadFile(
               outFile,
               customName: fileName,
               subject: subject,
@@ -370,9 +370,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final fileName = '${safeBase}_${styleTag}_Slides.pptx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
-        if (DriveService.instance.isSignedIn) {
+        if (CloudVaultService.isAnyVaultConnected) {
           try {
-            await DriveService.instance.uploadFile(
+            await CloudVaultService.uploadFile(
               outFile,
               customName: fileName,
               subject: subject,

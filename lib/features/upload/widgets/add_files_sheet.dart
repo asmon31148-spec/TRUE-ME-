@@ -9,11 +9,14 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/drive_service.dart';
+import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/ocr_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/true_me_ui.dart';
+import '../../profile/widgets/mega_connect_sheet.dart';
 import '../services/audio_processor.dart';
 import '../services/pdf_processor.dart';
 import '../services/url_processor.dart';
@@ -72,6 +75,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
   OcrService? _ocrService;
   bool _isRecording = false;
   List<drive.File> _driveFiles = [];
+  List<MegaFileEntry> _megaFiles = [];
 
   final List<String> _sections = const ['Syllabus', 'Notes', 'Books', 'Previous papers'];
 
@@ -99,15 +103,16 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     String? driveFileId,
   }) async {
     String? uploadedDriveId = driveFileId;
-    if (uploadedDriveId == null && originalFile != null && DriveService.instance.isSignedIn) {
+    if (uploadedDriveId == null && originalFile != null && CloudVaultService.isAnyVaultConnected) {
       try {
-        setState(() => _statusText = 'Syncing to True Me / ${widget.subjectName} / $_targetSection...');
-        uploadedDriveId = await DriveService.instance.uploadFile(
+        setState(() => _statusText = 'Backing up to ${CloudVaultService.activeVaultName} / ${widget.subjectName}...');
+        final res = await CloudVaultService.uploadFile(
           originalFile,
           customName: fileName,
           subject: widget.subjectName,
           section: _targetSection,
         );
+        uploadedDriveId = res?.fileId;
       } catch (_) {}
     }
 
@@ -355,6 +360,74 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     });
   }
 
+  Future<void> _loadMegaFiles() async {
+    if (!MegaVaultService.instance.isSignedIn) {
+      final ok = await MegaConnectSheet.show(context);
+      if (!ok || !mounted) return;
+    }
+
+    setState(() {
+      _mode = 'mega';
+      _isBusy = true;
+      _errorText = null;
+      _statusText = 'Loading files from your 20 GB MEGA Vault...';
+    });
+
+    final files = await MegaVaultService.instance.listFiles();
+    if (!mounted) return;
+
+    setState(() {
+      _megaFiles = files;
+      _isBusy = false;
+      if (MegaVaultService.instance.lastError != null) {
+        _errorText = MegaVaultService.instance.lastError;
+      }
+    });
+  }
+
+  Future<void> _importMegaFile(MegaFileEntry mFile) async {
+    setState(() {
+      _isBusy = true;
+      _statusText = 'Downloading "${mFile.name}" from MEGA Vault...';
+    });
+
+    try {
+      final bytes = await MegaVaultService.instance.downloadFile(mFile.id);
+      final tmpDir = await getTemporaryDirectory();
+      final fName = mFile.name;
+      final tmpFile = File('${tmpDir.path}/$fName');
+      await tmpFile.writeAsBytes(bytes);
+
+      String extracted = '';
+      final lower = fName.toLowerCase();
+      if (lower.endsWith('.pdf')) {
+        extracted = await PdfProcessor.extractText(tmpFile);
+      } else if (lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp')) {
+        _ocrService ??= OcrService();
+        extracted = await _ocrService!.recognizeTextFromImage(tmpFile);
+      } else {
+        extracted = await tmpFile.readAsString();
+      }
+
+      await _saveExtractedDocument(
+        fileName: fName,
+        content: extracted.trim().isNotEmpty ? extracted : 'Imported from MEGA Vault: $fName',
+        fileType: fName.split('.').last.toLowerCase(),
+        driveFileId: mFile.id,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+          _errorText = 'MEGA import error: $e';
+        });
+      }
+    }
+  }
+
   Future<void> _importDriveFile(drive.File dFile) async {
     if (dFile.id == null) return;
     setState(() {
@@ -535,11 +608,21 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   onTap: () => setState(() => _mode = 'audio'),
                 ),
                 _buildSourceRow(
+                  icon: Icons.cloud_done_rounded,
+                  label: 'Import from MEGA 20 GB Vault',
+                  subtitle: MegaVaultService.instance.isSignedIn
+                      ? 'Connected (${MegaVaultService.instance.userEmail ?? 'MEGA'})'
+                      : 'Connect your free 20 GB MEGA storage',
+                  bgColor: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                  accentColor: context.accentColor,
+                  onTap: _loadMegaFiles,
+                ),
+                _buildSourceRow(
                   icon: Icons.add_to_drive_rounded,
                   label: 'Import from Google Drive',
                   subtitle: DriveService.instance.isSignedIn
                       ? 'Connected (${DriveService.instance.userEmail ?? 'Drive'})'
-                      : 'Connect your Google Drive',
+                      : 'Optional Google Drive backup',
                   bgColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
                   accentColor: AppColors.success,
                   onTap: _loadDriveFiles,
@@ -678,6 +761,49 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                             style: TextStyle(color: context.accentColor, fontWeight: FontWeight.w600),
                           ),
                           onTap: () => _importDriveFile(f),
+                        );
+                      },
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () => setState(() {
+                      _mode = 'menu';
+                      _errorText = null;
+                    }),
+                    child: const Text('Back to options'),
+                  ),
+                ),
+              ] else if (_mode == 'mega') ...[
+                if (_megaFiles.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      'No files inside your MEGA "True Me" folder yet.',
+                      style: AppTypography.secondary,
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 260),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _megaFiles.length,
+                      separatorBuilder: (_, __) => Divider(height: 1, color: context.borderColor),
+                      itemBuilder: (ctx, i) {
+                        final f = _megaFiles[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.cloud_done_outlined, color: context.accentColor),
+                          title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text('${f.subject} · ${(f.size / 1024).toStringAsFixed(1)} KB',
+                              style: AppTypography.smallLabel),
+                          trailing: Text(
+                            'Import',
+                            style: TextStyle(color: context.accentColor, fontWeight: FontWeight.w600),
+                          ),
+                          onTap: () => _importMegaFile(f),
                         );
                       },
                     ),

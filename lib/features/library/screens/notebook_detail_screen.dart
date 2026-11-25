@@ -10,7 +10,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
-import '../../../core/services/drive_service.dart';
+import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/docx_exporter.dart';
 import '../../../features/export/pdf_exporter.dart';
@@ -409,9 +409,9 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pdfBytes, flush: true);
 
-        if (DriveService.instance.isSignedIn) {
+        if (CloudVaultService.isAnyVaultConnected) {
           try {
-            await DriveService.instance.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
+            await CloudVaultService.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
           } catch (_) {}
         }
 
@@ -435,11 +435,16 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(docBytes, flush: true);
 
-        bool uploadedToDrive = false;
-        if (DriveService.instance.isSignedIn) {
+        bool uploadedToVault = false;
+        if (CloudVaultService.isAnyVaultConnected) {
           try {
-            await DriveService.instance.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
-            uploadedToDrive = true;
+            final res = await CloudVaultService.uploadFile(
+              outFile,
+              customName: fileName,
+              subject: title,
+              section: 'Notes',
+            );
+            uploadedToVault = res != null;
           } catch (_) {}
         }
 
@@ -449,8 +454,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             SnackBar(
               content: Text(
                 openRes.type == ResultType.done
-                    ? 'Saved & opened $fileName${uploadedToDrive ? ' (synced to Drive)' : ''}'
-                    : 'Saved $fileName${uploadedToDrive ? ' & synced to Drive' : ''} (${openRes.message})',
+                    ? 'Saved & opened $fileName${uploadedToVault ? ' (backed up)' : ''}'
+                    : 'Saved $fileName${uploadedToVault ? ' & backed up' : ''} (${openRes.message})',
               ),
             ),
           );
@@ -487,11 +492,16 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pptxBytes, flush: true);
 
-        bool uploadedToDrive = false;
-        if (DriveService.instance.isSignedIn) {
+        bool uploadedToVault = false;
+        if (CloudVaultService.isAnyVaultConnected) {
           try {
-            await DriveService.instance.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
-            uploadedToDrive = true;
+            final res = await CloudVaultService.uploadFile(
+              outFile,
+              customName: fileName,
+              subject: title,
+              section: 'Notes',
+            );
+            uploadedToVault = res != null;
           } catch (_) {}
         }
 
@@ -501,8 +511,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             SnackBar(
               content: Text(
                 openRes.type == ResultType.done
-                    ? 'Saved & opened $fileName${uploadedToDrive ? ' (synced to Drive)' : ''}'
-                    : 'Saved $fileName${uploadedToDrive ? ' & synced to Drive' : ''} (${openRes.message})',
+                    ? 'Saved & opened $fileName${uploadedToVault ? ' (backed up)' : ''}'
+                    : 'Saved $fileName${uploadedToVault ? ' & backed up' : ''} (${openRes.message})',
               ),
             ),
           );
