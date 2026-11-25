@@ -9,9 +9,11 @@ class DriveService {
   factory DriveService() => instance;
   DriveService._internal();
 
+  // Keep only the single non-sensitive `drive.file` scope (accesses ONLY files
+  // created by True Me or explicitly opened by the user inside their own Drive).
+  // Unused scopes like `drive.appdata` trigger extra Google verification scrutiny.
   static const List<String> _driveScopes = [
     drive.DriveApi.driveFileScope,
-    drive.DriveApi.driveAppdataScope,
   ];
 
   // Do NOT pass serverClientId here on Android unless issuing server auth codes
@@ -33,22 +35,24 @@ class DriveService {
     final raw = error.toString();
     if (raw.contains('ApiException: 10') || raw.contains('DEVELOPER_ERROR') || raw.contains('code: 10')) {
       return 'Google OAuth Error 10 (DEVELOPER_ERROR)\n\n'
-          'Cause: In Google Cloud Console, a "Web application" client was created instead of an "Android" client.\n\n'
-          'Quick 1-Minute Fix in console.cloud.google.com:\n'
-          '1. Go to "Credentials" > click "+ CREATE CREDENTIALS" > "OAuth client ID".\n'
-          '2. Select Application type: "Android" (NOT Web application!).\n'
-          '3. Package name: com.trueme.study.trueme\n'
-          '4. SHA-1 certificate fingerprint:\n'
-          'DA:F8:48:4B:5B:07:4F:AF:CF:C4:57:0D:D1:DB:34:FF:B0:FD:61:AB\n'
-          '5. Click "CREATE".';
+          'Cause: Android Package Name or SHA-1 fingerprint does not match Google Cloud Console.\n\n'
+          'Check Google Auth Platform > Clients (Android):\n'
+          '- Package name: com.trueme.study.trueme\n'
+          '- SHA-1: DA:F8:48:4B:5B:07:4F:AF:CF:C4:57:0D:D1:DB:34:FF:B0:FD:61:AB';
     }
-    if (raw.contains('ApiException: 12500') || raw.contains('SIGN_IN_FAILED') || raw.contains('code: 12500')) {
-      return 'Google Sign-In Error 12500\n\n'
-          'Cause: Your OAuth Consent Screen is in "Testing" mode and your Gmail is not added as a Test User.\n\n'
-          'Quick Fix in console.cloud.google.com:\n'
-          '1. Go to "OAuth consent screen" > "Test users".\n'
-          '2. Click "+ ADD USERS" and enter your personal Gmail.\n'
-          '3. Click "Save".';
+    if (raw.contains('ApiException: 12500') ||
+        raw.contains('SIGN_IN_FAILED') ||
+        raw.contains('code: 12500') ||
+        raw.contains('access_denied')) {
+      return 'Google OAuth Access Blocked (Testing / Verification Mode)\n\n'
+          'Why other emails cannot connect:\n'
+          'Your Google Cloud OAuth Audience is still in "Testing" mode or awaiting App Verification.\n\n'
+          'To allow ANY Gmail user:\n'
+          '1. Open console.cloud.google.com > Google Auth Platform > Audience.\n'
+          '2. Click "Publish App" (switch Testing -> In Production).\n'
+          '3. Complete OAuth verification (Branding + Privacy Policy + demo video for drive.file).\n'
+          '4. During testing, tap "Advanced > Go to True Me" on the warning screen.\n\n'
+          'Tip: You can also pick Drive PDFs right now via "Upload PDF or Text File" using Android\'s system file picker.';
     }
     if (raw.contains('ApiException: 12501') || raw.contains('sign_in_canceled') || raw.contains('code: 12501')) {
       return 'Google Drive sign-in was cancelled.';
@@ -57,9 +61,19 @@ class DriveService {
       return 'Network error connecting to Google Drive. Check your internet connection.';
     }
     if (raw.contains('accessNotConfigured') || raw.contains('403')) {
-      return 'Google Drive API is not enabled in Google Cloud Console. Go to "Enabled APIs & Services" and click "ENABLE" on Google Drive API.\n\n($raw)';
+      return 'Google Drive API access denied or not enabled (403).\n'
+          'Verify Google Drive API is enabled under Enabled APIs & Services and OAuth Audience is published.\n\n($raw)';
     }
     return 'Google Drive error:\n$raw';
+  }
+
+  /// Ensures `_driveApi` is active, attempting silent token refresh if previously connected.
+  Future<bool> _ensureClientReady() async {
+    if (_driveApi != null) return true;
+    if (OfflineCacheService.isDriveConnected()) {
+      return await signInSilently();
+    }
+    return false;
   }
 
   /// Attempts silent sign-in on startup/resume if previously connected.
@@ -211,7 +225,7 @@ class DriveService {
     int pageSize = 30,
     bool onlyTrueMeVault = false,
   }) async {
-    if (_driveApi == null) {
+    if (!await _ensureClientReady()) {
       final ok = await signIn();
       if (!ok) return [];
     }
@@ -257,7 +271,9 @@ class DriveService {
     String? subject,
     String? section,
   }) async {
-    if (_driveApi == null) throw StateError('Not signed in to Google Drive');
+    if (!await _ensureClientReady()) {
+      throw StateError('Not signed in to Google Drive');
+    }
 
     final folderId = await _resolveTargetFolder(subject: subject, section: section);
     final fileName = customName ?? file.path.split(Platform.pathSeparator).last;

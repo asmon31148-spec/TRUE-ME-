@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — True Me</title>
+  <style>
+    :root {
+      --bg: #FAF7F4;
+      --surface: #FFFFFF;
+      --ink: #1D1B3A;
+      --muted: #585575;
+      --accent: #5B5CE6;
+      --wash: #F1EEFC;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.7;
+      padding: 36px 20px;
+    }
+    .container { max-width: 760px; margin: 0 auto; }
+    .card {
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 36px;
+      box-shadow: 0 12px 32px rgba(46, 42, 92, 0.08);
+    }
+    .back {
+      display: inline-block;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 30px;
+      margin-bottom: 6px;
+    }
+    .date { color: var(--muted); font-size: 13.5px; margin-bottom: 24px; }
+    h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 19px;
+      margin: 24px 0 8px;
+    }
+    p, li { color: var(--muted); font-size: 15px; }
+    ul { padding-left: 20px; margin-top: 8px; }
+    li { margin-bottom: 6px; }
+    .highlight {
+      background: var(--wash);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 16px 0;
+      color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <a class="back" href="index.html">← Back to True Me Home</a>
+      <h1>Privacy Policy for True Me</h1>
+      <p class="date">Effective Date: November 25, 2026 · Android Package: <code>com.trueme.study.trueme</code></p>
+
+      <p>
+        True Me ("we", "our", or "the app") is committed to protecting student privacy. This Privacy Policy
+        explains what data True Me collects, how it is processed, and how you control your files and accounts.
+      </p>
+
+      <h2>1. Data You Provide & Local-First Storage</h2>
+      <ul>
+        <li><strong>Profile & Study Preferences:</strong> Your display name, email address, subjects, learning style, and exam target dates are stored locally on your device and synced to your authenticated Supabase workspace.</li>
+        <li><strong>Study Materials & Progress:</strong> Extracted text from your study notes, SM-2 flashcard schedules, quiz scores, study tasks, and recent sessions are cached locally using Hive and synced for cross-device continuity.</li>
+      </ul>
+
+      <h2>2. Google Drive Integration & Limited Use Disclosure</h2>
+      <div class="highlight">
+        <strong>Google API Services User Data Policy Compliance:</strong> True Me's use and transfer to any other app of information received from Google APIs will adhere to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" style="color: var(--accent);">Google API Services User Data Policy</a>,
+        including the Limited Use requirements.
+      </div>
+      <ul>
+        <li><strong>Requested Scope:</strong> True Me strictly requests the non-sensitive <code>https://www.googleapis.com/auth/drive.file</code> scope only.</li>
+        <li><strong>What We Access:</strong> True Me only reads, creates, or updates files that you explicitly open inside True Me or export from True Me into your personal <code>True Me</code> folder on Google Drive. True Me never accesses or scans other files in your Google Drive.</li>
+        <li><strong>No Ads or Resale:</strong> Google Drive user data is never sold, rented, shared with advertisers, or used to train public AI models.</li>
+      </ul>
+
+      <h2>3. AI Processing</h2>
+      <p>
+        When you ask Sage a question or request a quiz, flashcard deck, summary, mind map, or study guide export,
+        only the relevant prompt and selected subject text are sent to configured AI providers strictly to generate your requested output.
+      </p>
+
+      <h2>4. Data Retention, Disconnect & Deletion</h2>
+      <ul>
+        <li><strong>Disconnect Google Drive:</strong> Open <em>Account → Storage → Google Drive → Disconnect</em> to immediately revoke OAuth access tokens while keeping your local notes intact.</li>
+        <li><strong>Delete Local Data:</strong> Use <em>Account → Storage → Clear Local Cache</em> or <em>Account → Data → Remove from App</em>.</li>
+        <li><strong>Full Account Deletion:</strong> Use <em>Account → Data → Delete Everything</em> to purge local storage, Supabase database rows, and the <code>True Me</code> folder inside your Google Drive.</li>
+      </ul>
+
+      <h2>5. Contact & Support</h2>
+      <p>
+        For privacy inquiries, Google OAuth feedback, or data deletion requests, contact the True Me developer at
+        <a href="mailto:asmon31148@gmail.com" style="color: var(--accent);">asmon31148@gmail.com</a>
+        or via the <a href="https://github.com/asmon31148-spec/TRUE-ME-/issues" style="color: var(--accent);">True Me GitHub repository</a>.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

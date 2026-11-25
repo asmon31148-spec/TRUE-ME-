@@ -489,7 +489,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                 _buildSourceRow(
                   icon: Icons.upload_file_rounded,
                   label: 'Upload PDF or Text File',
-                  subtitle: 'Extracts full text for Sage chat & quizzes',
+                  subtitle: 'Pick from Phone storage or Google Drive menu (no OAuth needed)',
                   bgColor: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
                   accentColor: context.accentColor,
                   onTap: _pickFromPhone,
