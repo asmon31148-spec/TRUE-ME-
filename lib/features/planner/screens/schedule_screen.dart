@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
@@ -8,6 +9,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 
 class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key});
@@ -149,25 +151,19 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     final durationCtrl = TextEditingController(text: '${existing?['duration'] ?? 25}');
     String selectedType = existing?['type'] as String? ?? 'quiz';
     String selectedPriority = existing?['priority'] as String? ?? 'Normal';
-    int dayOffset = isEdit
-        ? _weekKeys.indexOf(editDateKey).clamp(0, 6)
-        : _selectedDayOffset;
+    int dayOffset = isEdit ? _weekKeys.indexOf(editDateKey).clamp(0, 6) : _selectedDayOffset;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.bgColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => StatefulBuilder(
         builder: (sheetCtx, setSheetState) {
           return Padding(
             padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
+              left: 20,
+              right: 20,
               top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             ),
             child: SingleChildScrollView(
               child: Column(
@@ -177,11 +173,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(isEdit ? 'Edit task' : 'Add task', style: AppTypography.sectionHeading),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
+                      Text(isEdit ? 'Edit Task' : 'Add Task', style: AppTypography.sectionHeading),
+                      IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(ctx)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -207,14 +200,14 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                     controller: topicCtrl,
                   ),
                   const SizedBox(height: 14),
-                  const Text('Subject', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const Text('Subject', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: sheetCtx.surfaceColor,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: sheetCtx.borderColor, width: 1),
+                      color: sheetCtx.bgColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: sheetCtx.borderColor),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
@@ -243,14 +236,14 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Type', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                            const Text('Type', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
                               decoration: BoxDecoration(
-                                color: sheetCtx.surfaceColor,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: sheetCtx.borderColor, width: 1),
+                                color: sheetCtx.bgColor,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: sheetCtx.borderColor),
                               ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
@@ -275,7 +268,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  const Text('Priority', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const Text('Priority', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Row(
                     children: _priorities.map((p) {
@@ -289,9 +282,9 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 20),
-                  AppPrimaryButton(
-                    label: isEdit ? 'Save changes' : 'Add to ${_dayTabLabel(dayOffset)}',
+                  const SizedBox(height: 22),
+                  TrueMePrimaryButton(
+                    label: isEdit ? 'Save Changes' : 'Add to ${_dayTabLabel(dayOffset)}',
                     onPressed: () async {
                       final topic = topicCtrl.text.trim();
                       final mins = int.tryParse(durationCtrl.text.trim()) ?? 25;
@@ -350,14 +343,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   }
 
   Future<void> _toggleTask(String key, int index) async {
+    HapticFeedback.selectionClick();
     final tasks = _tasksByDate[key]!;
     final wasDone = tasks[index]['completed'] == true;
     final alreadyLogged = tasks[index]['loggedOnce'] == true;
     setState(() {
       tasks[index]['completed'] = !wasDone;
-      if (!wasDone) {
-        tasks[index]['loggedOnce'] = true;
-      }
+      if (!wasDone) tasks[index]['loggedOnce'] = true;
     });
     await _saveDatePlan(key);
 
@@ -399,137 +391,143 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       backgroundColor: context.bgColor,
-      appBar: AppBar(
-        title: const Text('Schedule', style: AppTypography.screenTitle),
-        actions: [
-          IconButton(
-            icon: _isGenerating
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: context.accentColor),
-                  )
-                : const Icon(Icons.auto_awesome_outlined, size: 22),
-            tooltip: 'Auto-plan with Sage',
-            onPressed: _isGenerating ? null : _generateWithSage,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // View mode segmented switch (By Day | By Subject)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.borderColor),
-                ),
-                child: Row(
-                  children: [
-                    _buildSegmentTab('By day', !_groupBySubject, () => setState(() => _groupBySubject = false)),
-                    _buildSegmentTab('By subject', _groupBySubject, () => setState(() => _groupBySubject = true)),
-                  ],
+      body: TrueMeAmbientBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              TrueMeTopBar(
+                title: 'Study Planner',
+                onBack: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/today');
+                  }
+                },
+                trailing: _isGenerating
+                    ? const SizedBox(width: 40, height: 40, child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))))
+                    : TrueMeCircleIconButton(
+                        icon: Icons.auto_awesome_rounded,
+                        tooltip: 'Auto-plan with Sage',
+                        iconColor: context.accentColor,
+                        size: 40,
+                        onPressed: _generateWithSage,
+                      ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 2, 18, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: context.surfaceColor,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: context.borderColor),
+                    boxShadow: context.cardShadow,
+                  ),
+                  child: Row(
+                    children: [
+                      _buildSegmentTab('By Day', !_groupBySubject, () => setState(() => _groupBySubject = false)),
+                      _buildSegmentTab('By Subject', _groupBySubject, () => setState(() => _groupBySubject = true)),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            // 7-day strip when in By Day mode
-            if (!_groupBySubject)
-              SizedBox(
-                height: 62,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  itemCount: 7,
-                  itemBuilder: (_, idx) {
-                    final selected = _selectedDayOffset == idx;
-                    final count = (_tasksByDate[_weekKeys[idx]] ?? []).length;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: InkWell(
-                        onTap: () => setState(() => _selectedDayOffset = idx),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: selected ? context.accentColor : context.surfaceColor,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selected ? context.accentColor : context.borderColor,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _dayTabLabel(idx),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: selected ? Colors.white : context.textPrimary,
-                                ),
+              if (!_groupBySubject)
+                SizedBox(
+                  height: 54,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    itemCount: 7,
+                    itemBuilder: (_, idx) {
+                      final selected = _selectedDayOffset == idx;
+                      final count = (_tasksByDate[_weekKeys[idx]] ?? []).length;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedDayOffset = idx),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+                            decoration: BoxDecoration(
+                              gradient: selected ? AppColors.indigoButtonGradient : null,
+                              color: selected ? null : context.surfaceColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: selected ? Colors.transparent : context.borderColor,
                               ),
-                              if (count > 0) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? Colors.white.withOpacity(0.22)
-                                        : context.accentTint,
-                                    borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _dayTabLabel(idx),
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: selected ? Colors.white : context.textPrimary,
                                   ),
-                                  child: Text(
-                                    '$count',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: selected ? Colors.white : context.accentColor,
+                                ),
+                                if (count > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: selected
+                                          ? Colors.white.withValues(alpha: 0.24)
+                                          : context.accentTint,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '$count',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: selected ? Colors.white : context.accentColor,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
+                      );
+                    },
+                  ),
+                ),
+
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+                  children: [
+                    if (!_groupBySubject) ...[
+                      Text(_dayFullLabel(_selectedDayOffset), style: AppTypography.sectionHeading),
+                      const SizedBox(height: 12),
+                      _buildTaskGroupCard(
+                        emptyMessage: 'No tasks scheduled for ${_dayTabLabel(_selectedDayOffset).toLowerCase()}.',
+                        entries: List.generate(
+                          dayTasks.length,
+                          (i) => _TaskEntry(dateKey: currentKey, index: i, task: dayTasks[i], showDay: false),
+                        ),
                       ),
-                    );
-                  },
+                    ] else ...[
+                      ..._buildSubjectGroupedSections(),
+                    ],
+                    const SizedBox(height: 20),
+                    TrueMePrimaryButton(
+                      label: 'Add Task',
+                      leadingIcon: const Icon(Icons.add_rounded, size: 20, color: Colors.white),
+                      onPressed: () => _showTaskSheet(),
+                    ),
+                  ],
                 ),
               ),
-
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-                children: [
-                  if (!_groupBySubject) ...[
-                    Text(_dayFullLabel(_selectedDayOffset), style: AppTypography.sectionHeading),
-                    const SizedBox(height: 10),
-                    _buildTaskGroupCard(
-                      emptyMessage: 'No tasks scheduled for ${_dayTabLabel(_selectedDayOffset).toLowerCase()}.',
-                      entries: List.generate(
-                        dayTasks.length,
-                        (i) => _TaskEntry(dateKey: currentKey, index: i, task: dayTasks[i], showDay: false),
-                      ),
-                    ),
-                  ] else ...[
-                    ..._buildSubjectGroupedSections(),
-                  ],
-                  const SizedBox(height: 20),
-                  AppPrimaryButton(
-                    label: 'Add task',
-                    icon: const Icon(Icons.add, size: 20, color: Colors.white),
-                    onPressed: () => _showTaskSheet(),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -537,23 +535,22 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
   Widget _buildSegmentTab(String label, bool active, VoidCallback onTap) {
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: active ? context.bgColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: active ? Border.all(color: context.borderColor) : null,
+            gradient: active ? AppColors.indigoButtonGradient : null,
+            borderRadius: BorderRadius.circular(20),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-              color: active ? context.textPrimary : context.textSecondary,
+              fontSize: 13.5,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              color: active ? Colors.white : context.textSecondary,
             ),
           ),
         ),
@@ -576,15 +573,12 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     if (bySubject.isEmpty) {
       return [
-        Container(
-          width: double.infinity,
+        TrueMeCard(
           padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: context.surfaceColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.borderColor),
+          child: Text(
+            'No tasks scheduled this week yet. Tap "Add Task" below or tap the Sage sparkle above.',
+            style: AppTypography.secondary.copyWith(color: context.textSecondary),
           ),
-          child: const Text('No tasks scheduled this week yet. Tap "Add task" below or Auto-plan with Sage.', style: AppTypography.secondary),
         ),
       ];
     }
@@ -610,25 +604,15 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
     required List<_TaskEntry> entries,
   }) {
     if (entries.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: context.borderColor),
-        ),
-        child: Text(emptyMessage, style: AppTypography.secondary),
+      return TrueMeCard(
+        padding: const EdgeInsets.all(18),
+        child: Text(emptyMessage, style: AppTypography.secondary.copyWith(color: context.textSecondary)),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.borderColor),
-      ),
+    return TrueMeCard(
+      borderRadius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: Column(
         children: List.generate(entries.length, (idx) {
           final e = entries[idx];
@@ -639,12 +623,13 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
             if (e.showDay && e.dayLabel != null) e.dayLabel!,
             t['subject'] as String? ?? '',
             '${t['duration'] ?? 20} min',
-          ].where((s) => s.isNotEmpty).join(' • ');
+          ].where((s) => s.isNotEmpty).join(' · ');
 
           return Column(
             children: [
               InkWell(
                 onTap: () => _launchTask(t),
+                borderRadius: BorderRadius.circular(14),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Row(
@@ -652,6 +637,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                       Checkbox(
                         value: isDone,
                         activeColor: context.accentColor,
+                        shape: const CircleBorder(),
                         onChanged: (_) => _toggleTask(e.dateKey, e.index),
                       ),
                       Expanded(
@@ -665,10 +651,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                                     width: 7,
                                     height: 7,
                                     margin: const EdgeInsets.only(right: 6),
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.warning,
-                                      shape: BoxShape.circle,
-                                    ),
+                                    decoration: const BoxDecoration(color: AppColors.warning, shape: BoxShape.circle),
                                   ),
                                 ],
                                 Expanded(
@@ -678,7 +661,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 15,
-                                      fontWeight: FontWeight.w500,
+                                      fontWeight: FontWeight.w600,
                                       color: isDone ? context.textSecondary : context.textPrimary,
                                       decoration: isDone ? TextDecoration.lineThrough : null,
                                     ),

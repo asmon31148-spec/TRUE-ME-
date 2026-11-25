@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../app/theme/colors.dart';
 import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
 import 'app_components.dart';
+import 'true_me_ui.dart';
 
 /// Displays an animated real-time percentage progress indicator (0% -> 96%),
 /// stage label, and elapsed timer capped under 1 minute for AI generation tasks.
@@ -50,11 +52,10 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
   }
 
   double get _progress {
-    // Smooth asymptotic curve reaching ~95% by 25-50s, never exceeding 96% until complete
     final secs = _elapsedMs / 1000.0;
-    if (secs < 1.5) return 0.12 + (secs / 1.5) * 0.22; // 12% -> 34%
-    if (secs < 5.0) return 0.34 + ((secs - 1.5) / 3.5) * 0.38; // 34% -> 72%
-    if (secs < 15.0) return 0.72 + ((secs - 5.0) / 10.0) * 0.18; // 72% -> 90%
+    if (secs < 1.5) return 0.12 + (secs / 1.5) * 0.22;
+    if (secs < 5.0) return 0.34 + ((secs - 1.5) / 3.5) * 0.38;
+    if (secs < 15.0) return 0.72 + ((secs - 5.0) / 10.0) * 0.18;
     return (0.90 + ((secs - 15.0) / 35.0) * 0.06).clamp(0.90, 0.96);
   }
 
@@ -74,13 +75,10 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
     final stage = _currentStage(pct);
 
     if (widget.compact) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: context.accentColor.withOpacity(0.5)),
-        ),
+      return TrueMeCard(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(16),
+        borderColor: context.accentColor.withValues(alpha: 0.35),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,25 +89,25 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
                 Expanded(
                   child: Text(
                     widget.title,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.textPrimary),
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: context.textPrimary),
                   ),
                 ),
-                Text(
-                  '$pct%',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.accentColor),
+                TrueMeTonalPill(
+                  label: '$pct%',
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             AppProgressBar(value: value),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(stage, style: AppTypography.smallLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
-                Text('${elapsedSec}s / 50s max', style: AppTypography.smallLabel),
+                Text('${elapsedSec}s', style: AppTypography.smallLabel),
               ],
             ),
           ],
@@ -120,56 +118,56 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 84,
-              height: 84,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: value,
-                    strokeWidth: 6,
-                    backgroundColor: context.borderColor,
-                    valueColor: AlwaysStoppedAnimation<Color>(context.accentColor),
-                  ),
-                  Center(
-                    child: Text(
-                      '$pct%',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                  ),
+        child: TrueMeCard(
+          borderRadius: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TrueMeCircularRing(
+                progress: value,
+                size: 92,
+                strokeWidth: 8,
+                gradientColors: const [
+                  AppColors.accent,
+                  AppColors.secondary,
+                  AppColors.accentCyan,
+                  AppColors.accent,
                 ],
+                center: Text(
+                  '$pct%',
+                  style: TextStyle(
+                    fontFamily: 'Georgia',
+                    fontFamilyFallback: AppTypography.serifFallbacks,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: context.textPrimary,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              widget.title,
-              textAlign: TextAlign.center,
-              style: AppTypography.sectionHeading,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              stage,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.5, color: context.accentColor, fontWeight: FontWeight.w500),
-            ),
-            if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(widget.subtitle!, textAlign: TextAlign.center, style: AppTypography.secondary),
+              const SizedBox(height: 20),
+              Text(
+                widget.title,
+                textAlign: TextAlign.center,
+                style: AppTypography.sectionHeading.copyWith(color: context.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                stage,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: context.accentColor, fontWeight: FontWeight.w600),
+              ),
+              if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(widget.subtitle!, textAlign: TextAlign.center, style: AppTypography.secondary),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                'Elapsed: ${elapsedSec}s',
+                style: AppTypography.smallLabel,
+              ),
             ],
-            const SizedBox(height: 12),
-            Text(
-              'Elapsed: ${elapsedSec}s (max 50s)',
-              style: AppTypography.smallLabel,
-            ),
-          ],
+          ),
         ),
       ),
     );

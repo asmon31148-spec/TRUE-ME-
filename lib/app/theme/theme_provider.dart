@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/offline_cache_service.dart';
+import 'colors.dart';
 
 class ThemeModeNotifier extends StateNotifier<ThemeMode> {
   ThemeModeNotifier() : super(_loadSavedMode());
@@ -45,7 +46,7 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
       SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: isDark ? const Color(0xFF0B0E14) : const Color(0xFFF7F9FC),
+        systemNavigationBarColor: isDark ? AppColors.darkSurface : AppColors.surface,
         systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       ),
     );
@@ -60,9 +61,26 @@ extension AppThemeContext on BuildContext {
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
   Color get bgColor => Theme.of(this).scaffoldBackgroundColor;
   Color get surfaceColor => Theme.of(this).colorScheme.surface;
+  Color get surfaceMutedColor => isDarkMode ? AppColors.darkSurfaceMuted : AppColors.surfaceMuted;
   Color get borderColor => Theme.of(this).colorScheme.outline;
   Color get textPrimary => Theme.of(this).colorScheme.onSurface;
   Color get textSecondary => Theme.of(this).colorScheme.onSurfaceVariant;
   Color get accentColor => Theme.of(this).colorScheme.primary;
   Color get accentTint => Theme.of(this).colorScheme.primaryContainer;
+
+  List<BoxShadow> get cardShadow => isDarkMode
+      ? [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ]
+      : const [
+          BoxShadow(
+            color: Color(0x0D2E2A5C),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+        ];
 }

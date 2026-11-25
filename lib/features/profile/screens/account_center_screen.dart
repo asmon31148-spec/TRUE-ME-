@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
@@ -11,6 +13,7 @@ import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 
 class AccountCenterScreen extends ConsumerStatefulWidget {
   const AccountCenterScreen({super.key});
@@ -26,13 +29,22 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
   late String _learningStyle;
   late DateTime _targetExamDate;
   String _appVersion = '...';
+  String _cacheSizeLabel = 'Calculating...';
   bool _isConnectingDrive = false;
+
+  static const List<String> _learningStyles = [
+    'Visual & Practice',
+    'Auditory & Socratic',
+    'Reading & Writing',
+    'Active Recall Sprint',
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadVersion();
+    _computeLocalCacheSize();
   }
 
   Future<void> _loadVersion() async {
@@ -43,6 +55,34 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _appVersion = 'v1.0');
+    }
+  }
+
+  Future<void> _computeLocalCacheSize() async {
+    try {
+      int totalBytes = 0;
+      final docsDir = await getApplicationDocumentsDirectory();
+      if (await docsDir.exists()) {
+        await for (final entity in docsDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            try {
+              totalBytes += await entity.length();
+            } catch (_) {}
+          }
+        }
+      }
+      if (!mounted) return;
+      String label;
+      if (totalBytes < 1024) {
+        label = '$totalBytes B';
+      } else if (totalBytes < 1024 * 1024) {
+        label = '${(totalBytes / 1024).toStringAsFixed(1)} KB';
+      } else {
+        label = '${(totalBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+      }
+      setState(() => _cacheSizeLabel = label);
+    } catch (_) {
+      if (mounted) setState(() => _cacheSizeLabel = 'Local Hive storage');
     }
   }
 
@@ -57,13 +97,19 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
     });
   }
 
+  String _formatDate(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
   void _showEditNameDialog() {
     final controller = TextEditingController(text: _userName);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit name', style: AppTypography.sectionHeading),
+        title: const Text('Edit Profile', style: AppTypography.sectionHeading),
         content: AppInput(
+          label: 'Display Name',
           controller: controller,
           hintText: 'Enter your name',
           autofocus: true,
@@ -74,11 +120,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: context.accentColor,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(80, 40),
-            ),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(92, 42)),
             onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty) {
@@ -96,6 +138,88 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
             child: const Text('Save'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showLearningStylePicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Learning Style', style: AppTypography.sectionHeading),
+              const SizedBox(height: 12),
+              ..._learningStyles.map((style) {
+                final isSelected = _learningStyle == style;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: AppListRow(
+                    title: style,
+                    trailing: Icon(
+                      isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      color: isSelected ? context.accentColor : context.textSecondary,
+                    ),
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await OfflineCacheService.saveUserProfile(
+                        name: _userName,
+                        email: _userEmail,
+                        subjects: _userSubjects,
+                        learningStyle: style,
+                        targetExamDate: _targetExamDate,
+                      );
+                      _loadProfile();
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showThemePicker(String currentTheme) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Appearance Theme', style: AppTypography.sectionHeading),
+              const SizedBox(height: 12),
+              ...['Light', 'System', 'Dark'].map((theme) {
+                final isSelected = currentTheme == theme;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: AppListRow(
+                    title: theme,
+                    subtitle: theme == 'Light'
+                        ? 'Soft Ivory & Lavender (Recommended)'
+                        : (theme == 'Dark' ? 'Quiet Twilight Obsidian' : 'Match device setting'),
+                    trailing: Icon(
+                      isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      color: isSelected ? context.accentColor : context.textSecondary,
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      ref.read(themeModeProvider.notifier).setTheme(theme);
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -144,11 +268,6 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ctx.bgColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: ctx.borderColor),
-        ),
         title: const Text('Disconnect Google Drive?', style: AppTypography.sectionHeading),
         content: const Text(
           'Your notes, quizzes, and decks will remain safely on this device. You can connect another Google Drive account anytime.',
@@ -233,7 +352,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
-              minimumSize: const Size(90, 40),
+              minimumSize: const Size(96, 42),
             ),
             onPressed: () async {
               if (deleteAll && confirmationController.text.trim() != 'DELETE') {
@@ -263,6 +382,7 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final daysRemaining = OfflineCacheService.daysUntil(_targetExamDate);
     final driveConnected = DriveService.instance.isSignedIn || OfflineCacheService.isDriveConnected();
     final driveEmail = DriveService.instance.userEmail;
@@ -273,336 +393,502 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
 
     return Scaffold(
       backgroundColor: context.bgColor,
-      appBar: AppBar(
-        title: const Text('Account', style: AppTypography.screenTitle),
-        centerTitle: false,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: context.textPrimary, size: 22),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/today');
-            }
-          },
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: context.borderColor, height: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Profile Section
-            const Text('Profile', style: AppTypography.sectionHeading),
-            const SizedBox(height: 8),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  AppListRow(
-                    title: _userName,
-                    subtitle: 'Name',
-                    trailing: Icon(Icons.edit_outlined, size: 18, color: context.textSecondary),
-                    onTap: _showEditNameDialog,
+      body: TrueMeAmbientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 36),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Bar
+                TrueMeTopBar(
+                  title: 'Account',
+                  onBack: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/today');
+                    }
+                  },
+                  trailing: TrueMeCircleIconButton(
+                    icon: Icons.settings_outlined,
+                    tooltip: 'Theme Settings',
+                    onPressed: () => _showThemePicker(selectedTheme),
                   ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  AppListRow(
-                    title: _userEmail,
-                    subtitle: 'Email',
-                    trailing: const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+                ),
 
-            // Study Section
-            const Text('Study', style: AppTypography.sectionHeading),
-            const SizedBox(height: 8),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  AppListRow(
-                    title: '${_targetExamDate.day}/${_targetExamDate.month}/${_targetExamDate.year}',
-                    subtitle: 'Target exam deadline ($daysRemaining days left)',
-                    trailing: Icon(Icons.calendar_today_outlined, size: 18, color: context.textSecondary),
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final safeInitial = _targetExamDate.isAfter(now) ? _targetExamDate : now;
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: safeInitial,
-                        firstDate: now,
-                        lastDate: now.add(const Duration(days: 730)),
-                      );
-                      if (picked != null) {
-                        await OfflineCacheService.saveTargetExamDate(picked);
-                        _loadProfile();
-                      }
-                    },
-                  ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  AppListRow(
-                    title: _userSubjects.isNotEmpty ? _userSubjects.join(', ') : 'No subjects added yet',
-                    subtitle: 'Active subjects (${_userSubjects.length})',
-                    trailing: Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
-                    onTap: () => context.push('/setup-profile'),
-                  ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  AppListRow(
-                    title: _learningStyle,
-                    subtitle: 'Learning style',
-                    trailing: const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Storage Section
-            const Text('Storage', style: AppTypography.sectionHeading),
-            const SizedBox(height: 8),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  AppListRow(
-                    title: 'Google Drive Sync',
-                    subtitle: driveConnected
-                        ? (driveEmail != null ? driveEmail : 'Connected to Google Drive')
-                        : 'Local storage only (offline)',
-                    trailing: _isConnectingDrive
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : (driveConnected
-                            ? PopupMenuButton<String>(
-                                icon: Icon(Icons.more_vert, size: 20, color: context.textSecondary),
-                                tooltip: 'Drive options',
-                                onSelected: (val) {
-                                  if (val == 'switch') _switchDriveAccount();
-                                  if (val == 'disconnect') _disconnectDrive();
-                                },
-                                itemBuilder: (ctx) => [
-                                  const PopupMenuItem(
-                                    value: 'switch',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.swap_horiz, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Switch Account'),
-                                      ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. Profile Hero Card
+                      TrueMeCard(
+                        borderRadius: 22,
+                        padding: const EdgeInsets.all(18),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: isDark
+                              ? [const Color(0xFF1A1D2D), const Color(0xFF212239)]
+                              : [Colors.white, const Color(0xFFF3F0FC)],
+                        ),
+                        child: Row(
+                          children: [
+                            TrueMeAvatar(name: _userName, size: 68, onTap: _showEditNameDialog),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _userName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.sectionHeading.copyWith(
+                                      fontSize: 21,
+                                      color: context.textPrimary,
                                     ),
                                   ),
-                                  const PopupMenuItem(
-                                    value: 'disconnect',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.link_off, size: 18, color: AppColors.error),
-                                        SizedBox(width: 8),
-                                        Text('Disconnect', style: TextStyle(color: AppColors.error)),
-                                      ],
-                                    ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _userEmail,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TrueMeTonalPill(
+                                    label: 'Edit Profile',
+                                    icon: Icons.edit_outlined,
+                                    onTap: _showEditNameDialog,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                                   ),
                                 ],
-                              )
-                            : TextButton(
-                                onPressed: _connectDrive,
-                                child: Text(
-                                  'Connect',
-                                  style: TextStyle(color: context.accentColor, fontSize: 13, fontWeight: FontWeight.w600),
-                                ),
-                              )),
-                  ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  const AppListRow(
-                    title: 'True Me',
-                    subtitle: 'Google Drive folder location',
-                    trailing: SizedBox.shrink(),
-                  ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  AppListRow(
-                    title: 'Clear local cache',
-                    subtitle: 'Clears locally stored quizzes, cards, and study logs',
-                    trailing: Icon(Icons.delete_outline, size: 18, color: context.textSecondary),
-                    onTap: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Clear Local Cache?'),
-                          content: const Text(
-                            'This will remove cached quizzes, offline flashcards, notes, and study logs from this device. Are you sure?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                              child: const Text('Clear Cache'),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                      if (confirm == true) {
-                        await OfflineCacheService.clearAllCache();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Local cache cleared successfully.')),
-                          );
-                        }
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+                      ),
+                      const SizedBox(height: 22),
 
-            // App Section
-            const Text('App', style: AppTypography.sectionHeading),
-            const SizedBox(height: 8),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  AppListRow(
-                    title: selectedTheme,
-                    subtitle: 'Theme',
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: ['System', 'Light', 'Dark'].map((theme) {
-                        final isSelected = selectedTheme == theme;
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: InkWell(
-                            onTap: () => ref.read(themeModeProvider.notifier).setTheme(theme),
-                            borderRadius: BorderRadius.circular(6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isSelected ? context.accentColor : context.bgColor,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: isSelected ? context.accentColor : context.borderColor,
-                                ),
+                      // 2. Study Section
+                      _SectionTitle(icon: Icons.school_rounded, title: 'Study'),
+                      const SizedBox(height: 10),
+                      TrueMeCard(
+                        borderRadius: 20,
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            _AccountItemRow(
+                              icon: Icons.calendar_today_rounded,
+                              iconBg: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                              iconColor: context.accentColor,
+                              title: 'Target Exam Deadline',
+                              subtitle: _formatDate(_targetExamDate),
+                              trailing: TrueMeTonalPill(
+                                label: '$daysRemaining ${daysRemaining == 1 ? 'day' : 'days'} left',
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               ),
-                              child: Text(
-                                theme,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isSelected ? Colors.white : context.textPrimary,
-                                ),
+                              onTap: () async {
+                                final now = DateTime.now();
+                                final safeInitial = _targetExamDate.isAfter(now) ? _targetExamDate : now;
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: safeInitial,
+                                  firstDate: now,
+                                  lastDate: now.add(const Duration(days: 730)),
+                                );
+                                if (picked != null) {
+                                  await OfflineCacheService.saveTargetExamDate(picked);
+                                  _loadProfile();
+                                }
+                              },
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.menu_book_rounded,
+                              iconBg: isDark ? const Color(0xFF11233D) : AppColors.pastelBlue,
+                              iconColor: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
+                              title: 'Active Subjects',
+                              subtitle: _userSubjects.isNotEmpty
+                                  ? _userSubjects.join(', ')
+                                  : 'No subjects added yet',
+                              onTap: () async {
+                                await context.push('/setup-profile');
+                                if (mounted) _loadProfile();
+                              },
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.psychology_rounded,
+                              iconBg: isDark ? const Color(0xFF241938) : AppColors.pastelLavender,
+                              iconColor: isDark ? const Color(0xFFC4B5FD) : AppColors.pastelLavenderInk,
+                              title: 'Learning Style',
+                              subtitle: _learningStyle,
+                              onTap: _showLearningStylePicker,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+
+                      // 3. Storage Section
+                      _SectionTitle(icon: Icons.cloud_rounded, title: 'Storage'),
+                      const SizedBox(height: 10),
+                      TrueMeCard(
+                        borderRadius: 20,
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            _AccountItemRow(
+                              icon: Icons.add_to_drive_rounded,
+                              iconBg: driveConnected
+                                  ? (isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen)
+                                  : (isDark ? AppColors.darkAccentWash : AppColors.accentWash),
+                              iconColor: driveConnected ? AppColors.success : context.accentColor,
+                              title: 'Google Drive',
+                              subtitle: driveConnected
+                                  ? (driveEmail ?? 'Connected')
+                                  : 'Local storage only (offline)',
+                              trailing: _isConnectingDrive
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : (driveConnected
+                                      ? Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            TrueMeTonalPill(
+                                              label: 'Disconnect',
+                                              onTap: _disconnectDrive,
+                                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                            ),
+                                            PopupMenuButton<String>(
+                                              icon: Icon(Icons.more_vert, size: 18, color: context.textSecondary),
+                                              onSelected: (val) {
+                                                if (val == 'switch') _switchDriveAccount();
+                                                if (val == 'disconnect') _disconnectDrive();
+                                              },
+                                              itemBuilder: (_) => const [
+                                                PopupMenuItem(value: 'switch', child: Text('Switch Account')),
+                                                PopupMenuItem(
+                                                  value: 'disconnect',
+                                                  child: Text('Disconnect', style: TextStyle(color: AppColors.error)),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        )
+                                      : TrueMeTonalPill(
+                                          label: 'Connect',
+                                          onTap: _connectDrive,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        )),
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.folder_rounded,
+                              iconBg: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                              iconColor: context.accentColor,
+                              title: 'True Me Drive Folder',
+                              subtitle: '/True Me',
+                              onTap: driveConnected ? null : _connectDrive,
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.delete_sweep_rounded,
+                              iconBg: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
+                              iconColor: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
+                              title: 'Clear Local Cache',
+                              subtitle: _cacheSizeLabel,
+                              trailing: TrueMeTonalPill(
+                                label: 'Clear',
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                onTap: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Clear Local Cache?'),
+                                      content: const Text(
+                                        'This will remove cached quizzes, offline flashcards, notes, and study logs from this device. Are you sure?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                                          child: const Text('Clear Cache'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    await OfflineCacheService.clearAllCache();
+                                    _computeLocalCacheSize();
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Local cache cleared successfully.')),
+                                      );
+                                    }
+                                  }
+                                },
                               ),
                             ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  AppListRow(
-                    title: 'Check for updates',
-                    subtitle: 'Installed version: $_appVersion',
-                    trailing: Icon(Icons.refresh, size: 18, color: context.textSecondary),
-                    onTap: () async {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Checking GitHub Releases for updates...'),
-                          duration: Duration(seconds: 1),
+                          ],
                         ),
-                      );
-                      final info = await UpdateService().checkForUpdate(force: true);
-                      if (!mounted) return;
-                      if (info != null && info.hasUpdate) {
-                        UpdateService.showUpdateDialog(context: context, info: info);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('True Me is up to date ($_appVersion)'),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+                      ),
+                      const SizedBox(height: 22),
 
-            // Data Section
-            const Text('Data', style: AppTypography.sectionHeading),
-            const SizedBox(height: 8),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  AppListRow(
-                    title: 'Remove from app',
-                    subtitle: 'Clears local data, leaves Drive files intact',
-                    trailing: Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
-                    onTap: () => _showConfirmDeleteDialog(deleteAll: false),
-                  ),
-                  Divider(height: 1, thickness: 1, color: context.borderColor),
-                  AppListRow(
-                    title: 'Delete everything',
-                    subtitle: 'Permanently deletes Drive files and local data',
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.error),
-                    onTap: () => _showConfirmDeleteDialog(deleteAll: true),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
+                      // 4. App Section
+                      _SectionTitle(icon: Icons.palette_rounded, title: 'App'),
+                      const SizedBox(height: 10),
+                      TrueMeCard(
+                        borderRadius: 20,
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            _AccountItemRow(
+                              icon: Icons.contrast_rounded,
+                              iconBg: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                              iconColor: context.accentColor,
+                              title: 'Theme',
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    selectedTheme,
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.accentColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.chevron_right_rounded, size: 20, color: context.textSecondary),
+                                ],
+                              ),
+                              onTap: () => _showThemePicker(selectedTheme),
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.refresh_rounded,
+                              iconBg: isDark ? const Color(0xFF11233D) : AppColors.pastelBlue,
+                              iconColor: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
+                              title: 'Check for Updates',
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _appVersion,
+                                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.chevron_right_rounded, size: 20, color: context.textSecondary),
+                                ],
+                              ),
+                              onTap: () async {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Checking GitHub Releases for updates...'),
+                                    duration: Duration(seconds: 1),
+                                  ),
+                                );
+                                final info = await UpdateService().checkForUpdate(force: true);
+                                if (!mounted) return;
+                                if (info != null && info.hasUpdate) {
+                                  UpdateService.showUpdateDialog(context: context, info: info);
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('True Me is up to date ($_appVersion)')),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
 
-            // Sign Out
-            Center(
-              child: TextButton(
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Sign Out?'),
-                      content: const Text('Are you sure you want to sign out of True Me?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
+                      // 5. Data Section
+                      _SectionTitle(icon: Icons.storage_rounded, title: 'Data'),
+                      const SizedBox(height: 10),
+                      TrueMeCard(
+                        borderRadius: 20,
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            _AccountItemRow(
+                              icon: Icons.delete_outline_rounded,
+                              iconBg: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                              iconColor: AppColors.error,
+                              title: 'Remove from App',
+                              titleColor: AppColors.error,
+                              onTap: () => _showConfirmDeleteDialog(deleteAll: false),
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.warning_amber_rounded,
+                              iconBg: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                              iconColor: AppColors.error,
+                              title: 'Delete Everything',
+                              titleColor: AppColors.error,
+                              onTap: () => _showConfirmDeleteDialog(deleteAll: true),
+                            ),
+                          ],
                         ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                          child: const Text('Sign Out'),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 6. Sign Out Button Card
+                      TrueMeCard(
+                        borderRadius: 18,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        onTap: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Sign Out?'),
+                              content: const Text('Are you sure you want to sign out of True Me?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                                  child: const Text('Sign Out'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await OfflineCacheService.logout();
+                            if (mounted) {
+                              context.go('/login');
+                            }
+                          }
+                        },
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.logout_rounded, size: 19, color: AppColors.error),
+                            SizedBox(width: 8),
+                            Text(
+                              'Sign Out',
+                              style: TextStyle(
+                                color: AppColors.error,
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    await OfflineCacheService.logout();
-                    if (mounted) {
-                      context.go('/login');
-                    }
-                  }
-                },
-                child: const Text(
-                  'Sign out',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                      ),
+                    ],
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const _SectionTitle({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 19, color: context.textPrimary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: AppTypography.sectionHeading.copyWith(color: context.textPrimary),
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountItemRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final Color? titleColor;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const _AccountItemRow({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    this.titleColor,
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, size: 19, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      color: titleColor ?? context.textPrimary,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 40),
+            trailing ?? Icon(Icons.chevron_right_rounded, size: 20, color: context.textSecondary),
           ],
         ),
       ),

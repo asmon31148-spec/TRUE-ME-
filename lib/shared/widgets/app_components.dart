@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../app/theme/colors.dart';
 import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
 
-/// Primary Button: Full width, 52 px high, accent fill, white text.
+/// Primary Pill Button: Full width, 52 px high, signature indigo gradient, white text.
 class AppPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -29,45 +31,76 @@ class AppPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = backgroundColor ?? context.accentColor;
     final fg = foregroundColor ?? Colors.white;
+    final enabled = !isLoading && onPressed != null;
 
     return SizedBox(
       width: width ?? double.infinity,
-      height: height ?? 52,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          disabledBackgroundColor: bg.withOpacity(0.5),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        onPressed: isLoading ? null : onPressed,
-        child: isLoading
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (icon != null) ...[icon!, const SizedBox(width: 8)],
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: fg,
-                    ),
+      height: (height ?? 52).clamp(44.0, 68.0),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: backgroundColor == null && enabled ? AppColors.indigoButtonGradient : null,
+          color: backgroundColor != null
+              ? (enabled ? bg : bg.withValues(alpha: 0.5))
+              : (enabled ? null : bg.withValues(alpha: 0.45)),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: bg.withValues(alpha: 0.25),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
                   ),
-                ],
-              ),
+                ]
+              : null,
+        ),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            foregroundColor: fg,
+            disabledBackgroundColor: Colors.transparent,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+          ),
+          onPressed: isLoading
+              ? null
+              : (onPressed == null
+                  ? null
+                  : () {
+                      HapticFeedback.lightImpact();
+                      onPressed!();
+                    }),
+          child: isLoading
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (icon != null) ...[icon!, const SizedBox(width: 8)],
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
 }
 
-/// Secondary Button: Same size 52 px, theme surface fill with 1 px border, theme primary text.
+/// Secondary Pill Button: 52 px high, theme surface fill with soft lavender border.
 class AppSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -88,26 +121,35 @@ class AppSecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width ?? double.infinity,
-      height: height ?? 52,
+      height: (height ?? 52).clamp(44.0, 68.0),
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           backgroundColor: context.surfaceColor,
           foregroundColor: context.textPrimary,
           elevation: 0,
           side: BorderSide(color: context.borderColor, width: 1),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         ),
-        onPressed: onPressed,
+        onPressed: onPressed == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                onPressed!();
+              },
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[icon!, const SizedBox(width: 8)],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: context.textPrimary,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                  color: context.textPrimary,
+                ),
               ),
             ),
           ],
@@ -117,7 +159,7 @@ class AppSecondaryButton extends StatelessWidget {
   }
 }
 
-/// Rounded tinted icon container used across Today, Library, Practice, and Study tabs.
+/// Rounded pastel icon container used across Quick Access, Library, Account & Practice.
 class AppIconBadge extends StatelessWidget {
   final IconData icon;
   final double size;
@@ -128,7 +170,7 @@ class AppIconBadge extends StatelessWidget {
   const AppIconBadge({
     super.key,
     required this.icon,
-    this.size = 40,
+    this.size = 42,
     this.iconSize = 20,
     this.color,
     this.backgroundColor,
@@ -141,7 +183,7 @@ class AppIconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: backgroundColor ?? context.accentTint,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
       ),
       alignment: Alignment.center,
       child: Icon(
@@ -153,7 +195,7 @@ class AppIconBadge extends StatelessWidget {
   }
 }
 
-/// Card: Theme surface fill, 1 px border, radius 14, padding 16.
+/// Card: Soft elevated surface fill, hairline lavender border, radius 18, subtle shadow.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -177,15 +219,16 @@ class AppCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? context.surfaceColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: context.borderColor, width: 1),
+        boxShadow: context.cardShadow,
       ),
       child: showChevron
           ? Row(
               children: [
                 Expanded(child: child),
                 const SizedBox(width: 8),
-                Icon(Icons.chevron_right, size: 20, color: context.textSecondary),
+                Icon(Icons.chevron_right_rounded, size: 20, color: context.textSecondary),
               ],
             )
           : child,
@@ -193,8 +236,11 @@ class AppCard extends StatelessWidget {
 
     if (onTap != null) {
       return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap!();
+        },
+        borderRadius: BorderRadius.circular(18),
         child: cardContent,
       );
     }
@@ -202,7 +248,7 @@ class AppCard extends StatelessWidget {
   }
 }
 
-/// List Row: 56 px high minimum, icon on left, title and optional subtitle, chevron/status on right.
+/// List Row: 56 px high minimum, pastel badge on left, title/subtitle, chevron/status on right.
 class AppListRow extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -222,15 +268,21 @@ class AppListRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      onTap: onTap == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap!();
+            },
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 56),
+        constraints: const BoxConstraints(minHeight: 58),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: context.borderColor, width: 1),
+          boxShadow: context.cardShadow,
         ),
         child: Row(
           children: [
@@ -246,12 +298,12 @@ class AppListRow extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15.5,
                       fontWeight: FontWeight.w600,
                       color: context.textPrimary,
                     ),
                   ),
-                  if (subtitle != null) ...[
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
@@ -261,7 +313,7 @@ class AppListRow extends StatelessWidget {
                 ],
               ),
             ),
-            trailing ?? Icon(Icons.chevron_right, size: 20, color: context.textSecondary),
+            trailing ?? Icon(Icons.chevron_right_rounded, size: 20, color: context.textSecondary),
           ],
         ),
       ),
@@ -269,7 +321,7 @@ class AppListRow extends StatelessWidget {
   }
 }
 
-/// Input: Label above (not floating), theme surface fill, 1 px border, radius 12, error text below.
+/// Input: Label above, crisp white card fill, soft lavender border, radius 14.
 class AppInput extends StatelessWidget {
   final String? label;
   final String? hintText;
@@ -308,7 +360,7 @@ class AppInput extends StatelessWidget {
             label!,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               color: context.textPrimary,
             ),
           ),
@@ -321,7 +373,7 @@ class AppInput extends StatelessWidget {
           keyboardType: keyboardType,
           maxLines: obscureText ? 1 : maxLines,
           onChanged: onChanged,
-          style: TextStyle(fontSize: 16, color: context.textPrimary),
+          style: TextStyle(fontSize: 15.5, color: context.textPrimary),
           decoration: InputDecoration(
             hintText: hintText,
             prefixIcon: prefixIcon,
@@ -334,7 +386,7 @@ class AppInput extends StatelessWidget {
   }
 }
 
-/// Chip: Radius 8, border, selected state uses accent text and accent border.
+/// Pill Filter Chip: Selected uses rich Indigo fill with crisp white text.
 class AppChip extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -351,13 +403,17 @@ class AppChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = context.accentColor;
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? accent.withOpacity(0.12) : context.surfaceColor,
-          borderRadius: BorderRadius.circular(8),
+          color: isSelected ? accent : context.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? accent : context.borderColor,
             width: 1,
@@ -366,9 +422,9 @@ class AppChip extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            color: isSelected ? accent : context.textPrimary,
+            fontSize: 13.5,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? Colors.white : context.textPrimary,
           ),
         ),
       ),
@@ -376,7 +432,7 @@ class AppChip extends StatelessWidget {
   }
 }
 
-/// Progress Bar: 6 px high, theme border track, accent fill.
+/// Progress Bar: Smooth 7 px rounded track with Indigo fill.
 class AppProgressBar extends StatelessWidget {
   final double value; // 0.0 to 1.0
 
@@ -385,9 +441,9 @@ class AppProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: BorderRadius.circular(4),
       child: SizedBox(
-        height: 6,
+        height: 7,
         child: LinearProgressIndicator(
           value: value.clamp(0.0, 1.0),
           backgroundColor: context.borderColor,
@@ -398,7 +454,7 @@ class AppProgressBar extends StatelessWidget {
   }
 }
 
-/// Empty State: One icon, one sentence, one button. Nothing else.
+/// Empty State: Soft pastel icon container, helpful text, pill CTA button.
 class AppEmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
@@ -418,25 +474,34 @@ class AppEmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: context.textSecondary),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: AppTypography.secondary.copyWith(color: context.textSecondary),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: 200,
-              child: AppPrimaryButton(
-                label: buttonLabel,
-                onPressed: onButtonPressed,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: context.borderColor),
+            boxShadow: context.cardShadow,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIconBadge(icon: icon, size: 58, iconSize: 28),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: AppTypography.secondary.copyWith(color: context.textSecondary),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: 210,
+                child: AppPrimaryButton(
+                  label: buttonLabel,
+                  onPressed: onButtonPressed,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

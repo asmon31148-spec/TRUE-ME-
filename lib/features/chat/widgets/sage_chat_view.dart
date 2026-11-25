@@ -1,17 +1,18 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:printing/printing.dart';
-import '../../../app/theme/liquid_glass_theme.dart';
+import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
 import '../../../shared/widgets/ai_thinking_indicator.dart';
-import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 import '../providers/chat_provider.dart';
 import 'formatted_message_body.dart';
 
@@ -34,11 +35,12 @@ class SageChatView extends ConsumerStatefulWidget {
   ConsumerState<SageChatView> createState() => _SageChatViewState();
 }
 
-class _SageChatViewState extends ConsumerState<SageChatView> {
+class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerProviderStateMixin {
   final TextEditingController _textCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   SttService? _sttService;
   bool _isListening = false;
+  late final AnimationController _orbCtrl;
 
   String get _scopeKey {
     if (widget.notebookId != null && widget.notebookId!.isNotEmpty) {
@@ -53,6 +55,11 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
   @override
   void initState() {
     super.initState();
+    _orbCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat(reverse: true);
+
     if (widget.initialPrompt != null && widget.initialPrompt!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sendMessage(widget.initialPrompt!);
@@ -62,6 +69,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
 
   @override
   void dispose() {
+    _orbCtrl.dispose();
     _textCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -85,7 +93,6 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
         );
     _scrollToBottom();
 
-    // Auto-open generated PDF/DOCX/PPTX immediately so the user gets their file right away
     if (mounted && aiMsg?.action != null) {
       final action = aiMsg!.action!;
       if (action.type == SageActionType.exportPdf ||
@@ -217,46 +224,133 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
+    final isDark = context.isDarkMode;
     final chatState = ref.watch(chatProvider(_scopeKey));
     final hasSubject = widget.subject != null && widget.subject!.trim().isNotEmpty;
     final subjectTitle = hasSubject ? widget.subject!.trim() : 'your studies';
+    final userName = OfflineCacheService.getUserName().trim().split(RegExp(r'\s+')).first;
+    final disableAnim = MediaQuery.disableAnimationsOf(context);
 
     return Column(
       children: [
         Expanded(
           child: chatState.messages.isEmpty && !chatState.isThinking
               ? SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        hasSubject ? 'Ask Sage about $subjectTitle' : 'Ask Sage anything',
-                        style: AppTypography.sectionHeading,
+                      const SizedBox(height: 8),
+                      // Glowing Translucent Lavender Orbital Sphere
+                      AnimatedBuilder(
+                        animation: _orbCtrl,
+                        builder: (context, _) {
+                          final breath = disableAnim ? 0.5 : _orbCtrl.value;
+                          return SizedBox(
+                            width: 196,
+                            height: 196,
+                            child: CustomPaint(
+                              painter: _SageOrbPainter(
+                                breath: breath,
+                                isDark: isDark,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        hasSubject
-                            ? 'Strictly focused on $subjectTitle sources and your $subjectTitle progress. Ask for summaries, PDFs, Word docs, PPT slides, quizzes, flashcards, or mind maps.'
-                            : 'Sage reads your uploaded syllabus and notes, and can create PDFs, Word docs, slides, quizzes, flashcards, or mind maps.',
-                        style: AppTypography.secondary,
+                      const SizedBox(height: 14),
+
+                      // Friendly Floating Greeting Card
+                      TrueMeCard(
+                        borderRadius: 22,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.graphic_eq_rounded,
+                                size: 22,
+                                color: context.accentColor,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Hey ${userName.isNotEmpty ? userName : 'there'}!',
+                                    style: AppTypography.cardTitle.copyWith(
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: context.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    hasSubject
+                                        ? 'Ready to explore $subjectTitle together?'
+                                        : 'What would you like to explore today?',
+                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 18),
-                      _buildSuggestionRow(
-                        hasSubject
-                            ? 'Summarize key concepts from my $subjectTitle sources'
-                            : 'Help me build a study strategy for my exams',
-                      ),
-                      _buildSuggestionRow(
-                        hasSubject
-                            ? 'What are my weak areas in $subjectTitle and what should I study next?'
-                            : 'Explain a difficult concept step by step',
-                      ),
-                      _buildSuggestionRow(
-                        hasSubject
-                            ? 'Provide a study guide of $subjectTitle as a PDF'
-                            : 'Create a 5-question practice quiz',
+                      const SizedBox(height: 20),
+
+                      // Staggered Suggestion Prompt Pills matching Reference Img 3 Center
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _SuggestionPill(
+                              icon: Icons.lightbulb_outline_rounded,
+                              label: 'Explain this topic',
+                              onTap: () => _sendMessage(
+                                hasSubject
+                                    ? 'Explain the core concepts in my $subjectTitle sources simply.'
+                                    : 'Explain a challenging concept from my notes step by step.',
+                              ),
+                            ),
+                            _SuggestionPill(
+                              icon: Icons.quiz_outlined,
+                              label: 'Make a quiz',
+                              onTap: () => _sendMessage(
+                                hasSubject
+                                    ? 'Quiz me on $subjectTitle'
+                                    : 'Create a 5-question practice quiz from my subjects',
+                              ),
+                            ),
+                            _SuggestionPill(
+                              icon: Icons.summarize_outlined,
+                              label: 'Summarise notes',
+                              onTap: () => _sendMessage(
+                                hasSubject
+                                    ? 'Summarize key concepts from my $subjectTitle sources'
+                                    : 'Summarize my uploaded study material for upcoming exams',
+                              ),
+                            ),
+                            _SuggestionPill(
+                              icon: Icons.account_tree_outlined,
+                              label: 'Create a mind map',
+                              onTap: () => _sendMessage(
+                                hasSubject
+                                    ? 'Create a mind map for $subjectTitle'
+                                    : 'Create a mind map of my key study topics',
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -277,103 +371,86 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                     }
 
                     final msg = chatState.messages[idx];
-                    final isDark = context.isDark;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Align(
                         alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.88,
+                            maxWidth: MediaQuery.of(context).size.width * 0.86,
                           ),
                           child: Column(
                             crossAxisAlignment:
                                 msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
                               msg.isUser
-                                  ? CustomPaint(
-                                      foregroundPainter: SpecularBorderPainter(
-                                        borderRadius: 18,
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            Colors.white.withOpacity(0.35),
-                                            Colors.white.withOpacity(0.06),
-                                          ],
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        gradient: AppColors.indigoButtonGradient,
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(18),
+                                          topRight: Radius.circular(18),
+                                          bottomLeft: Radius.circular(18),
+                                          bottomRight: Radius.circular(5),
                                         ),
-                                        borderWidth: 1.0,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.accent.withValues(alpha: 0.22),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                       ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: LiquidGlassTheme.electricIndigo,
-                                          borderRadius: const BorderRadius.only(
-                                            topLeft: Radius.circular(18),
-                                            topRight: Radius.circular(18),
-                                            bottomLeft: Radius.circular(18),
-                                            bottomRight: Radius.circular(4),
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: LiquidGlassTheme.electricIndigo.withOpacity(0.32),
-                                              blurRadius: 12,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                        child: SelectableText(
-                                          msg.text,
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            height: 1.4,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                                      child: SelectableText(
+                                        msg.text,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          height: 1.42,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     )
-                                  : GlassCard(
+                                  : TrueMeCard(
                                       borderRadius: 18,
                                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                      glowColor: LiquidGlassTheme.electricIndigo,
                                       child: FormattedMessageBody(
                                         text: msg.text,
-                                        textColor: context.liquidTextPrimary,
+                                        textColor: context.textPrimary,
                                       ),
                                     ),
                               if (!msg.isUser && msg.action != null) ...[
                                 const SizedBox(height: 8),
                                 InkWell(
                                   onTap: () => _runAction(msg.action!),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(16),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: LiquidGlassTheme.electricIndigo.withOpacity(isDark ? 0.20 : 0.12),
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                                      borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
-                                        color: LiquidGlassTheme.electricIndigo.withOpacity(0.40),
-                                        width: 1,
+                                        color: context.accentColor.withValues(alpha: 0.35),
                                       ),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(_actionIcon(msg.action!.type), size: 18, color: LiquidGlassTheme.electricIndigo),
+                                        Icon(_actionIcon(msg.action!.type), size: 18, color: context.accentColor),
                                         const SizedBox(width: 8),
                                         Flexible(
                                           child: Text(
                                             msg.action!.label,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 13.5,
                                               fontWeight: FontWeight.w700,
-                                              color: LiquidGlassTheme.electricIndigo,
+                                              color: context.accentColor,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 6),
-                                        const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: LiquidGlassTheme.electricIndigo),
+                                        Icon(Icons.arrow_forward_rounded, size: 14, color: context.accentColor),
                                       ],
                                     ),
                                   ),
@@ -389,41 +466,17 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                                         HapticFeedback.lightImpact();
                                         _showCitationSheet(context, msg.citation!);
                                       },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                                        decoration: BoxDecoration(
-                                          color: LiquidGlassTheme.electricIndigo.withOpacity(isDark ? 0.20 : 0.10),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: LiquidGlassTheme.electricIndigo.withOpacity(0.35),
-                                            width: 0.8,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.menu_book_rounded, size: 11, color: LiquidGlassTheme.electricIndigo),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              msg.citation!,
-                                              style: const TextStyle(
-                                                fontSize: 10.5,
-                                                color: LiquidGlassTheme.electricIndigo,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                      child: TrueMeTonalPill(
+                                        label: msg.citation!,
+                                        icon: Icons.menu_book_rounded,
+                                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
+                                    const SizedBox(width: 8),
                                   ],
                                   Text(
                                     _formatTime(msg.timestamp),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: context.liquidTextMuted,
-                                    ),
+                                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
                                   ),
                                 ],
                               ),
@@ -436,107 +489,96 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                 ),
         ),
 
-        // Quick Study Feature Command Chips
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.only(top: 6, bottom: 4),
-          decoration: BoxDecoration(
-            color: context.liquidCanvas,
-            border: Border(
-              top: BorderSide(
-                color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.06),
-                width: 1,
+        // Quick Action Strips when actively chatting
+        if (chatState.messages.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(top: 6, bottom: 4),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  _quickCommandChip(context, Icons.picture_as_pdf_outlined, 'Make PDF',
+                      'Provide a study guide of $subjectTitle as a PDF'),
+                  _quickCommandChip(context, Icons.description_outlined, 'Word',
+                      'Provide a study guide of $subjectTitle as a Word document'),
+                  _quickCommandChip(
+                      context, Icons.slideshow_outlined, 'Slides', 'Create PowerPoint slides for $subjectTitle'),
+                  _quickCommandChip(context, Icons.quiz_outlined, 'Quiz', 'Quiz me on $subjectTitle'),
+                  _quickCommandChip(context, Icons.style_outlined, 'Flashcards', 'Create flashcards for $subjectTitle'),
+                  _quickCommandChip(
+                      context, Icons.account_tree_outlined, 'Mind Map', 'Create a mind map for $subjectTitle'),
+                ],
               ),
             ),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+
+        // Pill Composer Bar matching Reference Img 3 Center
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: context.borderColor),
+              boxShadow: context.cardShadow,
+            ),
             child: Row(
               children: [
-                _quickCommandChip(context, Icons.picture_as_pdf_outlined, 'Make PDF', 'Provide a study guide of $subjectTitle as a PDF'),
-                _quickCommandChip(context, Icons.description_outlined, 'Word', 'Provide a study guide of $subjectTitle as a Word document'),
-                _quickCommandChip(context, Icons.slideshow_outlined, 'Slides', 'Create PowerPoint slides for $subjectTitle'),
-                _quickCommandChip(context, Icons.quiz_outlined, 'Quiz', 'Quiz me on $subjectTitle'),
-                _quickCommandChip(context, Icons.style_outlined, 'Flashcards', 'Create flashcards for $subjectTitle'),
-                _quickCommandChip(context, Icons.account_tree_outlined, 'Mind Map', 'Create a mind map for $subjectTitle'),
-              ],
-            ),
-          ),
-        ),
-
-        // Elevated Floating Glass Input Bar
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-          color: context.liquidCanvas,
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 24),
-                color: LiquidGlassTheme.electricIndigo,
-                tooltip: 'Attach study notes or files',
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/library');
-                },
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _textCtrl,
-                  minLines: 1,
-                  maxLines: 4,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _sendMessage(),
-                  style: TextStyle(color: context.liquidTextPrimary, fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: _isListening
-                        ? 'Listening to your voice...'
-                        : (hasSubject ? 'Ask Sage about $subjectTitle...' : 'Ask Sage anything...'),
-                    hintStyle: TextStyle(color: context.liquidTextSecondary),
-                    filled: true,
-                    fillColor: context.liquidGlassFill,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.10),
-                        width: 1,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.10),
-                        width: 1,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: const BorderSide(color: LiquidGlassTheme.electricIndigo, width: 1.5),
+                IconButton(
+                  icon: Icon(Icons.auto_awesome_rounded, size: 20, color: context.accentColor),
+                  tooltip: 'Add study material in Library',
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    context.push('/library');
+                  },
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _textCtrl,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMessage(),
+                    style: TextStyle(color: context.textPrimary, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: _isListening
+                          ? 'Listening to your voice...'
+                          : (hasSubject ? 'Ask about $subjectTitle...' : 'Ask anything...'),
+                      hintStyle: TextStyle(color: context.textSecondary),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                icon: Icon(
-                  _isListening ? Icons.mic : Icons.mic_none_outlined,
-                  size: 23,
-                  color: _isListening ? LiquidGlassTheme.roseAlert : context.liquidTextSecondary,
+                IconButton(
+                  icon: Icon(
+                    _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                    size: 22,
+                    color: _isListening ? AppColors.error : context.textSecondary,
+                  ),
+                  tooltip: 'Voice speech input',
+                  onPressed: _toggleVoiceInput,
                 ),
-                tooltip: 'Voice speech input',
-                onPressed: _toggleVoiceInput,
-              ),
-              IconButton(
-                icon: const Icon(Icons.arrow_upward_rounded, size: 22, color: Colors.white),
-                style: IconButton.styleFrom(
-                  backgroundColor: LiquidGlassTheme.electricIndigo,
-                  shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(8),
+                GestureDetector(
+                  onTap: chatState.isThinking ? null : () => _sendMessage(),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppColors.indigoButtonGradient,
+                    ),
+                    child: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                  ),
                 ),
-                onPressed: chatState.isThinking ? null : () => _sendMessage(),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -545,30 +587,28 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
 
   Widget _quickCommandChip(BuildContext context, IconData icon, String label, String prompt) {
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.only(right: 8),
       child: InkWell(
         onTap: () => _sendMessage(prompt),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
           decoration: BoxDecoration(
-            color: context.liquidGlassFill,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: context.isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08),
-            ),
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: context.borderColor),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: LiquidGlassTheme.electricIndigo),
+              Icon(icon, size: 14, color: context.accentColor),
               const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: context.liquidTextPrimary,
+                  color: context.textPrimary,
                 ),
               ),
             ],
@@ -581,10 +621,6 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
   void _showCitationSheet(BuildContext context, String citation) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: context.liquidCanvas,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -595,14 +631,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: LiquidGlassTheme.electricIndigo.withOpacity(0.18),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.menu_book_rounded, color: LiquidGlassTheme.electricIndigo, size: 20),
-                    ),
+                    AppIconBadge(icon: Icons.menu_book_rounded, color: context.accentColor),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -610,11 +639,11 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                         children: [
                           const Text(
                             'Verified Source Citation',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                            style: AppTypography.cardTitle,
                           ),
                           Text(
-                            'Extracted from your uploaded course notes',
-                            style: TextStyle(fontSize: 12, color: context.liquidTextSecondary),
+                            'Extracted from your uploaded study notes',
+                            style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
                           ),
                         ],
                       ),
@@ -622,18 +651,14 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Container(
+                TrueMeCard(
+                  borderRadius: 14,
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: context.liquidGlassFill,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: context.isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08),
-                    ),
-                  ),
+                  showShadow: false,
+                  color: context.bgColor,
                   child: Row(
                     children: [
-                      const Icon(Icons.article_outlined, size: 20, color: LiquidGlassTheme.electricIndigo),
+                      Icon(Icons.article_outlined, size: 20, color: context.accentColor),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -641,7 +666,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: context.liquidTextPrimary,
+                            color: context.textPrimary,
                           ),
                         ),
                       ),
@@ -649,21 +674,12 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: LiquidGlassTheme.electricIndigo,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      minimumSize: const Size(double.infinity, 48),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      context.push('/library');
-                    },
-                    child: const Text('View Source in Library', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
+                TrueMePrimaryButton(
+                  label: 'View Source in Library',
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.push('/library');
+                  },
                 ),
               ],
             ),
@@ -672,34 +688,133 @@ class _SageChatViewState extends ConsumerState<SageChatView> {
       },
     );
   }
+}
 
-  Widget _buildSuggestionRow(String text) {
+class _SuggestionPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SuggestionPill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        onTap: () => _sendMessage(text),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: context.surfaceColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.borderColor, width: 1),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  text,
-                  style: TextStyle(fontSize: 14.5, color: context.textPrimary),
-                ),
+      child: TrueMeCard(
+        borderRadius: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        onTap: onTap,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 17, color: context.accentColor),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimary,
               ),
-              Icon(Icons.arrow_forward, size: 16, color: context.textSecondary),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+/// Calm luminous Sage Sphere with orbital ellipses & delicate sparkle accents.
+class _SageOrbPainter extends CustomPainter {
+  final double breath;
+  final bool isDark;
+
+  _SageOrbPainter({required this.breath, required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final baseR = size.width * 0.29 + (breath * 3.0);
+
+    // Outer ambient bloom
+    final bloom = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFF7B7AF7).withValues(alpha: isDark ? 0.25 : 0.34),
+          const Color(0xFFA7A0FA).withValues(alpha: isDark ? 0.08 : 0.14),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: baseR * 1.75));
+    canvas.drawCircle(center, baseR * 1.75, bloom);
+
+    // Orbital rings
+    final ringPaint = Paint()
+      ..color = (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF8C87F2))
+          .withValues(alpha: 0.45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-math.pi / 7 + (breath * 0.08));
+    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: baseR * 3.0, height: baseR * 1.15), ringPaint);
+    canvas.rotate(math.pi / 3.5);
+    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: baseR * 2.8, height: baseR * 1.05), ringPaint);
+    canvas.restore();
+
+    // Luminous Sphere Body
+    final spherePaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.32, -0.35),
+        radius: 0.95,
+        colors: [
+          const Color(0xFFDCD8FE),
+          const Color(0xFF7C7DF5),
+          const Color(0xFF4F46E5),
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: baseR));
+    canvas.drawCircle(center, baseR, spherePaint);
+
+    // Delicate diagonal sheen inside sphere
+    final sheenPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.22)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: baseR * 0.78),
+      -math.pi * 0.85,
+      math.pi * 0.45,
+      false,
+      sheenPaint,
+    );
+
+    // Delicate 4-point sparkles around sphere
+    _drawSparkle(canvas, Offset(center.dx + baseR * 1.25, center.dy - baseR * 0.78), 7.5);
+    _drawSparkle(canvas, Offset(center.dx - baseR * 1.32, center.dy + baseR * 0.62), 6.0);
+  }
+
+  void _drawSparkle(Canvas canvas, Offset pos, double r) {
+    final path = Path()
+      ..moveTo(pos.dx, pos.dy - r)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx + r, pos.dy)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx, pos.dy + r)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx - r, pos.dy)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx, pos.dy - r)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()..color = (isDark ? const Color(0xFFC4B5FD) : const Color(0xFF6B6CE6)).withValues(alpha: 0.7),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SageOrbPainter oldDelegate) =>
+      oldDelegate.breath != breath || oldDelegate.isDark != isDark;
 }

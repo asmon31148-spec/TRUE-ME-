@@ -1,18 +1,14 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../app/theme/liquid_glass_theme.dart';
+import '../../app/theme/colors.dart';
+import '../../app/theme/theme_provider.dart';
 import '../../core/services/update_service.dart';
-import 'glass_card.dart';
 
-/// Application Shell hosting the Floating Liquid Glass Action Dock.
+/// Application Shell hosting the True Me Calm Bottom Navigation Bar & Center Sage Orb.
 ///
-/// Features:
-/// - Floating glass dock with 16px selective blur and 1px specular highlight
-/// - 44px+ ergonomic touch target compliance across all navigation items
-/// - Electric Indigo glowing active indicator and ambient Mother AI Sage orb
-/// - Automatic keyboard dismissal handling
+/// Preserves the existing 5-slot navigation structure:
+/// [Home (/today)] [Library (/library)] [★ Sage Orb (/chat)] [Practice (/practice)] [Progress (/progress)]
 class AppScaffoldShell extends StatefulWidget {
   final Widget child;
 
@@ -89,90 +85,86 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   Widget build(BuildContext context) {
     final showBar = _shouldShowBottomBar(context);
     final selectedIdx = _calculateSelectedIndex(context);
-    final isDark = context.isDark;
+    final isDark = context.isDarkMode;
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: context.liquidCanvas,
+      backgroundColor: context.bgColor,
       extendBody: true,
       body: widget.child,
       bottomNavigationBar: showBar
-          ? Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                0,
-                16,
-                MediaQuery.paddingOf(context).bottom > 0
-                    ? MediaQuery.paddingOf(context).bottom
-                    : 12,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(26),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: LiquidGlassTheme.floatingNavBlurSigma,
-                    sigmaY: LiquidGlassTheme.floatingNavBlurSigma,
-                  ),
-                  child: CustomPaint(
-                    foregroundPainter: SpecularBorderPainter(
-                      borderRadius: 26,
-                      gradient: isDark
-                          ? LiquidGlassTheme.darkSpecularBorder
-                          : LiquidGlassTheme.lightSpecularBorder,
-                      borderWidth: 1.0,
+          ? SizedBox(
+              height: 82 + bottomPad,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.bottomCenter,
+                children: [
+                  // Elevated clean rounded white/surface dock matching reference sheets
+                  Container(
+                    height: 68 + bottomPad,
+                    padding: EdgeInsets.only(bottom: bottomPad, left: 6, right: 6),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : AppColors.surface,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                      border: Border(
+                        top: BorderSide(
+                          color: isDark ? AppColors.darkBorder : const Color(0xFFE7E3F3),
+                          width: 1,
+                        ),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2E2A5C).withValues(alpha: isDark ? 0.35 : 0.08),
+                          blurRadius: 20,
+                          offset: const Offset(0, -6),
+                        ),
+                      ],
                     ),
-                    child: Container(
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? LiquidGlassTheme.darkCanvas.withOpacity(0.78)
-                            : LiquidGlassTheme.lightCanvas.withOpacity(0.82),
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: isDark
-                            ? LiquidGlassTheme.darkGlassShadow(
-                                glowColor: LiquidGlassTheme.electricIndigo,
-                              )
-                            : LiquidGlassTheme.lightGlassShadow(),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Row(
-                        children: [
-                          _FloatingNavItem(
-                            icon: Icons.today_outlined,
-                            activeIcon: Icons.today_rounded,
-                            label: 'Today',
-                            isSelected: selectedIdx == 0,
-                            onTap: () => _onItemTapped(0, context),
-                          ),
-                          _FloatingNavItem(
-                            icon: Icons.folder_outlined,
-                            activeIcon: Icons.folder_rounded,
-                            label: 'Library',
-                            isSelected: selectedIdx == 1,
-                            onTap: () => _onItemTapped(1, context),
-                          ),
-                          _FloatingSageDockButton(
-                            isSelected: selectedIdx == 2,
-                            onTap: () => _onItemTapped(2, context),
-                          ),
-                          _FloatingNavItem(
-                            icon: Icons.psychology_outlined,
-                            activeIcon: Icons.psychology_rounded,
-                            label: 'Practice',
-                            isSelected: selectedIdx == 3,
-                            onTap: () => _onItemTapped(3, context),
-                          ),
-                          _FloatingNavItem(
-                            icon: Icons.insights_outlined,
-                            activeIcon: Icons.insights_rounded,
-                            label: 'Progress',
-                            isSelected: selectedIdx == 4,
-                            onTap: () => _onItemTapped(4, context),
-                          ),
-                        ],
-                      ),
+                    child: Row(
+                      children: [
+                        _NavTabItem(
+                          icon: Icons.home_outlined,
+                          activeIcon: Icons.home_rounded,
+                          label: 'Home',
+                          isSelected: selectedIdx == 0,
+                          onTap: () => _onItemTapped(0, context),
+                        ),
+                        _NavTabItem(
+                          icon: Icons.menu_book_outlined,
+                          activeIcon: Icons.menu_book_rounded,
+                          label: 'Library',
+                          isSelected: selectedIdx == 1,
+                          onTap: () => _onItemTapped(1, context),
+                        ),
+                        const SizedBox(width: 68), // Spacereserved for centered Sage Orb
+                        _NavTabItem(
+                          icon: Icons.check_box_outlined,
+                          activeIcon: Icons.check_box_rounded,
+                          label: 'Practice',
+                          isSelected: selectedIdx == 3,
+                          onTap: () => _onItemTapped(3, context),
+                        ),
+                        _NavTabItem(
+                          icon: Icons.bar_chart_rounded,
+                          activeIcon: Icons.bar_chart_rounded,
+                          label: 'Progress',
+                          isSelected: selectedIdx == 4,
+                          onTap: () => _onItemTapped(4, context),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+
+                  // Prominent Centered Sage Star Orb
+                  Positioned(
+                    top: 0,
+                    child: _SageCenterOrb(
+                      isSelected: selectedIdx == 2,
+                      isDark: isDark,
+                      onTap: () => _onItemTapped(2, context),
+                    ),
+                  ),
+                ],
               ),
             )
           : null,
@@ -180,14 +172,14 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
   }
 }
 
-class _FloatingNavItem extends StatelessWidget {
+class _NavTabItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _FloatingNavItem({
+  const _NavTabItem({
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -197,44 +189,45 @@ class _FloatingNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
-    final activeColor = LiquidGlassTheme.electricIndigo;
-    final inactiveColor = isDark
-        ? LiquidGlassTheme.darkTextMuted
-        : LiquidGlassTheme.lightTextSecondary;
+    final activeColor = context.accentColor;
+    final inactiveColor = context.textSecondary;
 
     return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          constraints: const BoxConstraints(minHeight: LiquidGlassTheme.minTouchTarget),
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
+                duration: const Duration(milliseconds: 160),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? activeColor.withOpacity(isDark ? 0.18 : 0.12)
+                      ? activeColor.withValues(alpha: context.isDarkMode ? 0.16 : 0.10)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   isSelected ? activeIcon : icon,
-                  size: 21,
+                  size: 22,
                   color: isSelected ? activeColor : inactiveColor,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected ? activeColor : inactiveColor,
-                  letterSpacing: -0.2,
+                  letterSpacing: -0.1,
                 ),
               ),
             ],
@@ -245,66 +238,64 @@ class _FloatingNavItem extends StatelessWidget {
   }
 }
 
-class _FloatingSageDockButton extends StatelessWidget {
+class _SageCenterOrb extends StatefulWidget {
   final bool isSelected;
+  final bool isDark;
   final VoidCallback onTap;
 
-  const _FloatingSageDockButton({
+  const _SageCenterOrb({
     required this.isSelected,
+    required this.isDark,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = context.isDark;
+  State<_SageCenterOrb> createState() => _SageCenterOrbState();
+}
 
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+class _SageCenterOrbState extends State<_SageCenterOrb> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final disableAnim = MediaQuery.disableAnimationsOf(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: (_pressed && !disableAnim) ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOutCubic,
         child: Container(
-          constraints: const BoxConstraints(minHeight: LiquidGlassTheme.minTouchTarget),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF6366F1), // Electric Indigo
-                      Color(0xFF8B5CF6), // Purple Iris
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: LiquidGlassTheme.electricIndigo.withOpacity(0.45),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 19,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Sage',
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFFA5B4FC) : LiquidGlassTheme.electricIndigo,
-                  letterSpacing: -0.2,
-                ),
+          width: 58,
+          height: 58,
+          padding: const EdgeInsets.all(3.5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.isDark ? AppColors.darkSurface : AppColors.surface,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(alpha: widget.isDark ? 0.35 : 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 5),
               ),
             ],
+          ),
+          child: Container(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppColors.sageOrbGradient,
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 25,
+              ),
+            ),
           ),
         ),
       ),

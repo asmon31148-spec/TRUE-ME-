@@ -6,6 +6,7 @@ import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -104,7 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
             }
             return;
           }
-          // Offline / unreachable: continue with local mode
         }
       }
 
@@ -147,169 +147,174 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.bgColor,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Text(
-                _isSignUp ? 'Create account' : 'Sign in',
-                style: AppTypography.screenTitle,
-              ),
-              const SizedBox(height: 16),
-
-              // Two-option Segmented Control
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.borderColor, width: 1),
+      body: TrueMeAmbientBackground(
+        intenseLavender: true,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                Text(
+                  _isSignUp ? 'Create Account' : 'Welcome Back',
+                  style: AppTypography.editorialHero.copyWith(
+                    fontSize: 30,
+                    color: context.textPrimary,
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => setState(() {
-                          _isSignUp = false;
-                          _errorText = null;
-                        }),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: !_isSignUp ? context.bgColor : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: !_isSignUp
-                                ? Border.all(color: context.borderColor, width: 1)
-                                : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Sign in',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: !_isSignUp ? FontWeight.w600 : FontWeight.w400,
-                              color: context.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => setState(() {
-                          _isSignUp = true;
-                          _errorText = null;
-                        }),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: _isSignUp ? context.bgColor : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: _isSignUp
-                                ? Border.all(color: context.borderColor, width: 1)
-                                : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Sign up',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: _isSignUp ? FontWeight.w600 : FontWeight.w400,
-                              color: context.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  _isSignUp
+                      ? 'Set up your personal study companion.'
+                      : 'Sign in to continue your learning journey.',
+                  style: AppTypography.secondary.copyWith(color: context.textSecondary),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 22),
 
-              if (_errorText != null) ...[
+                // Pill Segmented Control
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: context.surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.error, width: 1),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: context.borderColor),
+                    boxShadow: context.cardShadow,
                   ),
-                  child: Text(
-                    _errorText!,
-                    style: const TextStyle(fontSize: 14, color: AppColors.error),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _isSignUp = false;
+                            _errorText = null;
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            decoration: BoxDecoration(
+                              gradient: !_isSignUp ? AppColors.indigoButtonGradient : null,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: !_isSignUp ? FontWeight.w700 : FontWeight.w500,
+                                color: !_isSignUp ? Colors.white : context.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _isSignUp = true;
+                            _errorText = null;
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            decoration: BoxDecoration(
+                              gradient: _isSignUp ? AppColors.indigoButtonGradient : null,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Sign Up',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: _isSignUp ? FontWeight.w700 : FontWeight.w500,
+                                color: _isSignUp ? Colors.white : context.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
+                const SizedBox(height: 22),
 
-              if (_isSignUp) ...[
-                AppInput(
-                  label: 'Name',
-                  hintText: 'Your name',
-                  controller: _nameController,
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              AppInput(
-                label: 'Email',
-                hintText: 'name@example.com',
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-
-              AppInput(
-                label: 'Password',
-                hintText: 'Password',
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    size: 20,
-                    color: context.textSecondary,
+                if (_errorText != null) ...[
+                  TrueMeCard(
+                    borderRadius: 14,
+                    padding: const EdgeInsets.all(14),
+                    borderColor: AppColors.error,
+                    child: Text(_errorText!, style: const TextStyle(fontSize: 14, color: AppColors.error)),
                   ),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-              ),
+                  const SizedBox(height: 16),
+                ],
 
-              if (!_isSignUp) ...[
-                Align(
-                  alignment: Alignment.centerRight,
+                TrueMeCard(
+                  borderRadius: 22,
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    children: [
+                      if (_isSignUp) ...[
+                        AppInput(
+                          label: 'Name',
+                          hintText: 'Your name',
+                          controller: _nameController,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      AppInput(
+                        label: 'Email',
+                        hintText: 'name@example.com',
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      AppInput(
+                        label: 'Password',
+                        hintText: 'Password (min 6 characters)',
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            size: 20,
+                            color: context.textSecondary,
+                          ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (!_isSignUp)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Password reset link sent if account exists.')),
+                        );
+                      },
+                      child: const Text('Forgot password?'),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 22),
+
+                TrueMePrimaryButton(
+                  label: _isSignUp ? 'Create Account' : 'Sign In',
+                  isLoading: _isLoading,
+                  onPressed: _handleSubmit,
+                ),
+                const SizedBox(height: 14),
+                Center(
                   child: TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Password reset link sent if account exists.')),
-                      );
-                    },
-                    child: const Text('Forgot password'),
+                    onPressed: _handleGuest,
+                    child: const Text('Continue as guest'),
                   ),
                 ),
-              ] else
-                const SizedBox(height: 24),
-
-              AppPrimaryButton(
-                label: _isSignUp ? 'Create account' : 'Sign in',
-                isLoading: _isLoading,
-                onPressed: _handleSubmit,
-              ),
-              const SizedBox(height: 16),
-
-              Center(
-                child: TextButton(
-                  onPressed: _handleGuest,
-                  child: const Text('Continue as guest'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

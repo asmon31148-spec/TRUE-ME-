@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/theme/liquid_glass_theme.dart';
+import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
+import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../shared/widgets/glass_app_bar.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/sage_chat_view.dart';
 
-/// NotebookLM-Style Research Chat Screen.
+/// NotebookLM-Style Sage AI Companion Screen.
 ///
-/// Features:
-/// - Single-file or Full-Notebook Context Selector Pill at top
-/// - Liquid Glass visual hierarchy (anti-AI slop: zero neon gradient bubbles)
-/// - Scope persistence and fast switching across enrolled subjects
+/// Preserves scope selection (Full Notebook vs Subject), chat history clearing,
+/// and embeds the redesigned [SageChatView].
 class ChatScreen extends ConsumerStatefulWidget {
   final String? notebookId;
   final String? subject;
@@ -52,164 +52,149 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final subjects = OfflineCacheService.getUserSubjects();
-    final isDark = context.isDark;
     final isFullNotebook = _activeSubject == null || _activeSubject!.isEmpty;
 
     return Scaffold(
-      backgroundColor: context.liquidCanvas,
-      appBar: GlassAppBar(
-        title: 'Sage AI',
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          color: context.liquidTextPrimary,
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/today');
-            }
-          },
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_horiz_rounded, size: 22, color: context.liquidTextSecondary),
-            color: isDark ? const Color(0xFF1E2638) : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            onSelected: (val) {
-              if (val == 'clear') {
-                HapticFeedback.mediumImpact();
-                ref.read(chatProvider(_scopeKey).notifier).clearHistory();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'clear',
+      backgroundColor: context.bgColor,
+      body: TrueMeAmbientBackground(
+        intenseLavender: true,
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Editorial Top Header matching Sage Reference
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_outlined, size: 18, color: LiquidGlassTheme.roseAlert),
-                    const SizedBox(width: 8),
-                    Text('Clear Chat History', style: TextStyle(color: LiquidGlassTheme.roseAlert)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // NotebookLM-Style Context Selector Pill
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? LiquidGlassTheme.darkCanvas.withOpacity(0.6)
-                    : LiquidGlassTheme.lightCanvas.withOpacity(0.6),
-                border: Border(
-                  bottom: BorderSide(
-                    color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.06),
-                    width: 0.8,
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
-                    decoration: BoxDecoration(
-                      color: LiquidGlassTheme.electricIndigo.withOpacity(isDark ? 0.20 : 0.12),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: LiquidGlassTheme.electricIndigo.withOpacity(0.35),
-                        width: 0.8,
+                    TrueMeCircleIconButton(
+                      icon: Icons.arrow_back_rounded,
+                      size: 40,
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/today');
+                        }
+                      },
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Sage',
+                                style: AppTypography.screenTitle.copyWith(
+                                  fontSize: 22,
+                                  color: context.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Icon(Icons.auto_awesome_rounded, size: 17, color: context.accentColor),
+                            ],
+                          ),
+                          Text(
+                            'Your AI Learning Companion',
+                            style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isFullNotebook ? Icons.auto_stories_rounded : Icons.bookmark_rounded,
-                          size: 13,
-                          color: LiquidGlassTheme.electricIndigo,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          isFullNotebook ? 'FULL NOTEBOOK' : 'SUBJECT SCOPE',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
-                            color: LiquidGlassTheme.electricIndigo,
+                    TrueMeCircleIconButton(
+                      icon: Icons.volume_up_rounded,
+                      tooltip: 'Voice Tutor',
+                      size: 40,
+                      onPressed: () => context.push('/voice-tutor'),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_horiz_rounded, size: 22, color: context.textSecondary),
+                      onSelected: (val) {
+                        if (val == 'clear') {
+                          HapticFeedback.mediumImpact();
+                          ref.read(chatProvider(_scopeKey).notifier).clearHistory();
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'clear',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_sweep_outlined, size: 18, color: AppColors.error),
+                              SizedBox(width: 8),
+                              Text('Clear Chat History', style: TextStyle(color: AppColors.error)),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: subjects.isNotEmpty && widget.notebookId == null
-                          ? () {
-                              HapticFeedback.lightImpact();
-                              _showScopePicker(context, subjects);
-                            }
-                          : null,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: context.liquidGlassFill,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08),
-                            width: 0.8,
+                  ],
+                ),
+              ),
+
+              // Compact Subject Scope Selector Pill
+              if (subjects.isNotEmpty || widget.notebookId != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: GestureDetector(
+                    onTap: subjects.isNotEmpty && widget.notebookId == null
+                        ? () {
+                            HapticFeedback.selectionClick();
+                            _showScopePicker(context, subjects);
+                          }
+                        : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor.withValues(alpha: 0.88),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: context.borderColor),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isFullNotebook ? Icons.auto_stories_rounded : Icons.bookmark_rounded,
+                            size: 14,
+                            color: context.accentColor,
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                isFullNotebook
-                                    ? (subjects.isNotEmpty
-                                        ? 'All Notebook Sources (${subjects.length} enrolled)'
-                                        : 'Global Study Context')
-                                    : _activeSubject!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: context.liquidTextPrimary,
-                                ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              isFullNotebook
+                                  ? (subjects.isNotEmpty
+                                      ? 'All Sources (${subjects.length} subjects)'
+                                      : 'Global Study Context')
+                                  : _activeSubject!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: context.textPrimary,
                               ),
                             ),
-                            if (subjects.isNotEmpty && widget.notebookId == null)
-                              Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 18,
-                                color: context.liquidTextSecondary,
-                              ),
+                          ),
+                          if (subjects.isNotEmpty && widget.notebookId == null) ...[
+                            const SizedBox(width: 4),
+                            Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: context.textSecondary),
                           ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // Main Chat Stream View
-            Expanded(
-              child: SageChatView(
-                key: ValueKey(_scopeKey),
-                notebookId: widget.notebookId,
-                subject: _activeSubject,
-                initialPrompt: widget.initialPrompt,
+              // Live Sage Chat Body
+              Expanded(
+                child: SageChatView(
+                  notebookId: widget.notebookId,
+                  subject: _activeSubject,
+                  initialPrompt: widget.initialPrompt,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -218,63 +203,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _showScopePicker(BuildContext context, List<String> subjects) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: context.liquidCanvas,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Text(
-                    'Select Research Context',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: context.liquidTextPrimary,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.auto_stories_rounded, color: LiquidGlassTheme.electricIndigo),
-                  title: const Text('Entire Notebook (All Sources)', style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Search across all ${subjects.length} subjects and notes'),
-                  trailing: _activeSubject == null
-                      ? const Icon(Icons.check_circle_rounded, color: LiquidGlassTheme.electricIndigo)
-                      : null,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    setState(() => _activeSubject = null);
-                  },
-                ),
-                const Divider(height: 1),
-                ...subjects.map((sub) {
-                  final isSelected = _activeSubject == sub;
-                  return ListTile(
-                    leading: const Icon(Icons.folder_outlined),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Study Context', style: AppTypography.sectionHeading),
+              const SizedBox(height: 4),
+              Text(
+                'Choose whether Sage reads across your entire library or narrows into one subject.',
+                style: AppTypography.secondary.copyWith(color: context.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                tileColor: _activeSubject == null ? context.accentTint : context.bgColor,
+                leading: Icon(Icons.auto_stories_rounded, color: context.accentColor),
+                title: const Text('Full Notebook Context', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Cross-reference all enrolled subjects', style: TextStyle(fontSize: 12)),
+                trailing: _activeSubject == null ? Icon(Icons.check_circle, color: context.accentColor) : null,
+                onTap: () {
+                  setState(() => _activeSubject = null);
+                  Navigator.pop(ctx);
+                },
+              ),
+              const SizedBox(height: 8),
+              ...subjects.map((sub) {
+                final isSelected = _activeSubject == sub;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    tileColor: isSelected ? context.accentTint : context.bgColor,
+                    leading: Icon(Icons.bookmark_outline_rounded, color: context.accentColor),
                     title: Text(sub, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Strictly scoped to this subject\'s notes'),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle_rounded, color: LiquidGlassTheme.electricIndigo)
-                        : null,
+                    trailing: isSelected ? Icon(Icons.check_circle, color: context.accentColor) : null,
                     onTap: () {
-                      Navigator.pop(ctx);
                       setState(() => _activeSubject = sub);
+                      Navigator.pop(ctx);
                     },
-                  );
-                }),
-              ],
-            ),
+                  ),
+                );
+              }),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

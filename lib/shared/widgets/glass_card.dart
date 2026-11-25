@@ -146,7 +146,7 @@ class _GlassCardState extends State<GlassCard> with SingleTickerProviderStateMix
             ? LiquidGlassTheme.darkGlassShadow(glowColor: widget.glowColor)
             : LiquidGlassTheme.lightGlassShadow(glowColor: widget.glowColor));
 
-    Widget cardBody = CustomPaint(
+    Widget innerContent = CustomPaint(
       foregroundPainter: SpecularBorderPainter(
         borderRadius: widget.borderRadius,
         gradient: effectiveBorderGradient,
@@ -160,30 +160,31 @@ class _GlassCardState extends State<GlassCard> with SingleTickerProviderStateMix
           color: widget.surfaceGradient == null ? effectiveFill : null,
           gradient: widget.surfaceGradient,
           borderRadius: BorderRadius.circular(widget.borderRadius),
-          boxShadow: effectiveShadows,
         ),
         child: widget.child,
       ),
     );
 
-    // High performance: Apply backdrop blur strictly when requested
     if (widget.enableBlur) {
-      cardBody = ClipRRect(
+      innerContent = ClipRRect(
         borderRadius: BorderRadius.circular(widget.borderRadius),
         child: BackdropFilter(
           filter: ImageFilter.blur(
             sigmaX: widget.blurSigma,
             sigmaY: widget.blurSigma,
           ),
-          child: cardBody,
+          child: innerContent,
         ),
       );
-    } else {
-      cardBody = ClipRRect(
-        borderRadius: BorderRadius.circular(widget.borderRadius),
-        child: cardBody,
-      );
     }
+
+    Widget cardBody = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        boxShadow: effectiveShadows,
+      ),
+      child: innerContent,
+    );
 
     // Outer margin
     if (widget.margin != null) {

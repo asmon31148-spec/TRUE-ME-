@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
-import '../../../app/theme/liquid_glass_theme.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
@@ -13,7 +13,7 @@ import '../../../core/services/tts_service.dart';
 import '../../../core/utils/stem_formula_formatter.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
-import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 import '../providers/flashcard_provider.dart';
 
 class DeckListScreen extends ConsumerStatefulWidget {
@@ -47,7 +47,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
     super.initState();
     _flipController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 360),
     );
     _flipAnimation = Tween<double>(begin: 0.0, end: math.pi).animate(
       CurvedAnimation(parent: _flipController, curve: Curves.easeInOutCubic),
@@ -104,15 +104,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: context.surfaceColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.edit_note, color: context.accentColor, size: 22),
-            const SizedBox(width: 8),
-            const Text('Edit card', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          ],
-        ),
+        title: const Text('Edit Flashcard', style: AppTypography.sectionHeading),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -136,13 +128,10 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.textSecondary)),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: context.accentColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(92, 42)),
             onPressed: () async {
               final newFront = frontCtrl.text.trim();
               final newBack = backCtrl.text.trim();
@@ -169,7 +158,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                 );
               }
             },
-            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -266,6 +255,48 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
     }
   }
 
+  void _showDeckSwitcherSheet(List<FlashcardDeckModel> decks) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Switch Flashcard Deck', style: AppTypography.sectionHeading),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: decks.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final d = decks[i];
+                    final isCurrent = _activeDeck?.id == d.id;
+                    return AppListRow(
+                      leading: AppIconBadge(icon: Icons.style_rounded, color: context.accentColor),
+                      title: d.topic,
+                      subtitle: '${d.subject} · ${d.cards.length} cards',
+                      trailing: isCurrent
+                          ? Icon(Icons.check_circle_rounded, color: context.accentColor)
+                          : Icon(Icons.play_arrow_rounded, color: context.textSecondary),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _startDeck(d);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showGenerateDeckSheet() {
     final notebooks = OfflineCacheService.getAllCachedNotebooks();
     String? selectedNbId = widget.notebookId ??
@@ -277,18 +308,14 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.bgColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
           return Padding(
             padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
+              left: 20,
+              right: 20,
               top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -297,21 +324,20 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Generate deck with Sage', style: AppTypography.sectionHeading),
+                    const Text('Generate Deck with Sage', style: AppTypography.sectionHeading),
                     IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(ctx)),
                   ],
                 ),
                 const SizedBox(height: 16),
-
                 if (notebooks.isNotEmpty) ...[
-                  const Text('Subject / Notebook', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const Text('Subject / Notebook', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: context.surfaceColor,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.borderColor, width: 1),
+                      color: context.bgColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: context.borderColor),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String?>(
@@ -336,23 +362,21 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                   ),
                   const SizedBox(height: 16),
                 ],
-
                 if (selectedNbId == null) ...[
                   AppInput(
                     label: 'Subject',
-                    hintText: 'e.g. Calculus, History...',
+                    hintText: 'e.g. Calculus, Microbiology...',
                     controller: customSubjectCtrl,
                   ),
                   const SizedBox(height: 16),
                 ],
-
                 AppInput(
                   label: 'Topic',
                   hintText: 'e.g. Chapter 3 definitions, key formulas',
                   controller: topicCtrl,
                 ),
                 const SizedBox(height: 16),
-                const Text('Number of cards', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const Text('Number of Cards', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Row(
                   children: [5, 10, 15].map((c) {
@@ -367,8 +391,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                   }).toList(),
                 ),
                 const SizedBox(height: 24),
-                AppPrimaryButton(
-                  label: 'Generate deck',
+                TrueMePrimaryButton(
+                  label: 'Generate Deck',
                   onPressed: () async {
                     String subjectName = customSubjectCtrl.text.trim();
                     String sourceText = '';
@@ -408,16 +432,12 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.bgColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
+          left: 20,
+          right: 20,
           top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -427,7 +447,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Create flashcard', style: AppTypography.sectionHeading),
+                  const Text('Create Flashcard', style: AppTypography.sectionHeading),
                   IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(ctx)),
                 ],
               ),
@@ -440,8 +460,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
               const SizedBox(height: 12),
               AppInput(label: 'Answer (Back)', hintText: 'Enter answer...', controller: backCtrl),
               const SizedBox(height: 20),
-              AppPrimaryButton(
-                label: 'Save card',
+              TrueMePrimaryButton(
+                label: 'Save Card',
                 onPressed: () async {
                   if (frontCtrl.text.trim().isEmpty || backCtrl.text.trim().isEmpty) return;
                   final sub = subjectCtrl.text.trim().isNotEmpty ? subjectCtrl.text.trim() : 'General';
@@ -470,117 +490,176 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final flashState = ref.watch(flashcardProvider);
     final decks = flashState.decks;
 
-    // 1. Active Study Session View
+    // 1. Active Flashcard Session matching Reference Image 4 Left
     if (_activeDeck != null && _sessionCards.isNotEmpty) {
       final card = _sessionCards[_cardIndex.clamp(0, _sessionCards.length - 1)];
       final total = _sessionCards.length;
+      final pastel = SubjectPastelStyle.forSubject(_activeDeck!.subject, isDark: isDark);
 
       return Scaffold(
         backgroundColor: context.bgColor,
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.close, size: 24),
-            onPressed: () {
-              _tts.stop();
-              setState(() {
-                _isSpeaking = false;
-                _activeDeck = null;
-              });
-            },
-          ),
-          title: Text(
-            'Card ${_cardIndex + 1} of $total',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: context.textPrimary),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(
-                _isSpeaking ? Icons.volume_up : Icons.volume_up_outlined,
-                color: _isSpeaking ? context.accentColor : context.textPrimary,
-              ),
-              tooltip: _isSpeaking ? 'Stop audio' : 'Listen with Speech',
-              onPressed: _speakCurrentCard,
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              tooltip: 'Edit card',
-              onPressed: () => _showEditCardDialog(card),
-            ),
-            const SizedBox(width: 4),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(6),
-            child: AppProgressBar(value: (_cardIndex + 1) / total),
-          ),
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  child: _build3dFlippableCard(card),
+        body: TrueMeAmbientBackground(
+          child: SafeArea(
+            child: Column(
+              children: [
+                TrueMeTopBar(
+                  title: 'Flashcards',
+                  onBack: () {
+                    _tts.stop();
+                    setState(() {
+                      _isSpeaking = false;
+                      _activeDeck = null;
+                    });
+                  },
+                  trailing: TrueMeCircleIconButton(
+                    icon: Icons.edit_outlined,
+                    tooltip: 'Edit current card',
+                    size: 40,
+                    onPressed: () => _showEditCardDialog(card),
+                  ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                decoration: BoxDecoration(
-                  color: context.liquidCanvas,
-                  border: Border(
-                    top: BorderSide(
-                      color: context.isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.08),
-                      width: 1,
+
+                // Deck Selector Dropdown Card
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: TrueMeCard(
+                    borderRadius: 18,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    onTap: () => _showDeckSwitcherSheet(decks),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: pastel.bgEnd,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.menu_book_rounded, size: 22, color: pastel.accent),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _activeDeck!.topic,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                '$total ${total == 1 ? 'card' : 'cards'} · ${_activeDeck!.subject}',
+                                style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: context.textSecondary),
+                      ],
                     ),
                   ),
                 ),
-                child: !_isFlipped
-                    ? AppPrimaryButton(
-                        label: 'Reveal Answer',
-                        backgroundColor: LiquidGlassTheme.electricIndigo,
-                        onPressed: _toggleCardFlip,
-                      )
-                    : Row(
-                        children: [
-                          _buildIntervalButton(
-                            'Again',
-                            _requeuedCardIds.contains(card.id) ? '1d' : '< 1m',
-                            LiquidGlassTheme.roseAlert,
-                            () => _rateCard(0),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildIntervalButton(
-                            'Hard',
-                            _previewInterval(card, 3),
-                            LiquidGlassTheme.amberStreak,
-                            () => _rateCard(3),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildIntervalButton(
-                            'Good',
-                            _previewInterval(card, 4),
-                            LiquidGlassTheme.electricIndigo,
-                            () => _rateCard(4),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildIntervalButton(
-                            'Easy',
-                            _previewInterval(card, 5),
-                            LiquidGlassTheme.emeraldFocus,
-                            () => _rateCard(5),
-                          ),
-                        ],
+                const SizedBox(height: 14),
+
+                // Progress Tracker Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_cardIndex + 1} / $total',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: context.textPrimary,
+                        ),
                       ),
-              ),
-            ],
+                      const SizedBox(height: 6),
+                      AppProgressBar(value: (_cardIndex + 1) / total),
+                    ],
+                  ),
+                ),
+
+                // Centered 3D Flippable Card
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                    child: _build3dFlippableCard(card),
+                  ),
+                ),
+
+                // Bottom SM-2 Interval Cards + Action Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: Column(
+                    children: [
+                      if (!_isFlipped)
+                        TrueMePrimaryButton(
+                          label: 'Reveal Answer',
+                          onPressed: _toggleCardFlip,
+                        )
+                      else ...[
+                        Row(
+                          children: [
+                            _Sm2RatingTile(
+                              label: 'Again',
+                              interval: _requeuedCardIds.contains(card.id) ? '1d' : '< 1m',
+                              icon: Icons.close_rounded,
+                              bgColor: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                              accentColor: isDark ? AppColors.darkError : AppColors.error,
+                              onTap: () => _rateCard(0),
+                            ),
+                            const SizedBox(width: 8),
+                            _Sm2RatingTile(
+                              label: 'Hard',
+                              interval: _previewInterval(card, 3),
+                              icon: Icons.sentiment_neutral_rounded,
+                              bgColor: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
+                              accentColor: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
+                              onTap: () => _rateCard(3),
+                            ),
+                            const SizedBox(width: 8),
+                            _Sm2RatingTile(
+                              label: 'Good',
+                              interval: _previewInterval(card, 4),
+                              icon: Icons.check_rounded,
+                              bgColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
+                              accentColor: isDark ? AppColors.darkSuccess : AppColors.pastelGreenInk,
+                              onTap: () => _rateCard(4),
+                            ),
+                            const SizedBox(width: 8),
+                            _Sm2RatingTile(
+                              label: 'Easy',
+                              interval: _previewInterval(card, 5),
+                              icon: Icons.star_rounded,
+                              bgColor: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                              accentColor: context.accentColor,
+                              onTap: () => _rateCard(5),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
-    // 2. Deck List View
+    // 2. Deck Library View
     final now = DateTime.now().add(const Duration(minutes: 5));
     int totalDue = 0;
     for (final d in decks) {
@@ -589,169 +668,193 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
 
     return Scaffold(
       backgroundColor: context.bgColor,
-      appBar: AppBar(
-        title: const Text('Flashcards', style: AppTypography.screenTitle),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, size: 24),
-            tooltip: 'Create card manually',
-            onPressed: _showCreateManualSheet,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          children: [
-            if (flashState.isGenerating) ...[
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: GenerationProgressView(
-                  compact: true,
-                  title: 'Generating flashcards with Sage',
-                  stages: [
-                    'Extracting key concepts...',
-                    'Creating active-recall Q&A cards...',
-                    'Scheduling SM-2 intervals...',
-                    'Almost ready...',
-                  ],
+      body: TrueMeAmbientBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              TrueMeTopBar(
+                title: 'Flashcards',
+                onBack: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/practice');
+                  }
+                },
+                trailing: TrueMeCircleIconButton(
+                  icon: Icons.add_rounded,
+                  tooltip: 'Create manual card',
+                  size: 40,
+                  onPressed: _showCreateManualSheet,
                 ),
               ),
-            ],
-
-            if (flashState.error != null) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.error.withOpacity(0.4)),
-                ),
-                child: Row(
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.error, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        flashState.error!,
-                        style: const TextStyle(fontSize: 13, color: AppColors.error),
+                    if (flashState.isGenerating)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: GenerationProgressView(
+                          compact: true,
+                          title: 'Generating flashcards with Sage',
+                          stages: [
+                            'Extracting key concepts...',
+                            'Creating active-recall Q&A cards...',
+                            'Scheduling SM-2 intervals...',
+                            'Almost ready...',
+                          ],
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18, color: AppColors.error),
-                      onPressed: () => ref.read(flashcardProvider.notifier).clearError(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
 
-            if (decks.isEmpty && !flashState.isGenerating) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: AppEmptyState(
-                  icon: Icons.style_outlined,
-                  message: 'No flashcard decks yet. Generate a deck from your notes with Sage or add cards manually.',
-                  buttonLabel: 'Generate deck with Sage',
-                  onButtonPressed: _showGenerateDeckSheet,
-                ),
-              ),
-            ] else ...[
-              // Due Today Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.borderColor, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            totalDue > 0 ? 'Due today: $totalDue' : 'All caught up!',
-                            style: AppTypography.sectionHeading,
+                    if (flashState.error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: TrueMeCard(
+                          borderColor: AppColors.error.withValues(alpha: 0.4),
+                          color: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  flashState.error!,
+                                  style: const TextStyle(fontSize: 13, color: AppColors.error),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                                onPressed: () => ref.read(flashcardProvider.notifier).clearError(),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${decks.length} ${decks.length == 1 ? 'deck' : 'decks'} in your library',
-                            style: AppTypography.secondary,
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                    SizedBox(
-                      width: 120,
-                      child: AppPrimaryButton(
-                        label: totalDue > 0 ? 'Study now' : 'Review',
-                        onPressed: () => _startAllDue(decks),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
 
-              const Text('Decks', style: AppTypography.sectionHeading),
-              const SizedBox(height: 10),
-
-              ...decks.map((deck) {
-                final dueCount = deck.cards.where((c) => c.nextReviewDate.isBefore(now)).length;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: AppListRow(
-                    title: deck.topic,
-                    subtitle: '${deck.subject} • ${deck.cards.length} cards ($dueCount due)',
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: context.textSecondary),
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Delete Deck?'),
-                                content: Text('Are you sure you want to delete "${deck.topic}"? This cannot be undone.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('Cancel'),
+                    if (decks.isEmpty && !flashState.isGenerating)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 36),
+                        child: AppEmptyState(
+                          icon: Icons.style_outlined,
+                          message:
+                              'No flashcard decks yet. Generate a deck from your notes with Sage or add cards manually.',
+                          buttonLabel: 'Generate Deck with Sage',
+                          onButtonPressed: _showGenerateDeckSheet,
+                        ),
+                      )
+                    else ...[
+                      // Due Today Hero Card
+                      TrueMeCard(
+                        borderRadius: 22,
+                        padding: const EdgeInsets.all(18),
+                        gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    totalDue > 0 ? '$totalDue Cards Due' : 'All Caught Up!',
+                                    style: AppTypography.sectionHeading.copyWith(
+                                      fontSize: 21,
+                                      color: context.textPrimary,
+                                    ),
                                   ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                                    child: const Text('Delete'),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${decks.length} ${decks.length == 1 ? 'deck' : 'decks'} ready for review',
+                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
                                   ),
                                 ],
                               ),
-                            );
-                            if (confirm == true) {
-                              ref.read(flashcardProvider.notifier).deleteDeck(deck.id);
-                            }
-                          },
+                            ),
+                            SizedBox(
+                              width: 124,
+                              child: TrueMePrimaryButton(
+                                label: totalDue > 0 ? 'Study Now' : 'Review',
+                                height: 44,
+                                onPressed: () => _startAllDue(decks),
+                              ),
+                            ),
+                          ],
                         ),
-                        Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
-                      ],
-                    ),
-                    onTap: () => _startDeck(deck),
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 22),
 
-              AppSecondaryButton(
-                label: 'Generate deck with Sage',
-                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                onPressed: _showGenerateDeckSheet,
+                      TrueMeSectionHeader(
+                        title: 'Your Decks',
+                        actionLabel: 'Generate New',
+                        onActionTap: _showGenerateDeckSheet,
+                      ),
+                      const SizedBox(height: 12),
+
+                      ...decks.map((deck) {
+                        final dueCount = deck.cards.where((c) => c.nextReviewDate.isBefore(now)).length;
+                        final pastel = SubjectPastelStyle.forSubject(deck.subject, isDark: isDark);
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: AppListRow(
+                            leading: AppIconBadge(
+                              icon: pastel.icon,
+                              color: pastel.accent,
+                              backgroundColor: pastel.bgEnd,
+                            ),
+                            title: deck.topic,
+                            subtitle: '${deck.subject} · ${deck.cards.length} cards ($dueCount due)',
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline, size: 19, color: context.textSecondary),
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Delete Deck?'),
+                                        content: Text(
+                                            'Are you sure you want to delete "${deck.topic}"? This cannot be undone.'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, true),
+                                            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      ref.read(flashcardProvider.notifier).deleteDeck(deck.id);
+                                    }
+                                  },
+                                ),
+                                Icon(Icons.chevron_right_rounded, size: 20, color: context.textSecondary),
+                              ],
+                            ),
+                            onTap: () => _startDeck(deck),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 14),
+                      TrueMePrimaryButton(
+                        label: 'Generate Deck with Sage',
+                        leadingIcon: const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
+                        onPressed: _showGenerateDeckSheet,
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -762,7 +865,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
       onTap: _toggleCardFlip,
       child: AnimatedBuilder(
         animation: _flipAnimation,
-        builder: (context, child) {
+        builder: (context, _) {
           final angle = _flipAnimation.value;
           final isBack = angle > (math.pi / 2);
 
@@ -785,98 +888,64 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
   }
 
   Widget _buildCardFace(FlashcardModel card, {required bool isAnswer}) {
-    final isDark = context.isDark;
-    final accentColor = isAnswer ? LiquidGlassTheme.emeraldFocus : LiquidGlassTheme.electricIndigo;
     final text = isAnswer ? card.back : card.front;
+    final badgeLabel = isAnswer ? 'ANSWER' : 'QUESTION';
+    final badgeColor = isAnswer ? AppColors.success : context.accentColor;
 
-    return GlassCard(
+    return TrueMeCard(
       width: double.infinity,
       height: double.infinity,
-      borderRadius: 22,
+      borderRadius: 24,
       padding: const EdgeInsets.all(22),
-      surfaceColor: isDark
-          ? const Color(0xFF131824)
-          : Colors.white.withOpacity(0.92),
-      glowColor: accentColor,
       child: Column(
         children: [
-          // Header Chip: QUESTION vs ANSWER
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(isDark ? 0.22 : 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: accentColor.withOpacity(0.35),
-                    width: 0.8,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isAnswer ? Icons.check_circle_outline_rounded : Icons.help_outline_rounded,
-                      size: 13,
-                      color: accentColor,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      isAnswer ? 'ANSWER' : 'QUESTION',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                        color: accentColor,
-                      ),
-                    ),
-                  ],
-                ),
+              TrueMeTonalPill(
+                label: badgeLabel,
+                backgroundColor: badgeColor.withValues(alpha: 0.12),
+                foregroundColor: badgeColor,
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
               ),
-              IconButton(
-                icon: Icon(
-                  _isSpeaking ? Icons.volume_up_rounded : Icons.volume_up_outlined,
-                  size: 20,
-                  color: _isSpeaking ? accentColor : context.liquidTextSecondary,
-                ),
+              TrueMeCircleIconButton(
+                icon: _isSpeaking ? Icons.volume_up_rounded : Icons.volume_up_outlined,
+                iconColor: _isSpeaking ? badgeColor : context.textSecondary,
+                size: 40,
                 onPressed: _speakCurrentCard,
               ),
             ],
           ),
-
           const Spacer(),
-
-          // Card Text Content with Stem Formula formatting
           SingleChildScrollView(
             child: Text(
               StemFormulaFormatter.format(text),
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: isAnswer ? 17.5 : 20,
-                fontWeight: isAnswer ? FontWeight.w500 : FontWeight.w700,
-                color: context.liquidTextPrimary,
-                height: 1.45,
-                letterSpacing: -0.2,
-              ),
+              style: isAnswer
+                  ? AppTypography.body.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: context.textPrimary,
+                      height: 1.5,
+                    )
+                  : AppTypography.sectionHeading.copyWith(
+                      fontSize: 22,
+                      color: context.textPrimary,
+                      height: 1.32,
+                    ),
             ),
           ),
-
           const Spacer(),
-
-          // Tap to flip hint
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.touch_app_outlined, size: 14, color: context.liquidTextMuted),
-              const SizedBox(width: 4),
+              Icon(Icons.sync_rounded, size: 15, color: context.textSecondary),
+              const SizedBox(width: 6),
               Text(
-                isAnswer ? 'Tap card to flip to question' : 'Tap card to reveal answer',
-                style: TextStyle(
-                  color: context.liquidTextMuted,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
+                isAnswer ? 'Tap to see question' : 'Tap to flip',
+                style: AppTypography.smallLabel.copyWith(
+                  color: context.textSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -885,40 +954,59 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
       ),
     );
   }
+}
 
-  Widget _buildIntervalButton(String label, String interval, Color accent, VoidCallback onTap) {
+class _Sm2RatingTile extends StatelessWidget {
+  final String label;
+  final String interval;
+  final IconData icon;
+  final Color bgColor;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  const _Sm2RatingTile({
+    required this.label,
+    required this.interval,
+    required this.icon,
+    required this.bgColor,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
+      child: TrueMeCard(
+        borderRadius: 16,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: accent.withOpacity(context.isDarkMode ? 0.12 : 0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: accent.withOpacity(0.35), width: 1.2),
-          ),
-          child: Column(
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: accent,
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+              child: Icon(icon, size: 16, color: accentColor),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
               ),
-              const SizedBox(height: 2),
-              Text(
-                interval,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: accent.withOpacity(0.85),
-                ),
+            ),
+            Text(
+              interval,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: context.textSecondary,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

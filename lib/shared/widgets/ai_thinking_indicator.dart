@@ -13,27 +13,28 @@ class AiThinkingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         color: context.surfaceColor,
         border: Border.all(
           color: context.borderColor,
           width: 1.0,
         ),
+        boxShadow: context.cardShadow,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 12,
-            height: 12,
+            width: 14,
+            height: 14,
             child: CircularProgressIndicator(
               strokeWidth: 2,
               valueColor: AlwaysStoppedAnimation<Color>(context.accentColor),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 9),
           Text(
             label,
             style: AppTypography.bodySmall.copyWith(

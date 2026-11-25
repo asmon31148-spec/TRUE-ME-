@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:graphview/GraphView.dart';
@@ -10,6 +11,7 @@ import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 
 class MindmapScreen extends ConsumerStatefulWidget {
   final String? notebookId;
@@ -26,10 +28,15 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
   late final BuchheimWalkerConfiguration _builder;
   late final BuchheimWalkerAlgorithm _algorithm;
   late final TextEditingController _topicCtrl;
+  final TransformationController _transformCtrl = TransformationController();
   final Map<String, String> _nodeLabels = {};
   final Map<String, String> _nodeSummaries = {};
+  final Map<String, int> _nodeBranchIndex = {};
+
   String _currentTopic = '';
+  String? _selectedNodeId;
   bool _isGenerating = false;
+  bool _isFullscreen = false;
   String? _errorText;
 
   @override
@@ -43,10 +50,10 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
     _topicCtrl = TextEditingController(text: initial);
 
     _builder = BuchheimWalkerConfiguration()
-      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_LEFT_RIGHT
-      ..siblingSeparation = 48
-      ..levelSeparation = 80
-      ..subtreeSeparation = 48;
+      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM
+      ..siblingSeparation = 28
+      ..levelSeparation = 64
+      ..subtreeSeparation = 32;
 
     _algorithm = BuchheimWalkerAlgorithm(_builder, TreeEdgeRenderer(_builder));
 
@@ -58,7 +65,20 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
   @override
   void dispose() {
     _topicCtrl.dispose();
+    _transformCtrl.dispose();
     super.dispose();
+  }
+
+  void _zoomBy(double factor) {
+    HapticFeedback.selectionClick();
+    final current = _transformCtrl.value.clone();
+    final currentScale = current.getMaxScaleOnAxis();
+    final targetScale = (currentScale * factor).clamp(0.4, 2.4);
+    final adjustedFactor = targetScale / currentScale;
+    current.scale(adjustedFactor, adjustedFactor);
+    setState(() {
+      _transformCtrl.value = current;
+    });
   }
 
   Future<void> _generateMindmap(String topic) async {
@@ -69,6 +89,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
       _isGenerating = true;
       _errorText = null;
       _currentTopic = cleanTopic;
+      _selectedNodeId = null;
     });
 
     try {
@@ -76,7 +97,6 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
       if (widget.notebookId != null && widget.notebookId!.isNotEmpty) {
         content = OfflineCacheService.getNotebookCombinedText(widget.notebookId!, maxChars: 12000);
       } else {
-        // Also try matching by subject name
         final match = OfflineCacheService.getAllCachedNotebooks().where(
           (n) => (n['title'] as String? ?? '').toLowerCase() == cleanTopic.toLowerCase(),
         );
@@ -92,15 +112,18 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
       final newGraph = Graph()..isTree = true;
       _nodeLabels.clear();
       _nodeSummaries.clear();
+      _nodeBranchIndex.clear();
       int seq = 0;
 
       final rootTitle = (data['root'] as String? ?? cleanTopic).trim();
       final rootId = 'node_${seq++}';
       final rootNode = Node.Id(rootId);
       _nodeLabels[rootId] = rootTitle;
-      _nodeSummaries[rootId] = 'Core topic: $rootTitle';
+      _nodeSummaries[rootId] = 'Core overview & concept hierarchy for $rootTitle.';
+      _nodeBranchIndex[rootId] = 0;
 
       final branches = data['branches'] as List<dynamic>? ?? [];
+      int branchIdx = 0;
       for (final b in branches) {
         final bMap = Map<String, dynamic>.from(b as Map);
         final bTitle = (bMap['title'] as String? ?? 'Subtopic').trim();
@@ -109,6 +132,7 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
         final bNode = Node.Id(bId);
         _nodeLabels[bId] = bTitle;
         _nodeSummaries[bId] = bSummary;
+        _nodeBranchIndex[bId] = branchIdx;
         newGraph.addEdge(rootNode, bNode);
 
         final children = bMap['children'] as List<dynamic>? ?? [];
@@ -120,13 +144,17 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
           final cNode = Node.Id(cId);
           _nodeLabels[cId] = cTitle;
           _nodeSummaries[cId] = cSummary;
+          _nodeBranchIndex[cId] = branchIdx;
           newGraph.addEdge(bNode, cNode);
         }
+        branchIdx++;
       }
 
       if (mounted) {
+        _transformCtrl.value = Matrix4.identity();
         setState(() {
           _graph = newGraph;
+          _selectedNodeId = rootId;
           _isGenerating = false;
         });
       }
@@ -140,165 +168,330 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
     }
   }
 
-  void _showNodeSheet(String nodeId) {
+  void _askSageAboutNode(String nodeId) {
     final title = _nodeLabels[nodeId] ?? nodeId;
-    final summary = _nodeSummaries[nodeId] ?? 'Concept related to $_currentTopic.';
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: context.bgColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text(title, style: AppTypography.sectionHeading)),
-                IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(ctx)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(summary, style: AppTypography.body),
-            const SizedBox(height: 24),
-            AppPrimaryButton(
-              label: 'Ask Sage about this',
-              onPressed: () {
-                Navigator.pop(ctx);
-                final q = Uri.encodeComponent('Explain "$title" in the context of $_currentTopic');
-                context.push('/chat?prompt=$q');
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+    final q = Uri.encodeComponent('Explain "$title" in the context of $_currentTopic');
+    context.push('/chat?prompt=$q');
+  }
+
+  Color _branchBgColor(int idx, bool isDark) {
+    final colorsLight = [
+      const Color(0xFFE0F2FE),
+      const Color(0xFFDCFCE7),
+      const Color(0xFFFFEDD5),
+      const Color(0xFFEDE9FE),
+    ];
+    final colorsDark = [
+      const Color(0xFF11233D),
+      const Color(0xFF0E2922),
+      const Color(0xFF2B2110),
+      const Color(0xFF241938),
+    ];
+    return isDark ? colorsDark[idx % colorsDark.length] : colorsLight[idx % colorsLight.length];
+  }
+
+  Color _branchInkColor(int idx, bool isDark) {
+    final inksLight = [
+      const Color(0xFF0284C7),
+      const Color(0xFF15803D),
+      const Color(0xFFC2410C),
+      const Color(0xFF6D28D9),
+    ];
+    final inksDark = [
+      const Color(0xFF60A5FA),
+      const Color(0xFF4ADE80),
+      const Color(0xFFFBBF24),
+      const Color(0xFFC4B5FD),
+    ];
+    return isDark ? inksDark[idx % inksDark.length] : inksLight[idx % inksLight.length];
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final activeId = _selectedNodeId ?? (_nodeLabels.isNotEmpty ? _nodeLabels.keys.first : null);
+    final activeTitle = activeId != null ? (_nodeLabels[activeId] ?? _currentTopic) : _currentTopic;
+    final activeSummary = activeId != null ? (_nodeSummaries[activeId] ?? '') : '';
+
     return Scaffold(
       backgroundColor: context.bgColor,
-      appBar: AppBar(
-        title: const Text('Mind map', style: AppTypography.screenTitle),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top input row
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: context.borderColor, width: 1)),
+      body: TrueMeAmbientBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Editorial Top Bar + Fullscreen Expand Button
+              TrueMeTopBar(
+                title: 'Mind Map',
+                onBack: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/practice');
+                  }
+                },
+                trailing: TrueMeCircleIconButton(
+                  icon: _isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                  tooltip: _isFullscreen ? 'Exit fullscreen' : 'Fullscreen canvas',
+                  size: 40,
+                  onPressed: () => setState(() => _isFullscreen = !_isFullscreen),
+                ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AppInput(
-                      controller: _topicCtrl,
-                      hintText: 'Enter any topic or chapter...',
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 96,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.accentColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: _isGenerating ? null : () => _generateMindmap(_topicCtrl.text),
-                      child: const Text('Create', style: TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
-            // Canvas or empty/loading state
-            Expanded(
-              child: _isGenerating
-                  ? const GenerationProgressView(
-                      title: 'Mapping concept hierarchy...',
-                      stages: [
-                        'Analyzing core topic...',
-                        'Building branches & relationships...',
-                        'Generating concept summaries...',
-                        'Rendering interactive tree...',
-                      ],
-                    )
-                  : _errorText != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text(_errorText!, style: const TextStyle(color: AppColors.error), textAlign: TextAlign.center),
+              // Topic Entry Bar (Hidden in Fullscreen)
+              if (!_isFullscreen)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: context.surfaceColor,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: context.borderColor),
+                            boxShadow: context.cardShadow,
                           ),
-                        )
-                      : _graph.nodeCount() == 0
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(24),
+                          child: TextField(
+                            controller: _topicCtrl,
+                            onSubmitted: (v) => _generateMindmap(v),
+                            style: TextStyle(fontSize: 14.5, color: context.textPrimary),
+                            decoration: const InputDecoration(
+                              hintText: 'Enter topic or chapter...',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      TrueMePrimaryButton(
+                        label: 'Map',
+                        width: 84,
+                        height: 46,
+                        onPressed: _isGenerating ? null : () => _generateMindmap(_topicCtrl.text),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Interactive Graph Canvas
+              Expanded(
+                child: _isGenerating
+                    ? const GenerationProgressView(
+                        title: 'Mapping concept hierarchy...',
+                        stages: [
+                          'Analyzing core topic...',
+                          'Building branches & relationships...',
+                          'Generating concept summaries...',
+                          'Rendering interactive tree...',
+                        ],
+                      )
+                    : _errorText != null
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: TrueMeCard(
                                 child: Text(
-                                  'Enter a topic above and tap Create to build an interactive concept mind map.',
+                                  _errorText!,
+                                  style: const TextStyle(color: AppColors.error),
                                   textAlign: TextAlign.center,
-                                  style: AppTypography.secondary,
-                                ),
-                              ),
-                            )
-                          : InteractiveViewer(
-                              constrained: false,
-                              boundaryMargin: const EdgeInsets.all(100),
-                              minScale: 0.3,
-                              maxScale: 2.5,
-                              child: Padding(
-                                padding: const EdgeInsets.all(32),
-                                child: GraphView(
-                                  graph: _graph,
-                                  algorithm: _algorithm,
-                                  paint: Paint()
-                                    ..color = context.borderColor
-                                    ..strokeWidth = 1.5
-                                    ..style = PaintingStyle.stroke,
-                                  builder: (Node node) {
-                                    final nodeId = node.key!.value as String;
-                                    final label = _nodeLabels[nodeId] ?? nodeId;
-                                    final isRoot = nodeId == 'node_0';
-                                    return GestureDetector(
-                                      onTap: () => _showNodeSheet(nodeId),
-                                      child: Container(
-                                        constraints: const BoxConstraints(minWidth: 90, maxWidth: 220),
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: context.surfaceColor,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: isRoot ? context.accentColor : context.borderColor,
-                                            width: isRoot ? 1.5 : 1.0,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          label,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: isRoot ? FontWeight.w600 : FontWeight.w500,
-                                            color: isRoot ? context.accentColor : context.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
                                 ),
                               ),
                             ),
-            ),
-          ],
+                          )
+                        : _graph.nodeCount() == 0
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    'Enter a topic above and tap Map to build an interactive concept hierarchy.',
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                  ),
+                                ),
+                              )
+                            : InteractiveViewer(
+                                transformationController: _transformCtrl,
+                                constrained: false,
+                                boundaryMargin: const EdgeInsets.all(140),
+                                minScale: 0.35,
+                                maxScale: 2.5,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(36),
+                                  child: GraphView(
+                                    graph: _graph,
+                                    algorithm: _algorithm,
+                                    paint: Paint()
+                                      ..color = context.accentColor.withValues(alpha: 0.45)
+                                      ..strokeWidth = 2.0
+                                      ..style = PaintingStyle.stroke,
+                                    builder: (Node node) {
+                                      final nodeId = node.key!.value as String;
+                                      final label = _nodeLabels[nodeId] ?? nodeId;
+                                      final isRoot = nodeId == 'node_0';
+                                      final isSelected = activeId == nodeId;
+                                      final bIdx = _nodeBranchIndex[nodeId] ?? 0;
+
+                                      if (isRoot) {
+                                        return GestureDetector(
+                                          onTap: () => setState(() => _selectedNodeId = nodeId),
+                                          child: Container(
+                                            constraints: const BoxConstraints(minWidth: 130, maxWidth: 200),
+                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                            decoration: BoxDecoration(
+                                              gradient: AppColors.indigoButtonGradient,
+                                              borderRadius: BorderRadius.circular(30),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: AppColors.accent.withValues(alpha: 0.30),
+                                                  blurRadius: 16,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.hub_rounded, size: 22, color: Colors.white),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  label,
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    fontSize: 14.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      final bg = _branchBgColor(bIdx, isDark);
+                                      final ink = _branchInkColor(bIdx, isDark);
+
+                                      return GestureDetector(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() => _selectedNodeId = nodeId);
+                                        },
+                                        child: Container(
+                                          constraints: const BoxConstraints(minWidth: 105, maxWidth: 180),
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                          decoration: BoxDecoration(
+                                            color: bg,
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: isSelected ? ink : ink.withValues(alpha: 0.25),
+                                              width: isSelected ? 2.0 : 1.0,
+                                            ),
+                                            boxShadow: context.cardShadow,
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.circle, size: 10, color: ink),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                label,
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: context.textPrimary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+              ),
+
+              // Bottom Selected Node Card + Regenerate/Zoom Bar (matching Ref Img 4 Right)
+              if (_graph.nodeCount() > 0 && !_isGenerating)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 6, 18, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (activeId != null)
+                        TrueMeCard(
+                          borderRadius: 18,
+                          padding: const EdgeInsets.all(14),
+                          onTap: () => _askSageAboutNode(activeId),
+                          child: Row(
+                            children: [
+                              AppIconBadge(icon: Icons.auto_awesome_rounded, color: context.accentColor),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      activeTitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.textPrimary,
+                                      ),
+                                    ),
+                                    if (activeSummary.isNotEmpty)
+                                      Text(
+                                        activeSummary,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded, size: 22, color: context.textSecondary),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          TrueMeTonalPill(
+                            label: 'Regenerate',
+                            icon: Icons.refresh_rounded,
+                            backgroundColor: context.surfaceColor,
+                            foregroundColor: context.textPrimary,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            onTap: _currentTopic.isNotEmpty ? () => _generateMindmap(_currentTopic) : null,
+                          ),
+                          const Spacer(),
+                          TrueMeCircleIconButton(
+                            icon: Icons.zoom_out_rounded,
+                            tooltip: 'Zoom out',
+                            size: 42,
+                            onPressed: () => _zoomBy(0.8),
+                          ),
+                          const SizedBox(width: 10),
+                          TrueMeCircleIconButton(
+                            icon: Icons.zoom_in_rounded,
+                            tooltip: 'Zoom in',
+                            size: 42,
+                            onPressed: () => _zoomBy(1.25),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,8 +1,11 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/theme/colors.dart';
+import '../../../app/theme/theme_provider.dart';
+import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -11,84 +14,40 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _entranceCtrl;
-  late final AnimationController _pulseCtrl;
-
   late final Animation<double> _logoScale;
   late final Animation<double> _logoFade;
   late final Animation<double> _textFade;
-  late final Animation<Offset> _textSlide;
   late final Animation<double> _progressAnim;
-
-  String _statusText = 'Igniting cognitive engine...';
+  String _statusText = 'Preparing your study space...';
 
   @override
   void initState() {
     super.initState();
-
-    // 1. Entrance animation sequence (1800ms)
     _entranceCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 1650),
     );
 
-    // Smooth spring scale for the puzzle bulb logo
-    _logoScale = Tween<double>(begin: 0.65, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceCtrl,
-        curve: const Interval(0.0, 0.55, curve: Curves.easeOutBack),
-      ),
+    _logoScale = Tween<double>(begin: 0.78, end: 1.0).animate(
+      CurvedAnimation(parent: _entranceCtrl, curve: const Interval(0.0, 0.55, curve: Curves.easeOutBack)),
     );
-
-    // Smooth fade-in for logo
     _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceCtrl,
-        curve: const Interval(0.0, 0.40, curve: Curves.easeIn),
-      ),
+      CurvedAnimation(parent: _entranceCtrl, curve: const Interval(0.0, 0.45, curve: Curves.easeIn)),
     );
-
-    // Title and tagline fade & upward slide
     _textFade = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceCtrl,
-        curve: const Interval(0.35, 0.75, curve: Curves.easeOut),
-      ),
+      CurvedAnimation(parent: _entranceCtrl, curve: const Interval(0.30, 0.75, curve: Curves.easeOut)),
     );
-
-    _textSlide = Tween<Offset>(
-      begin: const Offset(0, 0.25),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _entranceCtrl,
-        curve: const Interval(0.35, 0.75, curve: Curves.easeOutCubic),
-      ),
-    );
-
-    // Glowing progress capsule
     _progressAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceCtrl,
-        curve: const Interval(0.20, 0.95, curve: Curves.easeInOutCubic),
-      ),
+      CurvedAnimation(parent: _entranceCtrl, curve: const Interval(0.15, 0.95, curve: Curves.easeInOutCubic)),
     );
-
-    // 2. Ambient background breathing glow (looping 3000ms)
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    )..repeat(reverse: true);
 
     _progressAnim.addListener(() {
-      final v = _progressAnim.value;
       if (!mounted) return;
-      if (v < 0.40 && _statusText != 'Igniting cognitive engine...') {
-        setState(() => _statusText = 'Igniting cognitive engine...');
-      } else if (v >= 0.40 && v < 0.85 && _statusText != 'Connecting knowledge vault...') {
-        setState(() => _statusText = 'Connecting knowledge vault...');
+      final v = _progressAnim.value;
+      if (v >= 0.45 && v < 0.85 && _statusText != 'Syncing notes & progress...') {
+        setState(() => _statusText = 'Syncing notes & progress...');
       } else if (v >= 0.85 && _statusText != 'Welcome to True Me') {
         setState(() => _statusText = 'Welcome to True Me');
       }
@@ -99,13 +58,11 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _startBootSequence() async {
-    // Background silent sign-in and cache preload concurrently
     if (OfflineCacheService.isDriveConnected()) {
       DriveService.instance.signInSilently();
     }
 
-    // Wait for the full luxury entrance animation to deliver a smooth experience
-    await Future.delayed(const Duration(milliseconds: 2100));
+    await Future.delayed(const Duration(milliseconds: 1900));
     if (!mounted) return;
 
     if (OfflineCacheService.isLoggedIn()) {
@@ -121,215 +78,140 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     _entranceCtrl.dispose();
-    _pulseCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF090A0E), // Deep Obsidian luxury black
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 1. Dynamic Ambient Aura Bloom behind the bulb
-          AnimatedBuilder(
-            animation: _pulseCtrl,
-            builder: (context, _) {
-              final breath = _pulseCtrl.value; // 0.0 -> 1.0
-              final scale = 1.0 + (breath * 0.12);
-              final opacity = 0.65 + (breath * 0.35);
-
-              return Center(
-                child: Transform.scale(
-                  scale: scale,
-                  child: Container(
-                    width: 320,
-                    height: 320,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          const Color(0xFFFBBF24).withOpacity(0.18 * opacity), // Warm Amber
-                          const Color(0xFFFB7185).withOpacity(0.15 * opacity), // Coral Rose
-                          const Color(0xFF38BDF8).withOpacity(0.12 * opacity), // Sky Cyan
-                          const Color(0xFFA3E635).withOpacity(0.08 * opacity), // Lime Matcha
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.30, 0.55, 0.78, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-
-          // 2. Central Logo, Brand Name & Glowing Progress Capsule
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // The Puzzle Lightbulb Icon with smooth spring & glow
-                AnimatedBuilder(
-                  animation: _entranceCtrl,
-                  builder: (context, child) {
-                    return Opacity(
+      backgroundColor: context.bgColor,
+      body: TrueMeAmbientBackground(
+        intenseLavender: true,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedBuilder(
+                    animation: _entranceCtrl,
+                    builder: (context, child) => Opacity(
                       opacity: _logoFade.value,
-                      child: Transform.scale(
-                        scale: _logoScale.value,
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(26),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.25),
-                          blurRadius: 32,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                      child: Transform.scale(scale: _logoScale.value, child: child),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Image.asset(
-                      'assets/icons/app_icon.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(
+                    child: Container(
+                      width: 108,
+                      height: 108,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.sageOrbGradient,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accent.withValues(alpha: isDark ? 0.35 : 0.25),
+                            blurRadius: 28,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Image.asset(
+                        'assets/icons/app_logo_transparent.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
                           Icons.auto_awesome_rounded,
-                          color: Color(0xFF818CF8),
-                          size: 56,
+                          color: Colors.white,
+                          size: 52,
                         ),
                       ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 28),
-
-                // Brand Title & Tagline with staggered fade & slide
-                SlideTransition(
-                  position: _textSlide,
-                  child: FadeTransition(
+                  const SizedBox(height: 26),
+                  FadeTransition(
                     opacity: _textFade,
-                    child: const Column(
+                    child: Column(
                       children: [
                         Text(
-                          'TRUE ME',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 5.0,
-                            color: Colors.white,
+                          'True Me',
+                          style: AppTypography.editorialHero.copyWith(
+                            fontSize: 32,
+                            color: context.textPrimary,
+                            letterSpacing: 0.4,
                           ),
                         ),
-                        SizedBox(height: 6),
+                        const SizedBox(height: 6),
                         Text(
-                          'ENLIGHTEN YOUR POTENTIAL',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 10,
+                          'YOUR AI STUDY COMPANION',
+                          style: AppTypography.smallLabel.copyWith(
+                            letterSpacing: 2.2,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 2.5,
-                            color: Color(0xFF94A3B8),
+                            color: context.textSecondary,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 48),
-
-                // Sleek Luxury Glowing Progress Capsule
-                FadeTransition(
-                  opacity: _textFade,
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 160,
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: AnimatedBuilder(
-                          animation: _progressAnim,
-                          builder: (context, _) {
-                            final progress = _progressAnim.value.clamp(0.0, 1.0);
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                width: 160 * progress,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(3),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF6366F1), // Smart Indigo
-                                      Color(0xFFA855F7), // Soft Violet
-                                    ],
+                  const SizedBox(height: 44),
+                  FadeTransition(
+                    opacity: _textFade,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 164,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: context.borderColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: AnimatedBuilder(
+                            animation: _progressAnim,
+                            builder: (context, _) {
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  width: 164 * _progressAnim.value.clamp(0.0, 1.0),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.indigoButtonGradient,
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF6366F1).withOpacity(0.6),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      // Smooth changing status text
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Text(
-                          _statusText,
-                          key: ValueKey<String>(_statusText),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.8,
-                            color: Colors.white.withOpacity(0.45),
+                              );
+                            },
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 14),
+                        Text(
+                          _statusText,
+                          style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          // 3. Subtle bottom copyright / version badge
-          Positioned(
-            bottom: 24,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: FadeTransition(
-                opacity: _textFade,
-                child: Text(
-                  'AI STUDY & COGNITIVE ARCHITECTURE',
-                  style: TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 2.5,
-                    color: Colors.white.withOpacity(0.20),
+            Positioned(
+              bottom: 28,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: FadeTransition(
+                  opacity: _textFade,
+                  child: Text(
+                    'CALM FOCUS · ACTIVE RECALL',
+                    style: AppTypography.smallLabel.copyWith(
+                      fontSize: 10.5,
+                      letterSpacing: 2.0,
+                      color: context.textSecondary.withValues(alpha: 0.7),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

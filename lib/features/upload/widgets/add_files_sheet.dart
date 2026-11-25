@@ -13,6 +13,7 @@ import '../../../core/services/drive_service.dart';
 import '../../../core/services/ocr_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_ui.dart';
 import '../services/audio_processor.dart';
 import '../services/pdf_processor.dart';
 import '../services/url_processor.dart';
@@ -42,10 +43,6 @@ class AddFilesSheet extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.bgColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => AddFilesSheet(
         notebookId: notebookId,
         subjectName: subjectName,
@@ -384,10 +381,17 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       final lower = fName.toLowerCase();
       if (lower.endsWith('.pdf')) {
         extracted = await PdfProcessor.extractText(tmpFile);
-      } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+      } else if (lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp')) {
         _ocrService ??= OcrService();
         extracted = await _ocrService!.recognizeTextFromImage(tmpFile);
-      } else if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv') || lower.endsWith('.json') || mime == 'application/vnd.google-apps.document') {
+      } else if (lower.endsWith('.txt') ||
+          lower.endsWith('.md') ||
+          lower.endsWith('.csv') ||
+          lower.endsWith('.json') ||
+          mime == 'application/vnd.google-apps.document') {
         extracted = await tmpFile.readAsString();
       } else {
         throw StateError('Unsupported Drive file format "$fName". Import PDF, Google Docs, TXT, MD, or Image files.');
@@ -411,13 +415,15 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 18,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -427,9 +433,11 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _mode == 'menu' ? 'Add files to ${widget.subjectName}' : 'Add to $_targetSection',
-                    style: AppTypography.sectionHeading,
+                  Expanded(
+                    child: Text(
+                      _mode == 'menu' ? 'Add Files to ${widget.subjectName}' : 'Add to $_targetSection',
+                      style: AppTypography.sectionHeading,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, size: 20),
@@ -439,7 +447,6 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
               ),
               const SizedBox(height: 8),
 
-              // Section target selector always visible
               const Text('Save under section:', style: AppTypography.smallLabel),
               const SizedBox(height: 8),
               Wrap(
@@ -458,25 +465,18 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
               const SizedBox(height: 16),
 
               if (_errorText != null) ...[
-                Container(
-                  width: double.infinity,
+                TrueMeCard(
+                  borderRadius: 12,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.error.withOpacity(0.4)),
-                  ),
-                  child: Text(
-                    _errorText!,
-                    style: const TextStyle(fontSize: 13, color: AppColors.error),
-                  ),
+                  borderColor: AppColors.error,
+                  child: Text(_errorText!, style: const TextStyle(fontSize: 13, color: AppColors.error)),
                 ),
                 const SizedBox(height: 12),
               ],
 
               if (_isBusy) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  padding: const EdgeInsets.symmetric(vertical: 28),
                   child: Column(
                     children: [
                       Center(child: CircularProgressIndicator(color: context.accentColor)),
@@ -487,47 +487,61 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                 ),
               ] else if (_mode == 'menu') ...[
                 _buildSourceRow(
-                  icon: Icons.upload_file_outlined,
-                  label: 'Upload PDF or text file',
+                  icon: Icons.upload_file_rounded,
+                  label: 'Upload PDF or Text File',
                   subtitle: 'Extracts full text for Sage chat & quizzes',
+                  bgColor: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                  accentColor: context.accentColor,
                   onTap: _pickFromPhone,
                 ),
                 _buildSourceRow(
-                  icon: Icons.camera_alt_outlined,
-                  label: 'Take a photo (Camera)',
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Take a Photo (Camera)',
                   subtitle: 'Reads printed or whiteboard notes via OCR',
+                  bgColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
+                  accentColor: isDark ? AppColors.darkSuccess : AppColors.pastelGreenInk,
                   onTap: () => _pickPhoto(ImageSource.camera),
                 ),
                 _buildSourceRow(
-                  icon: Icons.photo_library_outlined,
-                  label: 'Pick photo from gallery',
+                  icon: Icons.photo_library_rounded,
+                  label: 'Pick Photo from Gallery',
                   subtitle: 'Extracts text from saved screenshots or photos',
+                  bgColor: isDark ? const Color(0xFF11233D) : AppColors.pastelBlue,
+                  accentColor: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
                   onTap: () => _pickPhoto(ImageSource.gallery),
                 ),
                 _buildSourceRow(
-                  icon: Icons.link_outlined,
-                  label: 'Paste a website or YouTube link',
+                  icon: Icons.link_rounded,
+                  label: 'Paste Website or YouTube Link',
                   subtitle: 'Fetches article text or lecture notes',
+                  bgColor: isDark ? const Color(0xFF241938) : AppColors.pastelLavender,
+                  accentColor: isDark ? const Color(0xFFC4B5FD) : AppColors.pastelLavenderInk,
                   onTap: () => setState(() => _mode = 'link'),
                 ),
                 _buildSourceRow(
-                  icon: Icons.notes_outlined,
-                  label: 'Write or paste text directly',
+                  icon: Icons.notes_rounded,
+                  label: 'Write or Paste Text Directly',
                   subtitle: 'Paste syllabus points or lecture notes',
+                  bgColor: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
+                  accentColor: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
                   onTap: () => setState(() => _mode = 'text'),
                 ),
                 _buildSourceRow(
-                  icon: Icons.mic_none_outlined,
-                  label: 'Record lecture audio',
+                  icon: Icons.mic_rounded,
+                  label: 'Record Lecture Audio',
                   subtitle: 'Records and transcribes voice notes',
+                  bgColor: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                  accentColor: AppColors.error,
                   onTap: () => setState(() => _mode = 'audio'),
                 ),
                 _buildSourceRow(
-                  icon: Icons.add_to_drive_outlined,
+                  icon: Icons.add_to_drive_rounded,
                   label: 'Import from Google Drive',
                   subtitle: DriveService.instance.isSignedIn
                       ? 'Connected (${DriveService.instance.userEmail ?? 'Drive'})'
                       : 'Connect your Google Drive',
+                  bgColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
+                  accentColor: AppColors.success,
                   onTap: _loadDriveFiles,
                 ),
               ] else if (_mode == 'link') ...[
@@ -538,7 +552,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   keyboardType: TextInputType.url,
                 ),
                 const SizedBox(height: 16),
-                AppPrimaryButton(
+                TrueMePrimaryButton(
                   label: 'Fetch & Add to $_targetSection',
                   onPressed: _processLink,
                 ),
@@ -569,7 +583,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                AppPrimaryButton(
+                TrueMePrimaryButton(
                   label: 'Save to $_targetSection',
                   onPressed: _savePastedText,
                 ),
@@ -584,19 +598,13 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   ),
                 ),
               ] else if (_mode == 'audio') ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: context.surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.borderColor),
-                  ),
+                TrueMeCard(
+                  padding: const EdgeInsets.all(22),
                   child: Column(
                     children: [
                       Icon(
-                        _isRecording ? Icons.graphic_eq : Icons.mic_none,
-                        size: 40,
+                        _isRecording ? Icons.graphic_eq : Icons.mic_none_rounded,
+                        size: 42,
                         color: _isRecording ? AppColors.error : context.accentColor,
                       ),
                       const SizedBox(height: 12),
@@ -618,9 +626,9 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   Center(
                     child: TextButton(
                       onPressed: () => setState(() {
-                      _mode = 'menu';
-                      _errorText = null;
-                    }),
+                        _mode = 'menu';
+                        _errorText = null;
+                      }),
                       child: const Text('Back to options'),
                     ),
                   ),
@@ -665,7 +673,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(Icons.insert_drive_file_outlined, color: context.accentColor),
                           title: Text(f.name ?? 'Untitled', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          trailing: Text('Import', style: TextStyle(color: context.accentColor, fontWeight: FontWeight.w600)),
+                          trailing: Text(
+                            'Import',
+                            style: TextStyle(color: context.accentColor, fontWeight: FontWeight.w600),
+                          ),
                           onTap: () => _importDriveFile(f),
                         );
                       },
@@ -693,29 +704,17 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     required IconData icon,
     required String label,
     required String subtitle,
+    required Color bgColor,
+    required Color accentColor,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-        child: Row(
-          children: [
-            Icon(icon, size: 22, color: context.textPrimary),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: context.textPrimary)),
-                  Text(subtitle, style: AppTypography.smallLabel),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppListRow(
+        leading: AppIconBadge(icon: icon, color: accentColor, backgroundColor: bgColor),
+        title: label,
+        subtitle: subtitle,
+        onTap: onTap,
       ),
     );
   }
