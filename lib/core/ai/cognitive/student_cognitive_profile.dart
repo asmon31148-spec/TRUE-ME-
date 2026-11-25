@@ -67,7 +67,7 @@ class StudentCognitiveProfile {
   factory StudentCognitiveProfile.buildLive({String? subjectScope}) {
     final name = OfflineCacheService.getUserName();
     final profile = OfflineCacheService.getUserProfile();
-    final examDateStr = profile?['examDate'] as String?;
+    final examDateStr = profile['examDate'] as String?;
     final examDate = examDateStr != null ? DateTime.tryParse(examDateStr) : null;
     final now = DateTime.now();
 

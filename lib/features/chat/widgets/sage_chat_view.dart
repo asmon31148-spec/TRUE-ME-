@@ -631,7 +631,19 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
               children: [
                 Row(
                   children: [
-                    AppIconBadge(icon: Icons.menu_book_rounded, color: context.accentColor),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: context.accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.menu_book_rounded,
+                        size: 20,
+                        color: context.accentColor,
+                      ),
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -769,15 +781,15 @@ class _SageOrbPainter extends CustomPainter {
 
     // Luminous Sphere Body
     final spherePaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.32, -0.35),
+      ..shader = const RadialGradient(
+        center: Alignment(-0.32, -0.35),
         radius: 0.95,
         colors: [
-          const Color(0xFFDCD8FE),
-          const Color(0xFF7C7DF5),
-          const Color(0xFF4F46E5),
+          Color(0xFFDCD8FE),
+          Color(0xFF7C7DF5),
+          Color(0xFF4F46E5),
         ],
-        stops: const [0.0, 0.45, 1.0],
+        stops: [0.0, 0.45, 1.0],
       ).createShader(Rect.fromCircle(center: center, radius: baseR));
     canvas.drawCircle(center, baseR, spherePaint);
 
