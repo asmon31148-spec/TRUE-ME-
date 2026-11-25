@@ -187,9 +187,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf "### TrueMe Android Release (Build #%s)\n\nDirect \`.apk\` download (ready to install directly on Android):\n- **[TrueMe-release.apk](https://github.com/%s/releases/download/v1.0.%s/TrueMe-release.apk)**\n" \
-            "${{ github.run_number }}" "${{ github.repository }}" "${{ github.run_number }}" > release_notes.md
-          gh release create "v1.0.${{ github.run_number }}" build/app/outputs/flutter-apk/TrueMe-release.apk \
-            --title "TrueMe v1.0.${{ github.run_number }}" \
-            -F release_notes.md \
-            --latest
+          python3 -c "
+          num = '${{ github.run_number }}'
+          repo = '${{ github.repository }}'
+          with open('release_notes.md', 'w', encoding='utf-8') as f:
+              f.write(f'### TrueMe Android Release (Build #{num})\n\nDirect .apk download (ready to install directly on Android):\n- **[TrueMe-release.apk](https://github.com/{repo}/releases/download/v1.0.{num}/TrueMe-release.apk)**\n')
+          "
+          TAG="v1.0.${{ github.run_number }}"
+          APK="build/app/outputs/flutter-apk/TrueMe-release.apk"
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt publishing release $TAG..." > release.log
+            if ! gh release view "$TAG" >> release.log 2>&1; then
+              gh release create "$TAG" --title "TrueMe $TAG" -F release_notes.md --latest >> release.log 2>&1 || true
+            fi
+            if gh release upload "$TAG" "$APK" --clobber >> release.log 2>&1; then
+              cat release.log
+              exit 0
+            fi
+            cat release.log || true
+            sleep 15
+          done
+          gh release delete debug-build --yes || true
+          gh release create debug-build -t "Debug Release Upload" -F release.log || true
+          exit 1
