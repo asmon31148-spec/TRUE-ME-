@@ -100,7 +100,7 @@ class AppPrimaryButton extends StatelessWidget {
   }
 }
 
-/// Secondary Pill Button: 52 px high, theme surface fill with soft lavender border.
+/// Secondary Pill Button: 52 px high, borderless milky-lavender fill for calm secondary CTAs.
 class AppSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -119,40 +119,39 @@ class AppSecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onPressed != null;
     return SizedBox(
       width: width ?? double.infinity,
       height: (height ?? 52).clamp(44.0, 68.0),
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          backgroundColor: context.surfaceColor,
-          foregroundColor: context.textPrimary,
-          elevation: 0,
-          side: BorderSide(color: context.borderColor, width: 1),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-        ),
-        onPressed: onPressed == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onPressed!();
-              },
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (icon != null) ...[icon!, const SizedBox(width: 8)],
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w600,
-                  color: context.textPrimary,
+      child: Material(
+        color: enabled ? context.milkyFill : context.milkyFill.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(26),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(26),
+          onTap: enabled
+              ? () {
+                  HapticFeedback.selectionClick();
+                  onPressed!();
+                }
+              : null,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[icon!, const SizedBox(width: 8)],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w600,
+                    color: enabled ? context.accentColor : context.textSecondary,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -195,7 +194,7 @@ class AppIconBadge extends StatelessWidget {
   }
 }
 
-/// Card: Soft elevated surface fill, hairline lavender border, radius 18, subtle shadow.
+/// Card: Soft borderless surface fill, radius 20, subtle atmospheric shadow.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -214,13 +213,14 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final cardContent = Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? context.surfaceColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.borderColor, width: 1),
+        color: backgroundColor ?? (isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.94)),
+        borderRadius: BorderRadius.circular(20),
+        border: isDark ? Border.all(color: AppColors.darkBorder, width: 0.8) : null,
         boxShadow: context.cardShadow,
       ),
       child: showChevron
@@ -240,7 +240,7 @@ class AppCard extends StatelessWidget {
           HapticFeedback.selectionClick();
           onTap!();
         },
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: cardContent,
       );
     }
@@ -248,7 +248,7 @@ class AppCard extends StatelessWidget {
   }
 }
 
-/// List Row: 56 px high minimum, pastel badge on left, title/subtitle, chevron/status on right.
+/// List Row: 58 px high minimum, borderless elevated card fill, pastel badge on left, title/subtitle, chevron on right.
 class AppListRow extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -267,6 +267,7 @@ class AppListRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return InkWell(
       onTap: onTap == null
           ? null
@@ -274,14 +275,14 @@ class AppListRow extends StatelessWidget {
               HapticFeedback.selectionClick();
               onTap!();
             },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         constraints: const BoxConstraints(minHeight: 58),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: context.borderColor, width: 1),
+          color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(18),
+          border: isDark ? Border.all(color: AppColors.darkBorder, width: 0.8) : null,
           boxShadow: context.cardShadow,
         ),
         child: Row(
@@ -386,7 +387,7 @@ class AppInput extends StatelessWidget {
   }
 }
 
-/// Pill Filter Chip: Selected uses rich Indigo fill with crisp white text.
+/// Pill Filter Chip: Borderless milky-lavender unselected; glossy Indigo selected.
 class AppChip extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -401,23 +402,29 @@ class AppChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.accentColor;
     return InkWell(
       onTap: () {
         HapticFeedback.selectionClick();
         onTap();
       },
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(22),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        duration: const Duration(milliseconds: 170),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? accent : context.surfaceColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? accent : context.borderColor,
-            width: 1,
-          ),
+          gradient: isSelected ? AppColors.indigoButtonGradient : null,
+          color: isSelected ? null : context.milkyFill,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.accent.withValues(alpha: 0.22),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
@@ -475,11 +482,10 @@ class AppEmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(26),
           decoration: BoxDecoration(
             color: context.surfaceColor,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: context.borderColor),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: context.cardShadow,
           ),
           child: Column(

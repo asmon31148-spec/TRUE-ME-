@@ -10,6 +10,7 @@ import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/tts_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../models/explainer_script_model.dart';
 import '../services/explainer_generator.dart';
@@ -26,9 +27,11 @@ class ExplainerPlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<ExplainerPlayerScreen> createState() => _ExplainerPlayerScreenState();
 }
 
-class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
+class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen>
+    with SingleTickerProviderStateMixin {
   final TtsService _tts = TtsService();
   final TextEditingController _topicCtrl = TextEditingController();
+  late final AnimationController _pulseCtrl;
 
   ExplainerScriptModel? _script;
   bool _isGenerating = false;
@@ -42,6 +45,10 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
     final subs = OfflineCacheService.getUserSubjects();
     final initialTopic = widget.topic?.isNotEmpty == true
         ? widget.topic!
@@ -55,6 +62,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
 
   @override
   void dispose() {
+    _pulseCtrl.dispose();
     _tts.dispose();
     _topicCtrl.dispose();
     super.dispose();
@@ -108,10 +116,12 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
     if (_script == null || _script!.scenes.isEmpty) return;
     HapticFeedback.mediumImpact();
     if (_isPlaying) {
+      _pulseCtrl.stop();
       await _tts.stop();
       if (mounted) setState(() => _isPlaying = false);
     } else {
       setState(() => _isPlaying = true);
+      _pulseCtrl.repeat();
       await _playFromScene(_sceneIndex);
     }
   }
@@ -125,6 +135,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
       await _tts.setSpeechRate(_playbackSpeed);
       await _tts.speak('${scene.title}. ${scene.narrationText}');
     }
+    _pulseCtrl.stop();
     if (mounted) setState(() => _isPlaying = false);
   }
 
@@ -340,11 +351,11 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                           borderRadius: BorderRadius.circular(24),
                                           child: Column(
                                             children: [
-                                              // Pastel Header Stage Banner with Play Overlay
+                                              // Illustrated Microscope Stage Banner with Animated Pulse Play Button
                                               GestureDetector(
                                                 onTap: _togglePlay,
                                                 child: Container(
-                                                  height: 144,
+                                                  height: 162,
                                                   width: double.infinity,
                                                   decoration: BoxDecoration(
                                                     gradient: isDark
@@ -355,16 +366,32 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                                     alignment: Alignment.center,
                                                     children: [
                                                       Positioned.fill(
-                                                        child: CustomPaint(
-                                                          painter: _StageArtworkPainter(isDark: isDark),
+                                                        child: AnimatedBuilder(
+                                                          animation: _pulseCtrl,
+                                                          builder: (_, __) => CustomPaint(
+                                                            painter: ExplainerMicroscopePainter(
+                                                              isDark: isDark,
+                                                              pulse: _isPlaying ? _pulseCtrl.value : 0.0,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                       Container(
-                                                        width: 58,
-                                                        height: 58,
+                                                        width: 60,
+                                                        height: 60,
                                                         decoration: BoxDecoration(
-                                                          color: context.textPrimary.withValues(alpha: 0.72),
+                                                          color: AppColors.charcoalInk.withValues(alpha: 0.72),
                                                           shape: BoxShape.circle,
+                                                          border: Border.all(
+                                                            color: Colors.white.withValues(alpha: 0.70),
+                                                            width: 1.8,
+                                                          ),
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: AppColors.accent.withValues(alpha: 0.28),
+                                                              blurRadius: 16,
+                                                            ),
+                                                          ],
                                                         ),
                                                         child: Icon(
                                                           _isPlaying
@@ -379,9 +406,9 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                                         left: 14,
                                                         child: TrueMeTonalPill(
                                                           label: 'Scene ${_sceneIndex + 1} / ${scenes.length}',
-                                                          backgroundColor: context.surfaceColor.withValues(alpha: 0.88),
+                                                          backgroundColor: context.surfaceColor.withValues(alpha: 0.90),
                                                           foregroundColor: context.textPrimary,
-                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
                                                         ),
                                                       ),
                                                     ],
@@ -520,7 +547,7 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                     ),
                                     const SizedBox(height: 16),
 
-                                    // Speed Pills: 0.5x | 1x | 1.5x | 2x
+                                    // Speed Pills: 0.5x | 1x | 1.5x | 2x (Borderless Milky-Lavender Capsules)
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: _speeds.map((spd) {
@@ -535,15 +562,21 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                               await _tts.setSpeechRate(spd);
                                             },
                                             child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 150),
-                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                              duration: const Duration(milliseconds: 160),
+                                              padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 9),
                                               decoration: BoxDecoration(
                                                 gradient: selected ? AppColors.indigoButtonGradient : null,
-                                                color: selected ? null : context.surfaceColor,
-                                                borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(
-                                                  color: selected ? Colors.transparent : context.borderColor,
-                                                ),
+                                                color: selected ? null : context.milkyFill,
+                                                borderRadius: BorderRadius.circular(22),
+                                                boxShadow: selected
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: AppColors.accent.withValues(alpha: 0.25),
+                                                          blurRadius: 10,
+                                                          offset: const Offset(0, 3),
+                                                        ),
+                                                      ]
+                                                    : null,
                                               ),
                                               child: Text(
                                                 label,
@@ -560,23 +593,31 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
                                     ),
                                     const SizedBox(height: 16),
 
-                                    // Previous / Next Scene Buttons
+                                    // Previous / Next Scene Pill Buttons
                                     Row(
                                       children: [
                                         Expanded(
-                                          child: AppSecondaryButton(
+                                          child: TrueMeTonalPill(
                                             label: '< Previous',
-                                            height: 46,
-                                            onPressed: _sceneIndex > 0 ? () => _goToScene(_sceneIndex - 1) : null,
+                                            backgroundColor: context.milkyFill,
+                                            foregroundColor: _sceneIndex > 0
+                                                ? context.textPrimary
+                                                : context.textSecondary.withValues(alpha: 0.45),
+                                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                                            onTap: _sceneIndex > 0 ? () => _goToScene(_sceneIndex - 1) : null,
                                           ),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: TrueMeTonalPill(
                                             label: 'Next Scene >',
-                                            backgroundColor: context.surfaceColor,
-                                            foregroundColor: context.textPrimary,
-                                            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 14),
+                                            backgroundColor: isDark
+                                                ? AppColors.darkSurface
+                                                : Colors.white.withValues(alpha: 0.96),
+                                            foregroundColor: _sceneIndex < scenes.length - 1
+                                                ? context.accentColor
+                                                : context.textSecondary.withValues(alpha: 0.45),
+                                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
                                             onTap: _sceneIndex < scenes.length - 1
                                                 ? () => _goToScene(_sceneIndex + 1)
                                                 : null,
@@ -594,24 +635,4 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen> {
       ),
     );
   }
-}
-
-class _StageArtworkPainter extends CustomPainter {
-  final bool isDark;
-
-  const _StageArtworkPainter({required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p1 = Paint()
-      ..color = (isDark ? const Color(0xFF4F46E5) : const Color(0xFFC8C2FA)).withValues(alpha: 0.40);
-    final p2 = Paint()
-      ..color = (isDark ? const Color(0xFF2DD4BF) : const Color(0xFFBFEAD4)).withValues(alpha: 0.45);
-
-    canvas.drawCircle(Offset(size.width * 0.16, size.height * 0.78), 52, p2);
-    canvas.drawCircle(Offset(size.width * 0.84, size.height * 0.25), 64, p1);
-  }
-
-  @override
-  bool shouldRepaint(covariant _StageArtworkPainter oldDelegate) => oldDelegate.isDark != isDark;
 }

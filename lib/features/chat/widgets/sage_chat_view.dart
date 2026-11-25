@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +11,7 @@ import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
 import '../../../shared/widgets/ai_thinking_indicator.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../providers/chat_provider.dart';
 import 'formatted_message_body.dart';
@@ -247,10 +247,10 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                         builder: (context, _) {
                           final breath = disableAnim ? 0.5 : _orbCtrl.value;
                           return SizedBox(
-                            width: 196,
-                            height: 196,
+                            width: 204,
+                            height: 204,
                             child: CustomPaint(
-                              painter: _SageOrbPainter(
+                              painter: TrueMeOrbPainter(
                                 breath: breath,
                                 isDark: isDark,
                               ),
@@ -261,48 +261,51 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                       const SizedBox(height: 14),
 
                       // Friendly Floating Greeting Card
-                      TrueMeCard(
-                        borderRadius: 22,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
-                                shape: BoxShape.circle,
+                      TrueMeEntrance(
+                        delayMs: 50,
+                        child: TrueMeCard(
+                          borderRadius: 24,
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.graphic_eq_rounded,
+                                  size: 22,
+                                  color: context.accentColor,
+                                ),
                               ),
-                              child: Icon(
-                                Icons.graphic_eq_rounded,
-                                size: 22,
-                                color: context.accentColor,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Hey ${userName.isNotEmpty ? userName : 'there'}!',
-                                    style: AppTypography.cardTitle.copyWith(
-                                      fontSize: 16.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: context.textPrimary,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Hey ${userName.isNotEmpty ? userName : 'there'}!',
+                                      style: AppTypography.cardTitle.copyWith(
+                                        fontSize: 16.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.textPrimary,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    hasSubject
-                                        ? 'Ready to explore $subjectTitle together?'
-                                        : 'What would you like to explore today?',
-                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
-                                  ),
-                                ],
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      hasSubject
+                                          ? 'Ready to explore $subjectTitle together?'
+                                          : 'What would you like to explore today?',
+                                      style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -313,40 +316,52 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            _SuggestionPill(
-                              icon: Icons.lightbulb_outline_rounded,
-                              label: 'Explain this topic',
-                              onTap: () => _sendMessage(
-                                hasSubject
-                                    ? 'Explain the core concepts in my $subjectTitle sources simply.'
-                                    : 'Explain a challenging concept from my notes step by step.',
+                            TrueMeEntrance(
+                              delayMs: 110,
+                              child: _SuggestionPill(
+                                icon: Icons.lightbulb_outline_rounded,
+                                label: 'Explain this topic',
+                                onTap: () => _sendMessage(
+                                  hasSubject
+                                      ? 'Explain the core concepts in my $subjectTitle sources simply.'
+                                      : 'Explain a challenging concept from my notes step by step.',
+                                ),
                               ),
                             ),
-                            _SuggestionPill(
-                              icon: Icons.quiz_outlined,
-                              label: 'Make a quiz',
-                              onTap: () => _sendMessage(
-                                hasSubject
-                                    ? 'Quiz me on $subjectTitle'
-                                    : 'Create a 5-question practice quiz from my subjects',
+                            TrueMeEntrance(
+                              delayMs: 160,
+                              child: _SuggestionPill(
+                                icon: Icons.quiz_outlined,
+                                label: 'Make a quiz',
+                                onTap: () => _sendMessage(
+                                  hasSubject
+                                      ? 'Quiz me on $subjectTitle'
+                                      : 'Create a 5-question practice quiz from my subjects',
+                                ),
                               ),
                             ),
-                            _SuggestionPill(
-                              icon: Icons.summarize_outlined,
-                              label: 'Summarise notes',
-                              onTap: () => _sendMessage(
-                                hasSubject
-                                    ? 'Summarize key concepts from my $subjectTitle sources'
-                                    : 'Summarize my uploaded study material for upcoming exams',
+                            TrueMeEntrance(
+                              delayMs: 210,
+                              child: _SuggestionPill(
+                                icon: Icons.summarize_outlined,
+                                label: 'Summarise notes',
+                                onTap: () => _sendMessage(
+                                  hasSubject
+                                      ? 'Summarize key concepts from my $subjectTitle sources'
+                                      : 'Summarize my uploaded study material for upcoming exams',
+                                ),
                               ),
                             ),
-                            _SuggestionPill(
-                              icon: Icons.account_tree_outlined,
-                              label: 'Create a mind map',
-                              onTap: () => _sendMessage(
-                                hasSubject
-                                    ? 'Create a mind map for $subjectTitle'
-                                    : 'Create a mind map of my key study topics',
+                            TrueMeEntrance(
+                              delayMs: 260,
+                              child: _SuggestionPill(
+                                icon: Icons.account_tree_outlined,
+                                label: 'Create a mind map',
+                                onTap: () => _sendMessage(
+                                  hasSubject
+                                      ? 'Create a mind map for $subjectTitle'
+                                      : 'Create a mind map of my key study topics',
+                                ),
                               ),
                             ),
                           ],
@@ -514,15 +529,15 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
             ),
           ),
 
-        // Pill Composer Bar matching Reference Img 3 Center
+        // Borderless Pill Composer Bar matching Reference Img 3 Center
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
-              color: context.surfaceColor,
+              color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.96),
               borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: context.borderColor),
+              border: isDark ? Border.all(color: AppColors.darkBorder, width: 0.8) : null,
               boxShadow: context.cardShadow,
             ),
             child: Row(
@@ -739,94 +754,4 @@ class _SuggestionPill extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Calm luminous Sage Sphere with orbital ellipses & delicate sparkle accents.
-class _SageOrbPainter extends CustomPainter {
-  final double breath;
-  final bool isDark;
-
-  _SageOrbPainter({required this.breath, required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseR = size.width * 0.29 + (breath * 3.0);
-
-    // Outer ambient bloom
-    final bloom = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF7B7AF7).withValues(alpha: isDark ? 0.25 : 0.34),
-          const Color(0xFFA7A0FA).withValues(alpha: isDark ? 0.08 : 0.14),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: baseR * 1.75));
-    canvas.drawCircle(center, baseR * 1.75, bloom);
-
-    // Orbital rings
-    final ringPaint = Paint()
-      ..color = (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF8C87F2))
-          .withValues(alpha: 0.45)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(-math.pi / 7 + (breath * 0.08));
-    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: baseR * 3.0, height: baseR * 1.15), ringPaint);
-    canvas.rotate(math.pi / 3.5);
-    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: baseR * 2.8, height: baseR * 1.05), ringPaint);
-    canvas.restore();
-
-    // Luminous Sphere Body
-    final spherePaint = Paint()
-      ..shader = const RadialGradient(
-        center: Alignment(-0.32, -0.35),
-        radius: 0.95,
-        colors: [
-          Color(0xFFDCD8FE),
-          Color(0xFF7C7DF5),
-          Color(0xFF4F46E5),
-        ],
-        stops: [0.0, 0.45, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: baseR));
-    canvas.drawCircle(center, baseR, spherePaint);
-
-    // Delicate diagonal sheen inside sphere
-    final sheenPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.22)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: baseR * 0.78),
-      -math.pi * 0.85,
-      math.pi * 0.45,
-      false,
-      sheenPaint,
-    );
-
-    // Delicate 4-point sparkles around sphere
-    _drawSparkle(canvas, Offset(center.dx + baseR * 1.25, center.dy - baseR * 0.78), 7.5);
-    _drawSparkle(canvas, Offset(center.dx - baseR * 1.32, center.dy + baseR * 0.62), 6.0);
-  }
-
-  void _drawSparkle(Canvas canvas, Offset pos, double r) {
-    final path = Path()
-      ..moveTo(pos.dx, pos.dy - r)
-      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx + r, pos.dy)
-      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx, pos.dy + r)
-      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx - r, pos.dy)
-      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx, pos.dy - r)
-      ..close();
-    canvas.drawPath(
-      path,
-      Paint()..color = (isDark ? const Color(0xFFC4B5FD) : const Color(0xFF6B6CE6)).withValues(alpha: 0.7),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SageOrbPainter oldDelegate) =>
-      oldDelegate.breath != breath || oldDelegate.isDark != isDark;
 }

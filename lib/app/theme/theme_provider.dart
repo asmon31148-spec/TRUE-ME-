@@ -62,6 +62,7 @@ extension AppThemeContext on BuildContext {
   Color get bgColor => Theme.of(this).scaffoldBackgroundColor;
   Color get surfaceColor => Theme.of(this).colorScheme.surface;
   Color get surfaceMutedColor => isDarkMode ? AppColors.darkSurfaceMuted : AppColors.surfaceMuted;
+  Color get milkyFill => isDarkMode ? AppColors.darkSurfaceMuted : AppColors.milkyLavender;
   Color get borderColor => Theme.of(this).colorScheme.outline;
   Color get textPrimary => Theme.of(this).colorScheme.onSurface;
   Color get textSecondary => Theme.of(this).colorScheme.onSurfaceVariant;
@@ -71,16 +72,22 @@ extension AppThemeContext on BuildContext {
   List<BoxShadow> get cardShadow => isDarkMode
       ? [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ]
       : const [
           BoxShadow(
-            color: Color(0x0D2E2A5C),
-            blurRadius: 18,
-            offset: Offset(0, 6),
+            color: Color(0x112E2A5C),
+            blurRadius: 22,
+            spreadRadius: -2,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Color(0x062E2A5C),
+            blurRadius: 6,
+            offset: Offset(0, 2),
           ),
         ];
 }

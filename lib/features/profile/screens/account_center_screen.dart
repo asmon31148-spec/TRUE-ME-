@@ -13,6 +13,7 @@ import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/update_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class AccountCenterScreen extends ConsumerStatefulWidget {
@@ -423,52 +424,74 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 1. Profile Hero Card
-                      TrueMeCard(
-                        borderRadius: 22,
-                        padding: const EdgeInsets.all(18),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: isDark
-                              ? [const Color(0xFF1A1D2D), const Color(0xFF212239)]
-                              : [Colors.white, const Color(0xFFF3F0FC)],
-                        ),
-                        child: Row(
-                          children: [
-                            TrueMeAvatar(name: _userName, size: 68, onTap: _showEditNameDialog),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _userName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.sectionHeading.copyWith(
-                                      fontSize: 21,
-                                      color: context.textPrimary,
-                                    ),
+                      // 1. Profile Hero Card with Botanical Lavender Foliage Accent
+                      TrueMeEntrance(
+                        delayMs: 30,
+                        child: TrueMeCard(
+                          borderRadius: 24,
+                          padding: EdgeInsets.zero,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: isDark
+                                ? [const Color(0xFF1A1D2D), const Color(0xFF212239)]
+                                : [Colors.white, const Color(0xFFF1EDFC)],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: CustomPaint(painter: BotanicalCornerPainter(isDark: isDark)),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _userEmail,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(18),
+                                  child: Row(
+                                    children: [
+                                      TrueMeAvatar(name: _userName, size: 70, onTap: _showEditNameDialog),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _userName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTypography.sectionHeading.copyWith(
+                                                fontSize: 21,
+                                                color: context.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _userEmail,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            TrueMeTonalPill(
+                                              label: 'Edit Profile',
+                                              icon: Icons.edit_outlined,
+                                              backgroundColor: isDark
+                                                  ? AppColors.darkAccentWash
+                                                  : AppColors.milkyLavender,
+                                              foregroundColor: context.textPrimary,
+                                              onTap: _showEditNameDialog,
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  TrueMeTonalPill(
-                                    label: 'Edit Profile',
-                                    icon: Icons.edit_outlined,
-                                    onTap: _showEditNameDialog,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 22),

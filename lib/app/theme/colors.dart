@@ -227,17 +227,17 @@ class SubjectPastelStyle {
 class ZenColors {
   ZenColors._();
 
-  // Light Mode ("Warm Ivory & Soft Lavender")
-  static const Color washiCanvas = Color(0xFFF8F7FC); // Soft Ivory-Lavender canvas
-  static const Color warmIvory = Color(0xFFFAF8F5);   // Warm parchment ivory accent
+  // Light Mode ("Warm Milk Ivory & Soft Lavender")
+  static const Color washiCanvas = Color(0xFFFAF7F4); // Warm milk-cream ivory canvas
+  static const Color warmIvory = Color(0xFFF6F2EC);   // Warm parchment ivory tint
   static const Color washiSurface = Color(0xFFFFFFFF); // Pure crisp elevated card
-  static const Color washiBorder = Color(0xFFE8E4F3);  // Gentle lavender-grey hairline
+  static const Color washiBorder = Color(0xFFECE8F5);  // Subtle barely-there hairline
   static const Color sumiInk = Color(0xFF1D1B3A);      // Deep editorial indigo-black ink
-  static const Color stoneMist = Color(0xFF646182);    // Calm muted lavender-slate text
+  static const Color stoneMist = Color(0xFF6B6888);    // Calm muted lavender-slate text
 
   // Primary Brand Indigo / Periwinkle
   static const Color vermilionSeal = Color(0xFF5B5CE6); // Calm Executive Indigo
-  static const Color vermilionSoft = Color(0xFFEEEDFE); // Soft lavender tint wash
+  static const Color vermilionSoft = Color(0xFFF0EEFD); // Milky soft lavender wash
 
   // Dark Mode ("Deep Twilight Obsidian" — preserved for Theme toggle)
   static const Color darkCanvas = Color(0xFF0F111A);
@@ -272,9 +272,11 @@ class AppColors {
 
   // Signature Lavender-Indigo Brand Accents
   static const Color accent = Color(0xFF5B5CE6);
-  static const Color accentLight = Color(0xFF7374F4);
+  static const Color accentLight = Color(0xFF7B7CF7);
   static const Color accentDark = Color(0xFF4746C8);
-  static const Color accentWash = Color(0xFFEEEDFE);
+  static const Color accentWash = Color(0xFFF1EEFC);
+  static const Color milkyLavender = Color(0xFFF1EEFC);
+  static const Color charcoalInk = Color(0xFF1B1A33);
   static const Color lavenderBloom = Color(0xFFDCD6FA);
   static const Color primary = accent;
   static const Color primaryLight = accentLight;

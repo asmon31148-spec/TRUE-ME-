@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +11,7 @@ import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/utils/study_analytics.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class TodayScreen extends ConsumerStatefulWidget {
@@ -388,12 +388,17 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 const SizedBox(height: 18),
 
                 // 2. Hero "Today's Focus" Card
-                _buildHeroFocusCard(context, isDark, upNextTask, completedCount),
-                const SizedBox(height: 12),
+                TrueMeEntrance(
+                  delayMs: 40,
+                  child: _buildHeroFocusCard(context, isDark, upNextTask, completedCount),
+                ),
+                const SizedBox(height: 14),
 
                 // 3. Split 2-Column KPI Cards (Study Streak + Overall/Daily Progress)
-                Row(
-                  children: [
+                TrueMeEntrance(
+                  delayMs: 90,
+                  child: Row(
+                    children: [
                     Expanded(
                       child: TrueMeCard(
                         borderRadius: 18,
@@ -500,6 +505,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                       ),
                     ),
                   ],
+                  ),
                 ),
                 const SizedBox(height: 22),
 
@@ -510,46 +516,45 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   onActionTap: () => context.go('/practice'),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _QuickAccessItem(
-                      label: 'Sage',
-                      icon: Icons.auto_awesome_rounded,
-                      bgColor: isDark ? AppColors.darkAccentWash : const Color(0xFFEDE9FE),
-                      iconColor: context.accentColor,
-                      onTap: () => context.push('/chat'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickAccessItem(
-                      label: 'Library',
-                      icon: Icons.menu_book_rounded,
-                      bgColor: isDark ? const Color(0xFF11233D) : const Color(0xFFE0F2FE),
-                      iconColor: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0284C7),
-                      onTap: () => context.go('/library'),
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickAccessItem(
-                      label: 'Planner',
-                      icon: Icons.event_note_rounded,
-                      bgColor: isDark ? const Color(0xFF2B2110) : const Color(0xFFFEF3C7),
-                      iconColor: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
-                      onTap: () async {
-                        await context.push('/schedule');
-                        if (mounted) _loadData();
-                      },
-                    ),
-                    const SizedBox(width: 10),
-                    _QuickAccessItem(
-                      label: 'Quiz',
-                      icon: Icons.quiz_rounded,
-                      bgColor: isDark ? const Color(0xFF1D1B3B) : const Color(0xFFE0E7FF),
-                      iconColor: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                      onTap: () async {
-                        await context.push('/quiz');
-                        if (mounted) _loadData();
-                      },
-                    ),
-                  ],
+                TrueMeEntrance(
+                  delayMs: 140,
+                  child: Row(
+                    children: [
+                      _QuickAccessItem(
+                        label: 'Sage',
+                        kind: 'sage',
+                        isDark: isDark,
+                        onTap: () => context.push('/chat'),
+                      ),
+                      const SizedBox(width: 10),
+                      _QuickAccessItem(
+                        label: 'Library',
+                        kind: 'library',
+                        isDark: isDark,
+                        onTap: () => context.go('/library'),
+                      ),
+                      const SizedBox(width: 10),
+                      _QuickAccessItem(
+                        label: 'Planner',
+                        kind: 'planner',
+                        isDark: isDark,
+                        onTap: () async {
+                          await context.push('/schedule');
+                          if (mounted) _loadData();
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      _QuickAccessItem(
+                        label: 'Quiz',
+                        kind: 'quiz',
+                        isDark: isDark,
+                        onTap: () async {
+                          await context.push('/quiz');
+                          if (mounted) _loadData();
+                        },
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -838,75 +843,81 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 ],
                 const SizedBox(height: 18),
 
-                // 6. Calm Sage Insight Banner (Real Insight Data, Pastoral Backdrop)
-                TrueMeCard(
-                  borderRadius: 20,
-                  padding: EdgeInsets.zero,
-                  gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
-                  onTap: () {
-                    if (_analytics.prescriptionRoute == '/library') {
-                      context.go('/library');
-                    } else {
-                      context.push(_analytics.prescriptionRoute);
-                    }
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          right: -12,
-                          bottom: -14,
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              size: const Size(150, 96),
-                              painter: _SoftHorizonPainter(isDark: isDark),
+                // 6. Calm Sage Insight Banner (Real Insight Data, Pastoral Horizon Backdrop)
+                TrueMeEntrance(
+                  delayMs: 200,
+                  child: TrueMeCard(
+                    borderRadius: 22,
+                    padding: EdgeInsets.zero,
+                    gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
+                    onTap: () {
+                      if (_analytics.prescriptionRoute == '/library') {
+                        context.go('/library');
+                      } else {
+                        context.push(_analytics.prescriptionRoute);
+                      }
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            right: -6,
+                            bottom: 0,
+                            top: 0,
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                size: const Size(185, 130),
+                                painter: CalmHorizonBannerPainter(isDark: isDark),
+                              ),
                             ),
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.auto_awesome_rounded, size: 16, color: context.accentColor),
-                                  const SizedBox(width: 7),
-                                  Text(
-                                    'Sage Prescription',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: context.accentColor,
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.auto_awesome_rounded, size: 16, color: context.accentColor),
+                                    const SizedBox(width: 7),
+                                    Text(
+                                      'Sage Prescription',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.accentColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 54),
+                                  child: Text(
+                                    _analytics.sagePrescription,
+                                    style: AppTypography.body.copyWith(
+                                      fontSize: 14,
+                                      color: context.textPrimary,
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.only(right: 48),
-                                child: Text(
-                                  _analytics.sagePrescription,
-                                  style: AppTypography.body.copyWith(
-                                    fontSize: 14,
-                                    color: context.textPrimary,
-                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              TrueMeTonalPill(
-                                label: _analytics.dueCards > 0
-                                    ? 'Review ${_analytics.dueCards} Due Cards'
-                                    : (_analytics.weakTopics.isNotEmpty ? 'Practice Weak Topic' : 'Ask Sage'),
-                                icon: Icons.arrow_forward_rounded,
-                                backgroundColor: context.surfaceColor,
-                                foregroundColor: context.accentColor,
-                              ),
-                            ],
+                                const SizedBox(height: 12),
+                                TrueMeTonalPill(
+                                  label: _analytics.dueCards > 0
+                                      ? 'Review ${_analytics.dueCards} Due Cards'
+                                      : (_analytics.weakTopics.isNotEmpty ? 'Practice Weak Topic' : 'Ask Sage'),
+                                  icon: Icons.arrow_forward_rounded,
+                                  backgroundColor: isDark
+                                      ? AppColors.darkSurface
+                                      : Colors.white.withValues(alpha: 0.90),
+                                  foregroundColor: context.accentColor,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -944,26 +955,23 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : const Color(0xFFE0DCF5),
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(24),
+        border: isDark ? Border.all(color: AppColors.darkBorder, width: 0.8) : null,
         boxShadow: context.cardShadow,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: Stack(
           children: [
-            // Soft calm architectural arch illustration on right side
+            // Painterly dusk mountain valley + glowing arch portal on right side
             Positioned(
               right: 0,
               bottom: 0,
               top: 0,
               child: IgnorePointer(
                 child: CustomPaint(
-                  size: const Size(165, 190),
-                  painter: _HeroArchPainter(isDark: isDark),
+                  size: const Size(185, 195),
+                  painter: HeroFocusArchPainter(isDark: isDark),
                 ),
               ),
             ),
@@ -978,7 +986,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                         width: 24,
                         height: 24,
                         decoration: BoxDecoration(
-                          color: context.surfaceColor.withValues(alpha: 0.78),
+                          color: context.surfaceColor.withValues(alpha: 0.85),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -1000,7 +1008,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                   const SizedBox(height: 12),
                   Padding(
-                    padding: const EdgeInsets.only(right: 68),
+                    padding: const EdgeInsets.only(right: 76),
                     child: Text(
                       heroTitle,
                       maxLines: 2,
@@ -1014,7 +1022,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                   const SizedBox(height: 6),
                   Padding(
-                    padding: const EdgeInsets.only(right: 68),
+                    padding: const EdgeInsets.only(right: 76),
                     child: Text(
                       heroSubtitle,
                       maxLines: 2,
@@ -1042,13 +1050,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.accent : AppColors.textPrimary,
+                            color: isDark ? AppColors.accent : AppColors.charcoalInk,
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.textPrimary.withValues(alpha: 0.16),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                                color: AppColors.charcoalInk.withValues(alpha: 0.22),
+                                blurRadius: 12,
+                                offset: const Offset(0, 5),
                               ),
                             ],
                           ),
@@ -1094,16 +1102,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
 
 class _QuickAccessItem extends StatelessWidget {
   final String label;
-  final IconData icon;
-  final Color bgColor;
-  final Color iconColor;
+  final String kind;
+  final bool isDark;
   final VoidCallback onTap;
 
   const _QuickAccessItem({
     required this.label,
-    required this.icon,
-    required this.bgColor,
-    required this.iconColor,
+    required this.kind,
+    required this.isDark,
     required this.onTap,
   });
 
@@ -1111,21 +1117,13 @@ class _QuickAccessItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: TrueMeCard(
-        borderRadius: 18,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        borderRadius: 20,
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6),
         onTap: onTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, size: 22, color: iconColor),
-            ),
+            QuickAccessEmblem(kind: kind, isDark: isDark),
             const SizedBox(height: 8),
             Text(
               label,
@@ -1142,85 +1140,4 @@ class _QuickAccessItem extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Lightweight custom painter creating the calm pastel arch & hill motif on Hero Focus Card.
-class _HeroArchPainter extends CustomPainter {
-  final bool isDark;
-
-  const _HeroArchPainter({required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final hill1 = Paint()
-      ..color = (isDark ? const Color(0xFF2D2C54) : const Color(0xFFC5C0F0)).withValues(alpha: 0.45);
-    final hill2 = Paint()
-      ..color = (isDark ? const Color(0xFF3A376B) : const Color(0xFFAFA7EC)).withValues(alpha: 0.50);
-
-    final p1 = Path()
-      ..moveTo(size.width * 0.15, size.height)
-      ..quadraticBezierTo(size.width * 0.50, size.height * 0.42, size.width, size.height * 0.62)
-      ..lineTo(size.width, size.height)
-      ..close();
-    canvas.drawPath(p1, hill1);
-
-    final p2 = Path()
-      ..moveTo(size.width * 0.35, size.height)
-      ..quadraticBezierTo(size.width * 0.72, size.height * 0.58, size.width, size.height * 0.75)
-      ..lineTo(size.width, size.height)
-      ..close();
-    canvas.drawPath(p2, hill2);
-
-    // Serene gateway portal arch
-    final archOuter = Paint()
-      ..color = (isDark ? const Color(0xFF818CF8) : const Color(0xFF6B6CE6)).withValues(alpha: 0.35);
-    final archInner = Paint()
-      ..color = (isDark ? const Color(0xFF1F2238) : const Color(0xFFF3F1FC)).withValues(alpha: 0.85);
-
-    final archRect = RRect.fromRectAndCorners(
-      Rect.fromLTWH(size.width * 0.54, size.height * 0.32, 36, 52),
-      topLeft: const Radius.circular(18),
-      topRight: const Radius.circular(18),
-    );
-    canvas.drawRRect(archOuterRect(archRect), archOuter);
-    canvas.drawRRect(archRect.deflate(4), archInner);
-  }
-
-  RRect archOuterRect(RRect inner) => inner;
-
-  @override
-  bool shouldRepaint(covariant _HeroArchPainter oldDelegate) => oldDelegate.isDark != isDark;
-}
-
-class _SoftHorizonPainter extends CustomPainter {
-  final bool isDark;
-
-  const _SoftHorizonPainter({required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p1 = Path()
-      ..moveTo(0, size.height * 0.72)
-      ..quadraticBezierTo(size.width * 0.45, size.height * 0.18, size.width, size.height * 0.50)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(
-      p1,
-      Paint()..color = (isDark ? const Color(0xFF33306B) : const Color(0xFFCCC6F6)).withValues(alpha: 0.55),
-    );
-
-    final sun = Paint()
-      ..color = (isDark ? const Color(0xFF818CF8) : const Color(0xFF9E98F2)).withValues(alpha: 0.35);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(size.width * 0.70, size.height * 0.45), radius: math.min(size.width, size.height) * 0.24),
-      0,
-      math.pi * 2,
-      true,
-      sun,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SoftHorizonPainter oldDelegate) => oldDelegate.isDark != isDark;
 }

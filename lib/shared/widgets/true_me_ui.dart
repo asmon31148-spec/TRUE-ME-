@@ -4,8 +4,9 @@ import 'package:flutter/services.dart';
 import '../../app/theme/colors.dart';
 import '../../app/theme/theme_provider.dart';
 import '../../app/theme/typography.dart';
+import 'true_me_illustrations.dart';
 
-/// Soft Ivory & Lavender canvas with lightweight corner pastel washes.
+/// Warm Milk Ivory & Lavender Silk Ribbon Canvas.
 /// Zero GPU blur overhead; smoothly adapts to Dark Mode.
 class TrueMeAmbientBackground extends StatelessWidget {
   final Widget child;
@@ -29,7 +30,7 @@ class TrueMeAmbientBackground extends StatelessWidget {
         children: [
           IgnorePointer(
             child: CustomPaint(
-              painter: _AmbientCornerPainter(
+              painter: SilkRibbonBackgroundPainter(
                 isDark: isDark,
                 intense: intenseLavender,
               ),
@@ -42,61 +43,75 @@ class TrueMeAmbientBackground extends StatelessWidget {
   }
 }
 
-class _AmbientCornerPainter extends CustomPainter {
-  final bool isDark;
-  final bool intense;
+/// Smooth staggered entrance reveal (fade + gentle upward slide) respecting OS reduce-motion.
+class TrueMeEntrance extends StatefulWidget {
+  final Widget child;
+  final int delayMs;
+  final double offsetY;
 
-  _AmbientCornerPainter({required this.isDark, required this.intense});
+  const TrueMeEntrance({
+    super.key,
+    required this.child,
+    this.delayMs = 0,
+    this.offsetY = 14,
+  });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final topRightCenter = Offset(size.width * 0.92, size.height * 0.06);
-    final bottomLeftCenter = Offset(size.width * 0.08, size.height * 0.88);
-    final midRightCenter = Offset(size.width * 0.96, size.height * 0.56);
+  State<TrueMeEntrance> createState() => _TrueMeEntranceState();
+}
 
-    final topAlpha = isDark ? (intense ? 0.16 : 0.10) : (intense ? 0.55 : 0.36);
-    final bottomAlpha = isDark ? (intense ? 0.12 : 0.08) : (intense ? 0.48 : 0.30);
+class _TrueMeEntranceState extends State<TrueMeEntrance> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _opacity;
+  late final Animation<double> _slide;
 
-    final topPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          (isDark ? const Color(0xFF4F46E5) : const Color(0xFFD8D2FC))
-              .withValues(alpha: topAlpha),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: topRightCenter, radius: size.width * 0.65));
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+    );
+    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: widget.offsetY, end: 0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
+    );
 
-    final bottomPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          (isDark ? const Color(0xFF312E81) : const Color(0xFFE0DCFB))
-              .withValues(alpha: bottomAlpha),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: bottomLeftCenter, radius: size.width * 0.72));
-
-    canvas.drawCircle(topRightCenter, size.width * 0.65, topPaint);
-    canvas.drawCircle(bottomLeftCenter, size.width * 0.72, bottomPaint);
-
-    if (intense) {
-      final midPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            (isDark ? const Color(0xFF6366F1) : const Color(0xFFE6E0FF))
-                .withValues(alpha: isDark ? 0.10 : 0.38),
-            Colors.transparent,
-          ],
-        ).createShader(Rect.fromCircle(center: midRightCenter, radius: size.width * 0.55));
-      canvas.drawCircle(midRightCenter, size.width * 0.55, midPaint);
+    if (widget.delayMs <= 0) {
+      _ctrl.forward();
+    } else {
+      Future.delayed(Duration(milliseconds: widget.delayMs), () {
+        if (mounted) _ctrl.forward();
+      });
     }
   }
 
   @override
-  bool shouldRepaint(covariant _AmbientCornerPainter oldDelegate) =>
-      oldDelegate.isDark != isDark || oldDelegate.intense != intense;
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return widget.child;
+    }
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, child) => Opacity(
+        opacity: _opacity.value,
+        child: Transform.translate(
+          offset: Offset(0, _slide.value),
+          child: child,
+        ),
+      ),
+      child: widget.child,
+    );
+  }
 }
 
-/// Elevated soft white/ivory card with calm lavender hairline border & tactile press scale.
+/// Elevated milky-white card with soft atmospheric lavender shadow & zero harsh grey borders.
 class TrueMeCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -115,13 +130,13 @@ class TrueMeCard extends StatefulWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
-    this.borderRadius = 20,
+    this.borderRadius = 22,
     this.onTap,
     this.onLongPress,
     this.color,
     this.gradient,
     this.borderColor,
-    this.borderWidth = 1.0,
+    this.borderWidth = 0.0,
     this.showShadow = true,
     this.width,
     this.height,
@@ -140,15 +155,23 @@ class _TrueMeCardState extends State<TrueMeCard> {
     final disableAnim = MediaQuery.disableAnimationsOf(context);
     final isDark = context.isDarkMode;
 
+    final effectiveBorderWidth = widget.borderWidth > 0
+        ? widget.borderWidth
+        : (widget.borderColor != null ? 1.5 : (isDark ? 0.8 : 0.0));
+
     final decoration = BoxDecoration(
-      color: widget.gradient == null ? (widget.color ?? context.surfaceColor) : null,
+      color: widget.gradient == null
+          ? (widget.color ?? (isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.94)))
+          : null,
       gradient: widget.gradient,
       borderRadius: BorderRadius.circular(widget.borderRadius),
-      border: Border.all(
-        color: widget.borderColor ??
-            (isDark ? AppColors.darkBorder : const Color(0xFFEAE6F5)),
-        width: widget.borderWidth,
-      ),
+      border: effectiveBorderWidth > 0
+          ? Border.all(
+              color: widget.borderColor ??
+                  (isDark ? AppColors.darkBorder : const Color(0x80ECE8F5)),
+              width: effectiveBorderWidth,
+            )
+          : null,
       boxShadow: widget.showShadow ? context.cardShadow : null,
     );
 
@@ -175,7 +198,7 @@ class _TrueMeCardState extends State<TrueMeCard> {
             },
       onLongPress: widget.onLongPress,
       child: AnimatedScale(
-        scale: (_pressed && !disableAnim) ? 0.98 : 1.0,
+        scale: (_pressed && !disableAnim) ? 0.975 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOutCubic,
         child: box,
@@ -184,7 +207,7 @@ class _TrueMeCardState extends State<TrueMeCard> {
   }
 }
 
-/// Primary pill action button matching the soft indigo gradient CTAs in the references.
+/// Primary pill CTA matching the luminous glossy indigo gradient buttons in the references.
 class TrueMePrimaryButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -202,9 +225,9 @@ class TrueMePrimaryButton extends StatefulWidget {
     this.isLoading = false,
     this.leadingIcon,
     this.trailingIcon,
-    this.height = 52,
+    this.height = 54,
     this.width,
-    this.borderRadius = 26,
+    this.borderRadius = 28,
   });
 
   @override
@@ -231,7 +254,7 @@ class _TrueMePrimaryButtonState extends State<TrueMePrimaryButton> {
             }
           : null,
       child: AnimatedScale(
-        scale: (_pressed && !disableAnim) ? 0.975 : 1.0,
+        scale: (_pressed && !disableAnim) ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 100),
         curve: Curves.easeOutCubic,
         child: Opacity(
@@ -245,9 +268,9 @@ class _TrueMePrimaryButtonState extends State<TrueMePrimaryButton> {
               borderRadius: BorderRadius.circular(widget.borderRadius),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.accent.withValues(alpha: 0.28),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+                  color: AppColors.accent.withValues(alpha: 0.30),
+                  blurRadius: 18,
+                  offset: const Offset(0, 7),
                 ),
               ],
             ),
@@ -295,7 +318,7 @@ class _TrueMePrimaryButtonState extends State<TrueMePrimaryButton> {
   }
 }
 
-/// Editorial Section Header with Serif title and optional "View All ->" pill/link.
+/// Editorial Section Header with Serif title and optional "View All ->" link.
 class TrueMeSectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;
@@ -355,7 +378,7 @@ class TrueMeSectionHeader extends StatelessWidget {
   }
 }
 
-/// Smooth Gradient Circular Progress Gauge (Exam Readiness & Home Mini Progress).
+/// Smooth Animated Gradient Circular Progress Gauge.
 class TrueMeCircularRing extends StatelessWidget {
   final double progress; // 0.0 to 1.0
   final double size;
@@ -380,26 +403,36 @@ class TrueMeCircularRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: Size(size, size),
-            painter: _CircularRingPainter(
-              progress: progress.clamp(0.0, 1.0),
-              strokeWidth: strokeWidth,
-              trackColor: isDark
-                  ? AppColors.darkBorder
-                  : const Color(0xFFEAE7F6),
-              colors: gradientColors,
-            ),
+    final disableAnim = MediaQuery.disableAnimationsOf(context);
+    final clamped = progress.clamp(0.0, 1.0);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: disableAnim ? clamped : 0.0, end: clamped),
+      duration: Duration(milliseconds: disableAnim ? 0 : 750),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedVal, _) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: Size(size, size),
+                painter: _CircularRingPainter(
+                  progress: animatedVal,
+                  strokeWidth: strokeWidth,
+                  trackColor: isDark
+                      ? AppColors.darkBorder
+                      : const Color(0xFFE7E3F5),
+                  colors: gradientColors,
+                ),
+              ),
+              if (center != null) center!,
+            ],
           ),
-          if (center != null) center!,
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -455,7 +488,7 @@ class _CircularRingPainter extends CustomPainter {
       oldDelegate.trackColor != trackColor;
 }
 
-/// Clean Tonal Pill Action Button or Badge.
+/// Clean Borderless Milky-Lavender Tonal Pill Action Button / Badge.
 class TrueMeTonalPill extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -476,30 +509,33 @@ class TrueMeTonalPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final bg = backgroundColor ??
-        (isDark ? AppColors.darkAccentWash : AppColors.accentWash);
+    final bg = backgroundColor ?? context.milkyFill;
     final fg = foregroundColor ?? context.accentColor;
 
     final inner = Container(
       padding: padding,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (icon != null) ...[
             Icon(icon, size: 15, color: fg),
             const SizedBox(width: 6),
           ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: fg,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
             ),
           ),
         ],
@@ -512,13 +548,13 @@ class TrueMeTonalPill extends StatelessWidget {
         HapticFeedback.selectionClick();
         onTap!();
       },
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(24),
       child: inner,
     );
   }
 }
 
-/// Circular Icon Button used cleanly in top bars across all reference screens.
+/// Soft Circular Icon Button matching top bars, zoom controls & audio skip buttons.
 class TrueMeCircleIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
@@ -551,17 +587,13 @@ class TrueMeCircleIconButton extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           color: backgroundColor ??
-              (isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.92)),
+              (isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.94)),
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isDark ? AppColors.darkBorder : const Color(0xFFE7E2F4),
-            width: 1,
-          ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF2E2A5C).withValues(alpha: isDark ? 0.2 : 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: const Color(0xFF2E2A5C).withValues(alpha: isDark ? 0.24 : 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -601,13 +633,20 @@ class TrueMeAvatar extends StatelessWidget {
       width: size,
       height: size,
       padding: const EdgeInsets.all(2.5),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFA5B4FC), Color(0xFF5B5CE6)],
+          colors: [Color(0xFFB7B4FA), Color(0xFF5B5CE6)],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.accent.withValues(alpha: 0.16),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -639,7 +678,7 @@ class TrueMeAvatar extends StatelessWidget {
   }
 }
 
-/// Top Header Bar aligned with Reference Images (Back arrow + Serif Title + Trailing widget).
+/// Editorial Top Header Bar aligned with Reference Images.
 class TrueMeTopBar extends StatelessWidget {
   final String title;
   final VoidCallback? onBack;
@@ -686,7 +725,7 @@ class TrueMeTopBar extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.screenTitle.copyWith(
-                fontSize: 22,
+                fontSize: 22.5,
                 color: context.textPrimary,
               ),
             ),

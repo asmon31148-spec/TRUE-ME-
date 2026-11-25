@@ -7,6 +7,7 @@ import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -422,9 +423,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: context.surfaceColor,
+                          color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.96),
                           borderRadius: BorderRadius.circular(26),
-                          border: Border.all(color: context.borderColor),
+                          border: isDark ? Border.all(color: AppColors.darkBorder, width: 0.8) : null,
                           boxShadow: context.cardShadow,
                         ),
                         child: TextField(
@@ -530,94 +531,107 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                 ] else ...[
                   if (_isGridMode)
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.96,
-                      ),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, idx) {
-                        final nb = filtered[idx];
-                        final id = nb['id'] as String? ?? '';
-                        final title = nb['title'] as String? ?? 'Untitled';
-                        final docs = List.from(nb['documents'] ?? []);
-                        final pastel = SubjectPastelStyle.forSubject(title, isDark: isDark);
+                    TrueMeEntrance(
+                      delayMs: 50,
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.94,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, idx) {
+                          final nb = filtered[idx];
+                          final id = nb['id'] as String? ?? '';
+                          final title = nb['title'] as String? ?? 'Untitled';
+                          final docs = List.from(nb['documents'] ?? []);
+                          final pastel = SubjectPastelStyle.forSubject(title, isDark: isDark);
 
-                        return TrueMeCard(
-                          borderRadius: 22,
-                          padding: const EdgeInsets.all(14),
-                          gradient: pastel.gradient,
-                          borderColor: pastel.border,
-                          onTap: () async {
-                            await context.push('/notebook/$id');
-                            if (mounted) _loadNotebooks();
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: context.surfaceColor.withValues(alpha: isDark ? 0.25 : 0.80),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: Icon(pastel.icon, size: 26, color: pastel.accent),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    padding: EdgeInsets.zero,
-                                    icon: Icon(Icons.more_horiz_rounded, size: 20, color: pastel.accent),
-                                    onSelected: (val) async {
-                                      if (val == 'rename') {
-                                        _showRenameSubjectDialog(id, title);
-                                      } else if (val == 'delete') {
-                                        await OfflineCacheService.deleteNotebook(id);
-                                        _loadNotebooks();
-                                      }
-                                    },
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(value: 'rename', child: Text('Rename')),
-                                      PopupMenuItem(
-                                        value: 'delete',
-                                        child: Text('Delete subject', style: TextStyle(color: AppColors.error)),
+                          return TrueMeCard(
+                            borderRadius: 24,
+                            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                            gradient: pastel.gradient,
+                            onTap: () async {
+                              await context.push('/notebook/$id');
+                              if (mounted) _loadNotebooks();
+                            },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(top: 6),
+                                          child: CustomPaint(
+                                            painter: SubjectCardArtworkPainter(
+                                              subject: title,
+                                              accent: pastel.accent,
+                                              isDark: isDark,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: -4,
+                                        right: -8,
+                                        child: PopupMenuButton<String>(
+                                          padding: EdgeInsets.zero,
+                                          icon: Icon(
+                                            Icons.more_horiz_rounded,
+                                            size: 20,
+                                            color: pastel.accent.withValues(alpha: 0.8),
+                                          ),
+                                          onSelected: (val) async {
+                                            if (val == 'rename') {
+                                              _showRenameSubjectDialog(id, title);
+                                            } else if (val == 'delete') {
+                                              await OfflineCacheService.deleteNotebook(id);
+                                              _loadNotebooks();
+                                            }
+                                          },
+                                          itemBuilder: (_) => const [
+                                            PopupMenuItem(value: 'rename', child: Text('Rename')),
+                                            PopupMenuItem(
+                                              value: 'delete',
+                                              child: Text('Delete subject', style: TextStyle(color: AppColors.error)),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                              const Spacer(),
-                              Text(
-                                title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.cardTitle.copyWith(
-                                  fontSize: 16.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: context.textPrimary,
                                 ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                _buildSubjectSubtitle(docs),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.smallLabel.copyWith(
-                                  color: context.textSecondary,
-                                  fontWeight: FontWeight.w600,
+                                const SizedBox(height: 6),
+                                Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.cardTitle.copyWith(
+                                    fontSize: 16.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.textPrimary,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                                const SizedBox(height: 2),
+                                Text(
+                                  _buildSubjectSubtitle(docs),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.smallLabel.copyWith(
+                                    color: context.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     )
                   else
                     ...filtered.map((nb) {

@@ -5,6 +5,7 @@ import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class ExportStudioConfig {
@@ -226,33 +227,50 @@ class _ExportStudioSheetState extends State<ExportStudioSheet> {
                           text: 'A beautifully formatted study sheet synthesized from your notes.',
                         ),
                       ] else if (isWord) ...[
-                        // Live Word Document Outline Card matching Reference Img 1 Panel 3
+                        // Live Word Document Outline Card with Botanical Margin Motif matching Ref Img 1 Panel 3
                         TrueMeCard(
-                          borderRadius: 20,
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _titleCtrl.text.trim().isNotEmpty
-                                    ? _titleCtrl.text.trim()
-                                    : '${widget.subjectName} Study Guide',
-                                style: AppTypography.sectionHeading.copyWith(
-                                  fontSize: 18,
-                                  color: context.textPrimary,
+                          borderRadius: 22,
+                          padding: EdgeInsets.zero,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: CustomPaint(
+                                      painter: BotanicalCornerPainter(isDark: context.isDarkMode),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              _OutlineItem(
-                                heading: '1. Core Foundations',
-                                bullets: ['Key definitions & terms', 'Foundational principles'],
-                              ),
-                              const SizedBox(height: 8),
-                              _OutlineItem(
-                                heading: '2. ${widget.subjectName} Breakdown',
-                                bullets: ['High-yield concepts', 'Exam summary points'],
-                              ),
-                            ],
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(18, 18, 42, 18),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _titleCtrl.text.trim().isNotEmpty
+                                            ? _titleCtrl.text.trim()
+                                            : '${widget.subjectName} Study Guide',
+                                        style: AppTypography.sectionHeading.copyWith(
+                                          fontSize: 18,
+                                          color: context.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      const _OutlineItem(
+                                        heading: '1. Core Foundations',
+                                        bullets: ['Key definitions & terms', 'Foundational principles'],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _OutlineItem(
+                                        heading: '2. ${widget.subjectName} Breakdown',
+                                        bullets: const ['High-yield concepts', 'Exam summary points'],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -423,10 +441,10 @@ class _StyleGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TrueMeCard(
-      borderRadius: 18,
+      borderRadius: 20,
       padding: const EdgeInsets.all(10),
-      borderColor: isSelected ? context.accentColor : context.borderColor,
-      borderWidth: isSelected ? 2.0 : 1.0,
+      borderColor: isSelected ? context.accentColor : null,
+      borderWidth: isSelected ? 2.0 : 0.0,
       onTap: onTap,
       child: Stack(
         children: [
@@ -434,11 +452,11 @@ class _StyleGridCard extends StatelessWidget {
             children: [
               Expanded(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   child: _buildPreviewArtwork(),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 9),
               Text(
                 title,
                 textAlign: TextAlign.center,
@@ -455,14 +473,20 @@ class _StyleGridCard extends StatelessWidget {
           ),
           if (isSelected)
             Positioned(
-              top: 4,
-              right: 4,
+              top: 6,
+              right: 6,
               child: Container(
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: context.accentColor,
+                  gradient: AppColors.indigoButtonGradient,
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.30),
+                      blurRadius: 6,
+                    ),
+                  ],
                 ),
                 child: const Icon(Icons.check_rounded, size: 15, color: Colors.white),
               ),
@@ -475,94 +499,19 @@ class _StyleGridCard extends StatelessWidget {
   Widget _buildPreviewArtwork() {
     switch (previewType) {
       case _PreviewKind.cornell:
-        return Container(
-          width: double.infinity,
-          color: const Color(0xFFFFFBEB),
-          child: CustomPaint(painter: _CornellMiniPainter()),
-        );
+        return const ExportStyleMiniPreview(kind: 'cornell');
       case _PreviewKind.minimalCute:
-        return Container(
-          width: double.infinity,
-          color: const Color(0xFFFFF1F2),
-          child: const Center(
-            child: Icon(Icons.auto_awesome_rounded, size: 36, color: Color(0xFFF472B6)),
-          ),
-        );
+        return const ExportStyleMiniPreview(kind: 'minimalCute');
       case _PreviewKind.zenInk:
-        return Container(
-          width: double.infinity,
-          color: const Color(0xFFF5EFE6),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              const Icon(Icons.landscape_rounded, size: 42, color: Color(0xFF78716C)),
-              Positioned(
-                bottom: 8,
-                right: 10,
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE11D48),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
+        return const ExportStyleMiniPreview(kind: 'zenInk');
       case _PreviewKind.modernHighYield:
-        return Container(
-          width: double.infinity,
-          color: const Color(0xFFEEF2FF),
-          child: const Center(
-            child: Icon(Icons.view_quilt_rounded, size: 38, color: Color(0xFF4F46E5)),
-          ),
-        );
+        return const ExportStyleMiniPreview(kind: 'modernHighYield');
       case _PreviewKind.cuteDeck:
-        return Container(
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFEDE9FE), Color(0xFFDDD6FE)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: const Center(
-            child: Icon(Icons.school_rounded, size: 38, color: Color(0xFF5B5CE6)),
-          ),
-        );
+        return const ExportStyleMiniPreview(kind: 'cuteDeck');
       case _PreviewKind.chartDeck:
-        return Container(
-          width: double.infinity,
-          color: const Color(0xFFEDF2FF),
-          child: const Center(
-            child: Icon(Icons.trending_up_rounded, size: 40, color: Color(0xFF4F46E5)),
-          ),
-        );
+        return const ExportStyleMiniPreview(kind: 'chartDeck');
     }
   }
-}
-
-class _CornellMiniPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final redLine = Paint()
-      ..color = const Color(0xFFEF4444).withValues(alpha: 0.45)
-      ..strokeWidth = 1.5;
-    final blueLine = Paint()
-      ..color = const Color(0xFF93C5FD).withValues(alpha: 0.65)
-      ..strokeWidth = 1.0;
-
-    canvas.drawLine(Offset(size.width * 0.25, 0), Offset(size.width * 0.25, size.height), redLine);
-    for (double y = 18; y < size.height; y += 14) {
-      canvas.drawLine(Offset(10, y), Offset(size.width - 10, y), blueLine);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _OutlineItem extends StatelessWidget {

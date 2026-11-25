@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/colors.dart';
 import '../../app/theme/theme_provider.dart';
 import '../../core/services/update_service.dart';
+import 'true_me_illustrations.dart';
 
-/// Application Shell hosting the True Me Calm Bottom Navigation Bar & Center Sage Orb.
+/// Application Shell hosting the True Me Calm Ivory Bottom Dock & Animated Center Sage Orb.
 ///
 /// Preserves the existing 5-slot navigation structure:
 /// [Home (/today)] [Library (/library)] [★ Sage Orb (/chat)] [Practice (/practice)] [Progress (/progress)]
@@ -99,23 +100,17 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                 clipBehavior: Clip.none,
                 alignment: Alignment.bottomCenter,
                 children: [
-                  // Elevated clean rounded white/surface dock matching reference sheets
+                  // Pure clean curved white dock matching Reference Images 2 & 3
                   Container(
-                    height: 68 + bottomPad,
+                    height: 66 + bottomPad,
                     padding: EdgeInsets.only(bottom: bottomPad, left: 6, right: 6),
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSurface : AppColors.surface,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                      border: Border(
-                        top: BorderSide(
-                          color: isDark ? AppColors.darkBorder : const Color(0xFFE7E3F3),
-                          width: 1,
-                        ),
-                      ),
+                      color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.97),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2E2A5C).withValues(alpha: isDark ? 0.35 : 0.08),
-                          blurRadius: 20,
+                          color: const Color(0xFF2E2A5C).withValues(alpha: isDark ? 0.36 : 0.08),
+                          blurRadius: 24,
                           offset: const Offset(0, -6),
                         ),
                       ],
@@ -136,7 +131,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                           isSelected: selectedIdx == 1,
                           onTap: () => _onItemTapped(1, context),
                         ),
-                        const SizedBox(width: 68), // Spacereserved for centered Sage Orb
+                        const SizedBox(width: 68), // Space reserved for centered Sage Orb
                         _NavTabItem(
                           icon: Icons.check_box_outlined,
                           activeIcon: Icons.check_box_rounded,
@@ -155,7 +150,7 @@ class _AppScaffoldShellState extends State<AppScaffoldShell> {
                     ),
                   ),
 
-                  // Prominent Centered Sage Star Orb
+                  // Luminous Animated Centered Sage Star Orb
                   Positioned(
                     top: 0,
                     child: _SageCenterOrb(
@@ -193,9 +188,9 @@ class _NavTabItem extends StatelessWidget {
     final inactiveColor = context.textSecondary;
 
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
         child: Container(
           constraints: const BoxConstraints(minHeight: 48),
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -203,32 +198,26 @@ class _NavTabItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? activeColor.withValues(alpha: context.isDarkMode ? 0.16 : 0.10)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              AnimatedScale(
+                scale: isSelected ? 1.10 : 1.0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutBack,
                 child: Icon(
                   isSelected ? activeIcon : icon,
-                  size: 22,
+                  size: 23,
                   color: isSelected ? activeColor : inactiveColor,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 160),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected ? activeColor : inactiveColor,
                   letterSpacing: -0.1,
                 ),
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
@@ -253,8 +242,24 @@ class _SageCenterOrb extends StatefulWidget {
   State<_SageCenterOrb> createState() => _SageCenterOrbState();
 }
 
-class _SageCenterOrbState extends State<_SageCenterOrb> {
+class _SageCenterOrbState extends State<_SageCenterOrb> with SingleTickerProviderStateMixin {
   bool _pressed = false;
+  late final AnimationController _pulseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,34 +271,46 @@ class _SageCenterOrbState extends State<_SageCenterOrb> {
       onTapCancel: () => setState(() => _pressed = false),
       onTap: widget.onTap,
       child: AnimatedScale(
-        scale: (_pressed && !disableAnim) ? 0.92 : 1.0,
+        scale: (_pressed && !disableAnim) ? 0.91 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOutCubic,
-        child: Container(
-          width: 58,
-          height: 58,
-          padding: const EdgeInsets.all(3.5),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.isDark ? AppColors.darkSurface : AppColors.surface,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.accent.withValues(alpha: widget.isDark ? 0.35 : 0.25),
-                blurRadius: 16,
-                offset: const Offset(0, 5),
+        child: AnimatedBuilder(
+          animation: _pulseCtrl,
+          builder: (_, child) {
+            final t = disableAnim ? 0.4 : _pulseCtrl.value;
+            return Container(
+              width: 60,
+              height: 60,
+              padding: const EdgeInsets.all(4.0),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.isDark ? AppColors.darkSurface : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accent.withValues(
+                      alpha: (widget.isDark ? 0.34 : 0.24) + (t * 0.12),
+                    ),
+                    blurRadius: 16 + (t * 6),
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-            ],
-          ),
+              child: child,
+            );
+          },
           child: Container(
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: AppColors.sageOrbGradient,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF8380F9), Color(0xFF534BE2)],
+              ),
             ),
             child: const Center(
-              child: Icon(
-                Icons.auto_awesome_rounded,
-                color: Colors.white,
-                size: 25,
+              child: CustomPaint(
+                size: Size(28, 28),
+                painter: SageDockStarPainter(),
               ),
             ),
           ),

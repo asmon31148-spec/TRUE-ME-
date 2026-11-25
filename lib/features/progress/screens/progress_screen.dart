@@ -5,6 +5,7 @@ import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/utils/study_analytics.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class ProgressScreen extends StatefulWidget {
@@ -109,15 +110,27 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 42,
-                            height: 42,
-                            decoration: const BoxDecoration(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: AppColors.sageOrbGradient,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.accent.withValues(alpha: 0.30),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.auto_awesome_rounded, size: 20, color: Colors.white),
+                            child: const Center(
+                              child: CustomPaint(
+                                size: Size(20, 20),
+                                painter: SageDockStarPainter(),
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 3),
                           Text(
                             'Ask Sage',
                             style: TextStyle(
@@ -133,14 +146,26 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 2. Hero Readiness Gauge + Sage Prescription Card
-                TrueMeCard(
-                  borderRadius: 22,
-                  padding: const EdgeInsets.all(18),
-                  gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
-                  borderColor: isDark ? AppColors.darkBorder : const Color(0xFFDCD6FA),
-                  child: Column(
-                    children: [
+                // 2. Hero Readiness Gauge + Sage Prescription Card with Botanical Veil
+                TrueMeEntrance(
+                  delayMs: 40,
+                  child: TrueMeCard(
+                    borderRadius: 24,
+                    padding: EdgeInsets.zero,
+                    gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(painter: BotanicalCornerPainter(isDark: isDark)),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              children: [
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -233,8 +258,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: context.surfaceColor.withValues(alpha: isDark ? 0.25 : 0.68),
-                          borderRadius: BorderRadius.circular(12),
+                          color: context.surfaceColor.withValues(alpha: isDark ? 0.25 : 0.72),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -257,6 +282,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
                 const SizedBox(height: 22),
 
                 // 3. Subject Mastery (Pastel Horizontal Row matching Reference Img 2 Left)
@@ -562,21 +592,34 @@ class _ProgressScreenState extends State<ProgressScreen> {
                                   children: List.generate(7, (i) {
                                     final mins = _analytics.weeklyBars[i];
                                     final ratio = maxBarVal > 0 ? (mins / maxBarVal).clamp(0.0, 1.0) : 0.0;
-                                    final h = mins > 0 ? (ratio * 52).clamp(8.0, 52.0) : 6.0;
+                                    final targetH = mins > 0 ? (ratio * 52).clamp(10.0, 52.0) : 7.0;
                                     final isToday = (i + 1) == todayWeekday;
                                     return Column(
                                       mainAxisAlignment: MainAxisAlignment.end,
                                       children: [
-                                        Container(
-                                          width: 11,
-                                          height: h,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(5),
-                                            color: mins > 0
-                                                ? (isToday
-                                                    ? context.accentColor
-                                                    : context.accentColor.withValues(alpha: 0.65))
-                                                : context.borderColor,
+                                        TweenAnimationBuilder<double>(
+                                          tween: Tween<double>(begin: 6.0, end: targetH),
+                                          duration: Duration(milliseconds: 450 + i * 55),
+                                          curve: Curves.easeOutCubic,
+                                          builder: (_, h, __) => Container(
+                                            width: 12,
+                                            height: h,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(6),
+                                              gradient: mins > 0
+                                                  ? LinearGradient(
+                                                      begin: Alignment.topCenter,
+                                                      end: Alignment.bottomCenter,
+                                                      colors: isToday
+                                                          ? [const Color(0xFF7D7EF7), context.accentColor]
+                                                          : [
+                                                              context.accentColor.withValues(alpha: 0.72),
+                                                              context.accentColor.withValues(alpha: 0.40),
+                                                            ],
+                                                    )
+                                                  : null,
+                                              color: mins > 0 ? null : context.milkyFill,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 6),

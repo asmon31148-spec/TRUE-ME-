@@ -11,6 +11,7 @@ import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class MindmapScreen extends ConsumerStatefulWidget {
@@ -75,10 +76,35 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
     final currentScale = current.getMaxScaleOnAxis();
     final targetScale = (currentScale * factor).clamp(0.4, 2.4);
     final adjustedFactor = targetScale / currentScale;
-    current.scale(adjustedFactor, adjustedFactor);
+    current.scaleByDouble(adjustedFactor, adjustedFactor, 1.0, 1.0);
     setState(() {
       _transformCtrl.value = current;
     });
+  }
+
+  void _showTopicPickerDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Map a Topic', style: AppTypography.sectionHeading),
+        content: AppInput(
+          controller: _topicCtrl,
+          autofocus: true,
+          hintText: 'e.g. Microbiology, Organic Chemistry...',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(96, 42)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _generateMindmap(_topicCtrl.text);
+            },
+            child: const Text('Map'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _generateMindmap(String topic) async {
@@ -176,10 +202,10 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
 
   Color _branchBgColor(int idx, bool isDark) {
     final colorsLight = [
-      const Color(0xFFE0F2FE),
-      const Color(0xFFDCFCE7),
-      const Color(0xFFFFEDD5),
-      const Color(0xFFEDE9FE),
+      const Color(0xFFE3F2FF),
+      const Color(0xFFE3F6E8),
+      const Color(0xFFFDEBD8),
+      const Color(0xFFEDE8FF),
     ];
     final colorsDark = [
       const Color(0xFF11233D),
@@ -204,6 +230,16 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
       const Color(0xFFC4B5FD),
     ];
     return isDark ? inksDark[idx % inksDark.length] : inksLight[idx % inksLight.length];
+  }
+
+  IconData _branchIcon(int idx) {
+    const icons = [
+      Icons.biotech_rounded,
+      Icons.coronavirus_outlined,
+      Icons.shield_outlined,
+      Icons.bubble_chart_rounded,
+    ];
+    return icons[idx % icons.length];
   }
 
   @override
@@ -237,41 +273,22 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                 ),
               ),
 
-              // Topic Entry Bar (Hidden in Fullscreen)
+              // Compact Floating Topic Switcher Pill (Hidden in Fullscreen)
               if (!_isFullscreen)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: context.surfaceColor,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: context.borderColor),
-                            boxShadow: context.cardShadow,
-                          ),
-                          child: TextField(
-                            controller: _topicCtrl,
-                            onSubmitted: (v) => _generateMindmap(v),
-                            style: TextStyle(fontSize: 14.5, color: context.textPrimary),
-                            decoration: const InputDecoration(
-                              hintText: 'Enter topic or chapter...',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              filled: false,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            ),
-                          ),
+                      Flexible(
+                        child: TrueMeTonalPill(
+                          label: _currentTopic.isNotEmpty ? _currentTopic : 'Choose Topic to Map',
+                          icon: Icons.edit_outlined,
+                          backgroundColor: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.94),
+                          foregroundColor: context.textPrimary,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          onTap: _showTopicPickerDialog,
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      TrueMePrimaryButton(
-                        label: 'Map',
-                        width: 84,
-                        height: 46,
-                        onPressed: _isGenerating ? null : () => _generateMindmap(_topicCtrl.text),
                       ),
                     ],
                   ),
@@ -306,11 +323,11 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                             ? Center(
                                 child: Padding(
                                   padding: const EdgeInsets.all(24),
-                                  child: Text(
-                                    'Enter a topic above and tap Map to build an interactive concept hierarchy.',
-                                    textAlign: TextAlign.center,
-                                    style: AppTypography.secondary.copyWith(color: context.textSecondary),
-                                  ),
+                                    child: Text(
+                                      'Tap the topic pill above to build an interactive concept tree.',
+                                      textAlign: TextAlign.center,
+                                      style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                                    ),
                                 ),
                               )
                             : InteractiveViewer(
@@ -339,29 +356,37 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                         return GestureDetector(
                                           onTap: () => setState(() => _selectedNodeId = nodeId),
                                           child: Container(
-                                            constraints: const BoxConstraints(minWidth: 130, maxWidth: 200),
-                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                            constraints: const BoxConstraints(minWidth: 138, maxWidth: 204),
+                                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
                                             decoration: BoxDecoration(
                                               gradient: AppColors.indigoButtonGradient,
-                                              borderRadius: BorderRadius.circular(30),
+                                              borderRadius: BorderRadius.circular(42),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: AppColors.accent.withValues(alpha: 0.30),
-                                                  blurRadius: 16,
-                                                  offset: const Offset(0, 6),
+                                                  color: AppColors.accent.withValues(alpha: 0.34),
+                                                  blurRadius: 18,
+                                                  offset: const Offset(0, 7),
                                                 ),
                                               ],
                                             ),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                const Icon(Icons.hub_rounded, size: 22, color: Colors.white),
-                                                const SizedBox(height: 4),
+                                                Container(
+                                                  width: 34,
+                                                  height: 34,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withValues(alpha: 0.18),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(Icons.hub_rounded, size: 19, color: Colors.white),
+                                                ),
+                                                const SizedBox(height: 6),
                                                 Text(
                                                   label,
                                                   textAlign: TextAlign.center,
                                                   style: const TextStyle(
-                                                    fontSize: 14.5,
+                                                    fontSize: 15,
                                                     fontWeight: FontWeight.w700,
                                                     color: Colors.white,
                                                   ),
@@ -380,23 +405,35 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                                           HapticFeedback.selectionClick();
                                           setState(() => _selectedNodeId = nodeId);
                                         },
-                                        child: Container(
-                                          constraints: const BoxConstraints(minWidth: 105, maxWidth: 180),
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 160),
+                                          constraints: const BoxConstraints(minWidth: 112, maxWidth: 178),
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                                           decoration: BoxDecoration(
                                             color: bg,
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: isSelected ? ink : ink.withValues(alpha: 0.25),
-                                              width: isSelected ? 2.0 : 1.0,
-                                            ),
-                                            boxShadow: context.cardShadow,
+                                            borderRadius: BorderRadius.circular(24),
+                                            border: isSelected ? Border.all(color: ink, width: 2.0) : null,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: ink.withValues(alpha: isSelected ? 0.22 : 0.10),
+                                                blurRadius: isSelected ? 16 : 12,
+                                                offset: const Offset(0, 5),
+                                              ),
+                                            ],
                                           ),
                                           child: Column(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(Icons.circle, size: 10, color: ink),
-                                              const SizedBox(height: 4),
+                                              Container(
+                                                width: 30,
+                                                height: 30,
+                                                decoration: BoxDecoration(
+                                                  color: ink,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(_branchIcon(bIdx), size: 16, color: Colors.white),
+                                              ),
+                                              const SizedBox(height: 6),
                                               Text(
                                                 label,
                                                 textAlign: TextAlign.center,
@@ -425,12 +462,12 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                     children: [
                       if (activeId != null)
                         TrueMeCard(
-                          borderRadius: 18,
+                          borderRadius: 20,
                           padding: const EdgeInsets.all(14),
                           onTap: () => _askSageAboutNode(activeId),
                           child: Row(
                             children: [
-                              AppIconBadge(icon: Icons.auto_awesome_rounded, color: context.accentColor),
+                              StackedDeckEmblem(accentColor: context.accentColor, size: 42),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -463,13 +500,31 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          TrueMeTonalPill(
-                            label: 'Regenerate',
-                            icon: Icons.refresh_rounded,
-                            backgroundColor: context.surfaceColor,
-                            foregroundColor: context.textPrimary,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          GestureDetector(
                             onTap: _currentTopic.isNotEmpty ? () => _generateMindmap(_currentTopic) : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.95),
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: context.cardShadow,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.refresh_rounded, size: 17, color: context.accentColor),
+                                  const SizedBox(width: 7),
+                                  Text(
+                                    'Regenerate',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                           const Spacer(),
                           TrueMeCircleIconButton(

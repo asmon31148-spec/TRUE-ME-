@@ -13,6 +13,7 @@ import '../../../core/services/tts_service.dart';
 import '../../../core/utils/stem_formula_formatter.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../providers/flashcard_provider.dart';
 
@@ -523,24 +524,16 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                   ),
                 ),
 
-                // Deck Selector Dropdown Card
+                // Deck Selector Dropdown Card with 3D Stacked Deck Emblem
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: TrueMeCard(
-                    borderRadius: 18,
+                    borderRadius: 20,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     onTap: () => _showDeckSwitcherSheet(decks),
                     child: Row(
                       children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: pastel.bgEnd,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(Icons.menu_book_rounded, size: 22, color: pastel.accent),
-                        ),
+                        StackedDeckEmblem(accentColor: pastel.accent, size: 42),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -598,7 +591,7 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                   ),
                 ),
 
-                // Bottom SM-2 Interval Cards + Action Button
+                // Bottom Pastel SM-2 Rating Cards + Next Card Soft Pill
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
                   child: Column(
@@ -615,7 +608,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                               label: 'Again',
                               interval: _requeuedCardIds.contains(card.id) ? '1d' : '< 1m',
                               icon: Icons.close_rounded,
-                              bgColor: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                              bgStart: isDark ? const Color(0xFF321822) : const Color(0xFFFFF1F3),
+                              bgEnd: isDark ? const Color(0xFF3F1D2B) : const Color(0xFFFFE2E6),
                               accentColor: isDark ? AppColors.darkError : AppColors.error,
                               onTap: () => _rateCard(0),
                             ),
@@ -624,7 +618,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                               label: 'Hard',
                               interval: _previewInterval(card, 3),
                               icon: Icons.sentiment_neutral_rounded,
-                              bgColor: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
+                              bgStart: isDark ? const Color(0xFF2B2110) : const Color(0xFFFFFAEB),
+                              bgEnd: isDark ? const Color(0xFF382A14) : const Color(0xFFFEF0CE),
                               accentColor: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
                               onTap: () => _rateCard(3),
                             ),
@@ -633,7 +628,8 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                               label: 'Good',
                               interval: _previewInterval(card, 4),
                               icon: Icons.check_rounded,
-                              bgColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
+                              bgStart: isDark ? const Color(0xFF0E2922) : const Color(0xFFF0FDF5),
+                              bgEnd: isDark ? const Color(0xFF13362C) : const Color(0xFFDCFCE7),
                               accentColor: isDark ? AppColors.darkSuccess : AppColors.pastelGreenInk,
                               onTap: () => _rateCard(4),
                             ),
@@ -642,11 +638,23 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                               label: 'Easy',
                               interval: _previewInterval(card, 5),
                               icon: Icons.star_rounded,
-                              bgColor: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                              bgStart: isDark ? AppColors.darkAccentWash : const Color(0xFFF4F1FF),
+                              bgEnd: isDark ? const Color(0xFF2D2B59) : const Color(0xFFE7E2FC),
                               accentColor: context.accentColor,
                               onTap: () => _rateCard(5),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TrueMeTonalPill(
+                            label: 'Next Card  ->',
+                            backgroundColor: isDark ? AppColors.darkAccentWash : AppColors.milkyLavender,
+                            foregroundColor: context.accentColor,
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                            onTap: () => _rateCard(4),
+                          ),
                         ),
                       ],
                     ],
@@ -960,7 +968,8 @@ class _Sm2RatingTile extends StatelessWidget {
   final String label;
   final String interval;
   final IconData icon;
-  final Color bgColor;
+  final Color bgStart;
+  final Color bgEnd;
   final Color accentColor;
   final VoidCallback onTap;
 
@@ -968,7 +977,8 @@ class _Sm2RatingTile extends StatelessWidget {
     required this.label,
     required this.interval,
     required this.icon,
-    required this.bgColor,
+    required this.bgStart,
+    required this.bgEnd,
     required this.accentColor,
     required this.onTap,
   });
@@ -977,17 +987,32 @@ class _Sm2RatingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: TrueMeCard(
-        borderRadius: 16,
+        borderRadius: 18,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [bgStart, bgEnd],
+        ),
         onTap: onTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-              child: Icon(icon, size: 16, color: accentColor),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: accentColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(icon, size: 17, color: Colors.white),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1002,7 +1027,7 @@ class _Sm2RatingTile extends StatelessWidget {
               interval,
               style: TextStyle(
                 fontSize: 10.5,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: context.textSecondary,
               ),
             ),

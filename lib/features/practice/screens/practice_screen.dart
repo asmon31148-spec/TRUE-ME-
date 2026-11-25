@@ -5,6 +5,7 @@ import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class PracticeScreen extends StatefulWidget {
@@ -55,7 +56,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 112),
               children: [
-                // Editorial Serif Header
+                // Editorial Serif Header + Glowing Sage Pill
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -72,138 +73,217 @@ class _PracticeScreenState extends State<PracticeScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Active Recall & Mastery Tools',
+                            'Active Recall & Mastery Studio',
                             style: AppTypography.secondary.copyWith(color: context.textSecondary),
                           ),
                         ],
                       ),
                     ),
-                    TrueMeCircleIconButton(
-                      icon: Icons.auto_awesome_rounded,
-                      tooltip: 'Ask Sage',
-                      iconColor: context.accentColor,
-                      size: 42,
-                      onPressed: () async {
+                    GestureDetector(
+                      onTap: () async {
                         await context.push('/chat');
                         if (mounted) _loadRecent();
                       },
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppColors.sageOrbGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accent.withValues(alpha: 0.28),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: CustomPaint(
+                            size: Size(20, 20),
+                            painter: SageDockStarPainter(),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 18),
 
-                // 2-Column Pastel Tool Grid
-                GridView.count(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.15,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _PracticeGridTile(
-                      icon: Icons.quiz_rounded,
-                      title: 'Quiz',
-                      subtitle: 'Adaptive MCQs',
-                      bgColor: isDark ? const Color(0xFF1D1B3B) : AppColors.accentWash,
-                      accentColor: context.accentColor,
-                      onTap: () async {
-                        await context.push('/quiz');
-                        if (mounted) _loadRecent();
-                      },
+                // Featured Pastel Audio Explainer Banner with Microscope Motif
+                TrueMeEntrance(
+                  delayMs: 30,
+                  child: TrueMeCard(
+                    borderRadius: 24,
+                    padding: EdgeInsets.zero,
+                    gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
+                    onTap: () async {
+                      await context.push('/explainer');
+                      if (mounted) _loadRecent();
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            right: -14,
+                            top: 0,
+                            bottom: 0,
+                            width: 148,
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: ExplainerMicroscopePainter(isDark: isDark, pulse: 0.0),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(18, 18, 130, 18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                TrueMeTonalPill(
+                                  label: 'Audio Studio',
+                                  icon: Icons.headphones_rounded,
+                                  backgroundColor: isDark
+                                      ? AppColors.darkSurface
+                                      : Colors.white.withValues(alpha: 0.88),
+                                  foregroundColor: context.accentColor,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Audio Explainer',
+                                  style: AppTypography.sectionHeading.copyWith(
+                                    fontSize: 19,
+                                    color: context.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Narrated visual scenes from your study notes',
+                                  style: AppTypography.smallLabel.copyWith(
+                                    color: context.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? AppColors.accent : AppColors.charcoalInk,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.play_arrow_rounded, size: 16, color: Colors.white),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Listen Now',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    _PracticeGridTile(
-                      icon: Icons.style_rounded,
-                      title: 'Flashcards',
-                      subtitle: 'Spaced recall',
-                      bgColor: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
-                      accentColor: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
-                      onTap: () async {
-                        await context.push('/flashcards');
-                        if (mounted) _loadRecent();
-                      },
-                    ),
-                    _PracticeGridTile(
-                      icon: Icons.mic_rounded,
-                      title: 'Voice Tutor',
-                      subtitle: 'Oral Socratic exam',
-                      bgColor: isDark ? const Color(0xFF11233D) : AppColors.pastelBlue,
-                      accentColor: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
-                      onTap: () async {
-                        await context.push('/voice-tutor');
-                        if (mounted) _loadRecent();
-                      },
-                    ),
-                    _PracticeGridTile(
-                      icon: Icons.timer_rounded,
-                      title: 'Focus Flow',
-                      subtitle: 'Pomodoro timer',
-                      bgColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
-                      accentColor: isDark ? AppColors.darkSuccess : AppColors.pastelGreenInk,
-                      onTap: () async {
-                        await context.push('/focus');
-                        if (mounted) _loadRecent();
-                      },
-                    ),
-                    _PracticeGridTile(
-                      icon: Icons.account_tree_rounded,
-                      title: 'Mind Map',
-                      subtitle: 'Visual concept trees',
-                      bgColor: isDark ? const Color(0xFF241938) : AppColors.pastelLavender,
-                      accentColor: isDark ? const Color(0xFFC4B5FD) : AppColors.pastelLavenderInk,
-                      onTap: () async {
-                        await context.push('/mindmap');
-                        if (mounted) _loadRecent();
-                      },
-                    ),
-                    _PracticeGridTile(
-                      icon: Icons.history_edu_rounded,
-                      title: 'Mistake Vault',
-                      subtitle: 'Review weak spots',
-                      bgColor: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
-                      accentColor: isDark ? AppColors.darkError : AppColors.error,
-                      onTap: () async {
-                        await context.push('/mistake-vault');
-                        if (mounted) _loadRecent();
-                      },
-                    ),
-                  ],
+                  ),
                 ),
+                const SizedBox(height: 20),
+
+                TrueMeSectionHeader(title: 'Study Features'),
                 const SizedBox(height: 12),
 
-                // Featured Audio Explainer Banner Row
-                TrueMeCard(
-                  borderRadius: 18,
-                  padding: const EdgeInsets.all(14),
-                  gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
-                  onTap: () async {
-                    await context.push('/explainer');
-                    if (mounted) _loadRecent();
-                  },
-                  child: Row(
+                // 2-Column Rich Pastel Feature Buttons matching Reference Design Aesthetic
+                TrueMeEntrance(
+                  delayMs: 80,
+                  child: GridView.count(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.08,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     children: [
-                      AppIconBadge(
-                        icon: Icons.headphones_rounded,
-                        color: context.accentColor,
-                        backgroundColor: context.surfaceColor.withValues(alpha: 0.85),
+                      _FeaturePastelTile(
+                        icon: Icons.quiz_rounded,
+                        title: 'Quiz',
+                        subtitle: 'Adaptive MCQs',
+                        bgStart: isDark ? const Color(0xFF1D1B3B) : const Color(0xFFF3F1FF),
+                        bgEnd: isDark ? const Color(0xFF26224C) : const Color(0xFFE4E0FD),
+                        accentColor: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF5552E4),
+                        onTap: () async {
+                          await context.push('/quiz');
+                          if (mounted) _loadRecent();
+                        },
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Audio Explainer Studio',
-                              style: AppTypography.cardTitle.copyWith(color: context.textPrimary),
-                            ),
-                            Text(
-                              'Narrated interactive topic walkthroughs',
-                              style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
-                            ),
-                          ],
-                        ),
+                      _FeaturePastelTile(
+                        icon: Icons.style_rounded,
+                        title: 'Flashcards',
+                        subtitle: 'SM-2 spaced recall',
+                        bgStart: isDark ? const Color(0xFF2B2110) : const Color(0xFFFFFAEB),
+                        bgEnd: isDark ? const Color(0xFF382A14) : const Color(0xFFFEEEE0),
+                        accentColor: isDark ? AppColors.darkWarning : const Color(0xFFC26D16),
+                        onTap: () async {
+                          await context.push('/flashcards');
+                          if (mounted) _loadRecent();
+                        },
                       ),
-                      Icon(Icons.play_arrow_rounded, size: 22, color: context.accentColor),
+                      _FeaturePastelTile(
+                        icon: Icons.graphic_eq_rounded,
+                        title: 'Voice Tutor',
+                        subtitle: 'Oral Socratic exam',
+                        bgStart: isDark ? const Color(0xFF11233D) : const Color(0xFFEEF7FF),
+                        bgEnd: isDark ? const Color(0xFF172E50) : const Color(0xFFD9ECFE),
+                        accentColor: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                        onTap: () async {
+                          await context.push('/voice-tutor');
+                          if (mounted) _loadRecent();
+                        },
+                      ),
+                      _FeaturePastelTile(
+                        icon: Icons.timer_rounded,
+                        title: 'Focus Flow',
+                        subtitle: 'Deep focus sprints',
+                        bgStart: isDark ? const Color(0xFF0E2922) : const Color(0xFFF0FDF6),
+                        bgEnd: isDark ? const Color(0xFF13362C) : const Color(0xFFD6F7E5),
+                        accentColor: isDark ? AppColors.darkSuccess : const Color(0xFF15803D),
+                        onTap: () async {
+                          await context.push('/focus');
+                          if (mounted) _loadRecent();
+                        },
+                      ),
+                      _FeaturePastelTile(
+                        icon: Icons.hub_rounded,
+                        title: 'Mind Map',
+                        subtitle: 'Concept trees',
+                        bgStart: isDark ? const Color(0xFF241938) : const Color(0xFFF6F1FF),
+                        bgEnd: isDark ? const Color(0xFF2E2048) : const Color(0xFFEADFFD),
+                        accentColor: isDark ? const Color(0xFFC4B5FD) : const Color(0xFF6D28D9),
+                        onTap: () async {
+                          await context.push('/mindmap');
+                          if (mounted) _loadRecent();
+                        },
+                      ),
+                      _FeaturePastelTile(
+                        icon: Icons.auto_fix_high_rounded,
+                        title: 'Mistake Vault',
+                        subtitle: 'Turn errors to mastery',
+                        bgStart: isDark ? const Color(0xFF321822) : const Color(0xFFFFF1F3),
+                        bgEnd: isDark ? const Color(0xFF3F1D2B) : const Color(0xFFFEE0E5),
+                        accentColor: isDark ? AppColors.darkError : const Color(0xFFE11D48),
+                        onTap: () async {
+                          await context.push('/mistake-vault');
+                          if (mounted) _loadRecent();
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -264,59 +344,110 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 }
 
-class _PracticeGridTile extends StatelessWidget {
+class _FeaturePastelTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bgColor;
+  final Color bgStart;
+  final Color bgEnd;
   final Color accentColor;
   final VoidCallback onTap;
 
-  const _PracticeGridTile({
+  const _FeaturePastelTile({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.bgColor,
+    required this.bgStart,
+    required this.bgEnd,
     required this.accentColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return TrueMeCard(
-      borderRadius: 20,
+      borderRadius: 24,
       padding: const EdgeInsets.all(15),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [bgStart, bgEnd],
+      ),
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Stack(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(13),
+          // Subtle pastel bokeh highlight in bottom-right corner
+          Positioned(
+            right: -22,
+            bottom: -22,
+            child: IgnorePointer(
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor.withValues(alpha: isDark ? 0.14 : 0.10),
+                ),
+              ),
             ),
-            child: Icon(icon, size: 22, color: accentColor),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: AppTypography.cardTitle.copyWith(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w700,
-                  color: context.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.18),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, size: 23, color: accentColor),
+                  ),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.65),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.arrow_forward_rounded, size: 15, color: accentColor),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.cardTitle.copyWith(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w700,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.smallLabel.copyWith(
+                      color: context.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -18,6 +18,7 @@ import '../../../features/export/pptx_exporter.dart';
 import '../../../features/export/widgets/export_studio_sheet.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../../chat/providers/chat_provider.dart';
 import '../../chat/widgets/sage_chat_view.dart';
@@ -562,17 +563,15 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                 ),
               ),
 
-              // Pill Segmented Tab Bar: Sources | Chat | Study
+              // Borderless Milky Pill Segmented Tab Bar: Sources | Chat | Study
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
                 child: Container(
-                  height: 44,
+                  height: 46,
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: context.surfaceColor,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: context.borderColor),
-                    boxShadow: context.cardShadow,
+                    color: context.milkyFill,
+                    borderRadius: BorderRadius.circular(24),
                   ),
                   child: TabBar(
                     controller: _tabController,
@@ -580,7 +579,14 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                     dividerColor: Colors.transparent,
                     indicator: BoxDecoration(
                       gradient: AppColors.indigoButtonGradient,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accent.withValues(alpha: 0.25),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     labelColor: Colors.white,
                     unselectedLabelColor: context.textSecondary,
@@ -663,7 +669,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                       subject: title,
                     ),
 
-                    // 3. Study Tab (Tools + Export Studio Launchers)
+                    // 3. Study Tab (Redesigned Pastel Feature Cards + Export Studio Tiles)
                     ListView(
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -684,134 +690,168 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                           ),
                         ],
                         TrueMeSectionHeader(title: 'Active Learning'),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: AppIconBadge(
-                            icon: Icons.summarize_outlined,
-                            color: context.accentColor,
-                            backgroundColor: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
-                          ),
-                          title: 'Summary',
-                          subtitle: 'Ask Sage to summarize all uploaded sources',
-                          onTap: () => context.push(
-                            '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Create a comprehensive summary of all my $title sources.')}',
-                          ),
+                        const SizedBox(height: 12),
+                        GridView.count(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 1.12,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: [
+                            _StudyFeatureTile(
+                              icon: Icons.summarize_rounded,
+                              title: 'Summary',
+                              subtitle: 'Key points & notes',
+                              bgStart: isDark ? const Color(0xFF1D1B3B) : const Color(0xFFF3F1FF),
+                              bgEnd: isDark ? const Color(0xFF26224C) : const Color(0xFFE4E0FD),
+                              accent: context.accentColor,
+                              onTap: () => context.push(
+                                '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Create a comprehensive summary of all my $title sources.')}',
+                              ),
+                            ),
+                            _StudyFeatureTile(
+                              icon: Icons.style_rounded,
+                              title: 'Flashcards',
+                              subtitle: 'Spaced recall',
+                              bgStart: isDark ? const Color(0xFF2B2110) : const Color(0xFFFFFAEB),
+                              bgEnd: isDark ? const Color(0xFF382A14) : const Color(0xFFFEEEE0),
+                              accent: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
+                              onTap: () => context.push(
+                                '/flashcards?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}',
+                              ),
+                            ),
+                            _StudyFeatureTile(
+                              icon: Icons.quiz_rounded,
+                              title: 'Quiz',
+                              subtitle: 'Practice questions',
+                              bgStart: isDark ? const Color(0xFF11233D) : const Color(0xFFEEF7FF),
+                              bgEnd: isDark ? const Color(0xFF172E50) : const Color(0xFFD9ECFE),
+                              accent: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
+                              onTap: () => context.push(
+                                '/quiz?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}',
+                              ),
+                            ),
+                            _StudyFeatureTile(
+                              icon: Icons.hub_rounded,
+                              title: 'Mind Map',
+                              subtitle: 'Concept tree',
+                              bgStart: isDark ? const Color(0xFF241938) : const Color(0xFFF6F1FF),
+                              bgEnd: isDark ? const Color(0xFF2E2048) : const Color(0xFFEADFFD),
+                              accent: isDark ? const Color(0xFFC4B5FD) : AppColors.pastelLavenderInk,
+                              onTap: () => context.push(
+                                '/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}',
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: AppIconBadge(
-                            icon: Icons.style_outlined,
-                            color: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
-                            backgroundColor: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
-                          ),
-                          title: 'Flashcards',
-                          subtitle: 'Review or generate AI cards from $title',
-                          onTap: () => context.push(
-                            '/flashcards?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: AppIconBadge(
-                            icon: Icons.quiz_outlined,
-                            color: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
-                            backgroundColor: isDark ? const Color(0xFF11233D) : AppColors.pastelBlue,
-                          ),
-                          title: 'Quiz',
-                          subtitle: 'Test yourself on your $title notes',
-                          onTap: () => context.push(
-                            '/quiz?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: AppIconBadge(
-                            icon: Icons.account_tree_outlined,
-                            color: isDark ? const Color(0xFFC4B5FD) : AppColors.pastelLavenderInk,
-                            backgroundColor: isDark ? const Color(0xFF241938) : AppColors.pastelLavender,
-                          ),
-                          title: 'Mind Map',
-                          subtitle: 'Generate visual concept hierarchy with AI',
-                          onTap: () => context.push(
-                            '/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: AppIconBadge(
-                            icon: Icons.play_circle_outline,
-                            color: isDark ? AppColors.darkSuccess : AppColors.pastelGreenInk,
-                            backgroundColor: isDark ? const Color(0xFF0E2922) : AppColors.pastelGreen,
-                          ),
-                          title: 'Audio Explainer',
-                          subtitle: 'Listen to a narrated walkthrough of $title',
+                        const SizedBox(height: 12),
+
+                        // Audio Explainer Studio Hero Banner
+                        TrueMeCard(
+                          borderRadius: 22,
+                          padding: EdgeInsets.zero,
+                          gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
                           onTap: () => context.push(
                             '/explainer?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}',
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  right: -12,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: 120,
+                                  child: IgnorePointer(
+                                    child: CustomPaint(
+                                      painter: ExplainerMicroscopePainter(isDark: isDark, pulse: 0.0),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 16, 100, 16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? AppColors.darkSurface
+                                              : Colors.white.withValues(alpha: 0.90),
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        child: Icon(Icons.headphones_rounded, color: context.accentColor),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Audio Explainer',
+                                              style: AppTypography.cardTitle.copyWith(color: context.textPrimary),
+                                            ),
+                                            Text(
+                                              'Narrated $title walkthrough',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 22),
 
                         TrueMeSectionHeader(title: 'Export Study Studio'),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: _exportingFormat == 'pdf'
-                              ? const SizedBox(
-                                  width: 42,
-                                  height: 42,
-                                  child: Center(
-                                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                                  ),
-                                )
-                              : AppIconBadge(
-                                  icon: Icons.picture_as_pdf_outlined,
-                                  color: AppColors.error,
-                                  backgroundColor: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
-                                ),
-                          title: _exportingFormat == 'pdf' ? 'Generating PDF...' : 'Export to PDF Study Sheet',
-                          subtitle: _exportingFormat == 'pdf'
-                              ? 'Synthesizing sources into PDF...'
-                              : 'Style: ${_getPdfStyleDisplayName(OfflineCacheService.getPreferredPdfStyle())}',
-                          onTap: _exportingFormat != null ? null : () => _launchExportStudio('pdf'),
-                        ),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: _exportingFormat == 'docx'
-                              ? const SizedBox(
-                                  width: 42,
-                                  height: 42,
-                                  child: Center(
-                                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                                  ),
-                                )
-                              : AppIconBadge(
-                                  icon: Icons.description_outlined,
-                                  color: isDark ? const Color(0xFF60A5FA) : AppColors.pastelBlueInk,
-                                  backgroundColor: isDark ? const Color(0xFF11233D) : AppColors.pastelBlue,
-                                ),
-                          title: _exportingFormat == 'docx' ? 'Generating Word (.docx)...' : 'Export to Word (.docx)',
-                          subtitle: 'Editable study guide for Word & Docs',
-                          onTap: _exportingFormat != null ? null : () => _launchExportStudio('docx'),
-                        ),
-                        const SizedBox(height: 10),
-                        AppListRow(
-                          leading: _exportingFormat == 'pptx'
-                              ? const SizedBox(
-                                  width: 42,
-                                  height: 42,
-                                  child: Center(
-                                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                                  ),
-                                )
-                              : AppIconBadge(
-                                  icon: Icons.slideshow_outlined,
-                                  color: isDark ? AppColors.darkWarning : AppColors.pastelAmberInk,
-                                  backgroundColor: isDark ? const Color(0xFF2B2110) : AppColors.pastelAmber,
-                                ),
-                          title: _exportingFormat == 'pptx' ? 'Generating Slides (.pptx)...' : 'Export to PowerPoint (.pptx)',
-                          subtitle: _exportingFormat == 'pptx'
-                              ? 'Creating presentation slides...'
-                              : 'Style: ${_getPptxStyleDisplayName(OfflineCacheService.getPreferredPptxStyle())}',
-                          onTap: _exportingFormat != null ? null : () => _launchExportStudio('pptx'),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _ExportFormatButton(
+                                label: _exportingFormat == 'pdf' ? 'Building...' : 'PDF Sheet',
+                                subtitle: _getPdfStyleDisplayName(OfflineCacheService.getPreferredPdfStyle()),
+                                icon: Icons.description_rounded,
+                                accent: AppColors.accent,
+                                bg: isDark ? AppColors.darkAccentWash : AppColors.milkyLavender,
+                                isBusy: _exportingFormat == 'pdf',
+                                onTap: _exportingFormat != null ? null : () => _launchExportStudio('pdf'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _ExportFormatButton(
+                                label: _exportingFormat == 'docx' ? 'Building...' : 'Word (.docx)',
+                                subtitle: 'Editable doc',
+                                icon: Icons.article_rounded,
+                                accent: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                bg: isDark ? const Color(0xFF11233D) : const Color(0xFFEAF3FF),
+                                isBusy: _exportingFormat == 'docx',
+                                onTap: _exportingFormat != null ? null : () => _launchExportStudio('docx'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _ExportFormatButton(
+                                label: _exportingFormat == 'pptx' ? 'Building...' : 'Slides (.pptx)',
+                                subtitle: _getPptxStyleDisplayName(OfflineCacheService.getPreferredPptxStyle()),
+                                icon: Icons.slideshow_rounded,
+                                accent: isDark ? AppColors.darkWarning : const Color(0xFFEA580C),
+                                bg: isDark ? const Color(0xFF2B2110) : const Color(0xFFFFF2E6),
+                                isBusy: _exportingFormat == 'pptx',
+                                onTap: _exportingFormat != null ? null : () => _launchExportStudio('pptx'),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 24),
                       ],
@@ -899,6 +939,144 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                 ),
               );
             }),
+        ],
+      ),
+    );
+  }
+}
+
+class _StudyFeatureTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color bgStart;
+  final Color bgEnd;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _StudyFeatureTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.bgStart,
+    required this.bgEnd,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    return TrueMeCard(
+      borderRadius: 22,
+      padding: const EdgeInsets.all(14),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [bgStart, bgEnd],
+      ),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, size: 22, color: accent),
+              ),
+              Icon(Icons.arrow_forward_rounded, size: 16, color: accent),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.cardTitle.copyWith(fontSize: 16, color: context.textPrimary),
+              ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExportFormatButton extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final Color bg;
+  final bool isBusy;
+  final VoidCallback? onTap;
+
+  const _ExportFormatButton({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.bg,
+    required this.isBusy,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TrueMeCard(
+      borderRadius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      color: bg,
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: context.isDarkMode ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: isBusy
+                ? const Center(
+                    child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                : Icon(icon, size: 21, color: accent),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: AppTypography.smallLabel.copyWith(fontSize: 10.5, color: context.textSecondary),
+          ),
         ],
       ),
     );

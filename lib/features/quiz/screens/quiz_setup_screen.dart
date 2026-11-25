@@ -10,6 +10,7 @@ import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
+import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../providers/quiz_provider.dart';
 
@@ -805,19 +806,18 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Subject Selector Card
+                      // Subject Selector Card with 3D Layered Deck Emblem
                       if (_notebooks.isNotEmpty) ...[
-                        TrueMeCard(
-                          borderRadius: 18,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                          onTap: _showSubjectPickerSheet,
-                          child: Row(
-                            children: [
-                              AppIconBadge(
-                                icon: Icons.menu_book_rounded,
-                                color: context.accentColor,
-                              ),
-                              const SizedBox(width: 14),
+                        TrueMeEntrance(
+                          delayMs: 30,
+                          child: TrueMeCard(
+                            borderRadius: 20,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            onTap: _showSubjectPickerSheet,
+                            child: Row(
+                              children: [
+                                StackedDeckEmblem(accentColor: context.accentColor, size: 42),
+                                const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -845,6 +845,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                             ],
                           ),
                         ),
+                        ),
                         const SizedBox(height: 18),
                       ],
 
@@ -866,7 +867,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                       ),
                       const SizedBox(height: 22),
 
-                      // Difficulty Level Segmented Control
+                      // Difficulty Level: 3 Separated Floating Capsules matching Ref Img 4 Center
                       Text(
                         'Difficulty Level',
                         style: TextStyle(
@@ -876,37 +877,47 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: context.surfaceColor,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: context.borderColor),
-                          boxShadow: context.cardShadow,
-                        ),
+                      TrueMeEntrance(
+                        delayMs: 80,
                         child: Row(
-                          children: ['Easy', 'Medium', 'Hard'].map((diff) {
+                          children: ['Easy', 'Medium', 'Hard'].asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final diff = entry.value;
                             final selected = _selectedDifficulty == diff;
                             return Expanded(
-                              child: GestureDetector(
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() => _selectedDifficulty = diff);
-                                },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 160),
-                                  padding: const EdgeInsets.symmetric(vertical: 11),
-                                  decoration: BoxDecoration(
-                                    gradient: selected ? AppColors.indigoButtonGradient : null,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    diff,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                      color: selected ? Colors.white : context.textPrimary,
+                              child: Padding(
+                                padding: EdgeInsets.only(right: idx < 2 ? 10 : 0),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _selectedDifficulty = diff);
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    curve: Curves.easeOutCubic,
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    decoration: BoxDecoration(
+                                      gradient: selected ? AppColors.indigoButtonGradient : null,
+                                      color: selected ? null : context.milkyFill,
+                                      borderRadius: BorderRadius.circular(24),
+                                      boxShadow: selected
+                                          ? [
+                                              BoxShadow(
+                                                color: AppColors.accent.withValues(alpha: 0.28),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      diff,
+                                      style: TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                        color: selected ? Colors.white : context.textPrimary,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -917,7 +928,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                       ),
                       const SizedBox(height: 22),
 
-                      // Number of Questions Stepper
+                      // Number of Questions: Separated - [10] + Floating Controls
                       Text(
                         'Number of Questions',
                         style: TextStyle(
@@ -926,43 +937,53 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                           color: context.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: context.surfaceColor,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: context.borderColor),
-                          boxShadow: context.cardShadow,
-                        ),
+                      const SizedBox(height: 12),
+                      TrueMeEntrance(
+                        delayMs: 120,
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            IconButton(
-                              onPressed: _questionCount > 5
-                                  ? () {
-                                      HapticFeedback.selectionClick();
-                                      setState(() => _questionCount = (_questionCount - 1).clamp(5, 25));
-                                    }
-                                  : null,
-                              icon: Icon(Icons.remove_rounded, color: context.accentColor),
+                            TrueMeCircleIconButton(
+                              icon: Icons.remove_rounded,
+                              size: 46,
+                              backgroundColor: context.milkyFill,
+                              iconColor: context.accentColor,
+                              onPressed: () {
+                                if (_questionCount > 5) {
+                                  setState(() => _questionCount = (_questionCount - 1).clamp(5, 25));
+                                }
+                              },
                             ),
-                            Text(
-                              '$_questionCount',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: context.textPrimary,
+                            const SizedBox(width: 14),
+                            Container(
+                              width: 108,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkSurface : Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: context.cardShadow,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '$_questionCount',
+                                style: TextStyle(
+                                  fontSize: 18.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.textPrimary,
+                                ),
                               ),
                             ),
-                            IconButton(
-                              onPressed: _questionCount < 25
-                                  ? () {
-                                      HapticFeedback.selectionClick();
-                                      setState(() => _questionCount = (_questionCount + 1).clamp(5, 25));
-                                    }
-                                  : null,
-                              icon: Icon(Icons.add_rounded, color: context.accentColor),
+                            const SizedBox(width: 14),
+                            TrueMeCircleIconButton(
+                              icon: Icons.add_rounded,
+                              size: 46,
+                              backgroundColor: context.milkyFill,
+                              iconColor: context.accentColor,
+                              onPressed: () {
+                                if (_questionCount < 25) {
+                                  setState(() => _questionCount = (_questionCount + 1).clamp(5, 25));
+                                }
+                              },
                             ),
                           ],
                         ),
