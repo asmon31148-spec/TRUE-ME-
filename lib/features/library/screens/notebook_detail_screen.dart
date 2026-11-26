@@ -312,7 +312,6 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     required String format,
     String? chosenStyle,
     String? customDocTitle,
-    int slideCount = 8,
   }) async {
     final title = _notebook?['title'] as String? ?? 'Study Guide';
     final combinedText = OfflineCacheService.getNotebookCombinedText(widget.notebookId);

@@ -455,8 +455,9 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    AppSecondaryButton(
-                      label: 'Previous',
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.chevron_left_rounded, size: 18),
+                      label: const Text('Previous'),
                       onPressed: _currentSlideIdx > 0
                           ? () => _slidePageCtrl.previousPage(
                                 duration: const Duration(milliseconds: 220),
@@ -468,8 +469,9 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
                       '${_currentSlideIdx + 1} / ${slides.length}',
                       style: TextStyle(fontWeight: FontWeight.w700, color: context.textPrimary),
                     ),
-                    AppSecondaryButton(
-                      label: 'Next',
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.chevron_right_rounded, size: 18),
+                      label: const Text('Next'),
                       onPressed: _currentSlideIdx < slides.length - 1
                           ? () => _slidePageCtrl.nextPage(
                                 duration: const Duration(milliseconds: 220),
