@@ -124,17 +124,24 @@ class AiRouter {
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
+    final requestId = RateLimitGuardian.newRequestId('heavy');
+
     // 1. Groq OSS 120B (Ultra-fast LPU inference: typically 1.5 - 4s)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_heavy')) {
       try {
-        await RateLimitGuardian.recordRequest('groq_heavy');
-        return await _groq
+        final out = await _groq
             .complete70B(
               prompt: prompt,
               systemPrompt: systemPrompt,
               jsonMode: jsonMode,
             )
             .timeout(const Duration(seconds: 20));
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'groq_heavy',
+          taskType: 'heavy_reasoning',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('groq_heavy');
       }
@@ -143,14 +150,19 @@ class AiRouter {
     // 2. Gemini Flash (Large context fallback)
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
-        await RateLimitGuardian.recordRequest('gemini_flash');
-        return await _gemini
+        final out = await _gemini
             .generateContent(
               prompt,
               systemInstruction: systemPrompt,
               jsonMode: jsonMode,
             )
             .timeout(const Duration(seconds: 22));
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'gemini_flash',
+          taskType: 'heavy_reasoning',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('gemini_flash');
       }
@@ -159,8 +171,7 @@ class AiRouter {
     // 3. OpenRouter Nemotron 3.5 Lightning:free (Fast fallback)
     if (_openRouter.isConfigured && await RateLimitGuardian.isAvailable('openrouter')) {
       try {
-        await RateLimitGuardian.recordRequest('openrouter');
-        return await _openRouter
+        final out = await _openRouter
             .completeFallback(
               prompt: prompt,
               systemPrompt: systemPrompt,
@@ -168,6 +179,12 @@ class AiRouter {
               jsonMode: jsonMode,
             )
             .timeout(const Duration(seconds: 15));
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'openrouter',
+          taskType: 'heavy_reasoning',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('openrouter');
       }
@@ -176,13 +193,18 @@ class AiRouter {
     // 4. Cohere Command R+
     if (_cohere.isConfigured && !jsonMode && await RateLimitGuardian.isAvailable('cohere')) {
       try {
-        await RateLimitGuardian.recordRequest('cohere');
-        return await _cohere
+        final out = await _cohere
             .chat(
               prompt: prompt,
               systemPrompt: systemPrompt,
             )
             .timeout(const Duration(seconds: 15));
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'cohere',
+          taskType: 'heavy_reasoning',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('cohere');
       }
@@ -200,16 +222,23 @@ class AiRouter {
     required String prompt,
     String? systemPrompt,
   }) async {
+    final requestId = RateLimitGuardian.newRequestId('chat');
+
     // 1. Groq OSS 20B (Extreme speed 500-800 tokens/sec on LPUs)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
-        await RateLimitGuardian.recordRequest('groq_speed');
-        return await _groq.complete8B(
+        final out = await _groq.complete8B(
           prompt: prompt,
           systemPrompt: systemPrompt,
           maxTokens: 250,
           temperature: 0.4,
         );
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'groq_speed',
+          taskType: 'realtime_chat',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('groq_speed');
       }
@@ -218,12 +247,17 @@ class AiRouter {
     // 2. OpenRouter Nemotron 3.5 Lightning:free (Fast conversational inference)
     if (_openRouter.isConfigured && await RateLimitGuardian.isAvailable('openrouter')) {
       try {
-        await RateLimitGuardian.recordRequest('openrouter');
-        return await _openRouter.completeFallback(
+        final out = await _openRouter.completeFallback(
           prompt: prompt,
           systemPrompt: systemPrompt,
           model: OpenRouterService.modelNemotronLightning,
         );
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'openrouter',
+          taskType: 'realtime_chat',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('openrouter');
       }
@@ -232,13 +266,18 @@ class AiRouter {
     // 3. Gemini 2.5 Flash
     if (_gemini.isConfigured && await RateLimitGuardian.isAvailable('gemini_flash')) {
       try {
-        await RateLimitGuardian.recordRequest('gemini_flash');
-        return await _gemini.generateContent(
+        final out = await _gemini.generateContent(
           prompt,
           systemInstruction: systemPrompt,
           maxOutputTokens: 250,
           temperature: 0.4,
         );
+        await RateLimitGuardian.recordRequestOnce(
+          requestId: requestId,
+          providerKey: 'gemini_flash',
+          taskType: 'realtime_chat',
+        );
+        return out;
       } catch (e) {
         RateLimitGuardian.trip('gemini_flash');
       }

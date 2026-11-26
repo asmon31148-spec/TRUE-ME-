@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/supabase_service.dart';
 
 /// Guardian that actively prevents 429 errors and enforces quotas
 /// across all free-tier providers using sliding RPM windows,
@@ -30,6 +31,12 @@ class RateLimitGuardian {
 
   // Dynamic circuit breaker: stores when a tripped provider can be retried
   static final Map<String, DateTime> _circuitBreakers = {};
+
+  // Single-owner idempotency set so retries/fallbacks never double-count one user action (AI-01)
+  static final Set<String> _recordedRequestIds = <String>{};
+
+  static String newRequestId([String prefix = 'ai']) =>
+      '${prefix}_${DateTime.now().microsecondsSinceEpoch}';
 
   static String _getUtcDateKey() {
     final now = DateTime.now().toUtc();
@@ -71,6 +78,28 @@ class RateLimitGuardian {
     }
 
     return true;
+  }
+
+  /// Records a completed user action exactly once per [requestId] (AI-01),
+  /// and syncs authoritative usage to the Supabase quota ledger (AI-02).
+  static Future<void> recordRequestOnce({
+    required String requestId,
+    required String providerKey,
+    String taskType = 'general',
+  }) async {
+    if (_recordedRequestIds.contains(requestId)) return;
+    _recordedRequestIds.add(requestId);
+    if (_recordedRequestIds.length > 500) {
+      _recordedRequestIds.remove(_recordedRequestIds.first);
+    }
+
+    await recordRequest(providerKey);
+    // Sync to server-side usage ledger (best-effort, idempotent by requestId)
+    await SupabaseService.instance.recordAiUsage(
+      requestId: requestId,
+      provider: providerKey,
+      taskType: taskType,
+    );
   }
 
   /// Records a successful or in-flight request to track RPM and daily totals.

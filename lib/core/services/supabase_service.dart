@@ -161,6 +161,34 @@ class SupabaseService {
     } catch (_) {}
   }
 
+  /// Idempotently records an AI request in the server-side `ai_usage_ledger` (AI-01 / AI-02).
+  Future<bool> recordAiUsage({
+    required String requestId,
+    required String provider,
+    required String taskType,
+    String status = 'success',
+  }) async {
+    final client = _clientOrNull;
+    if (client == null || client.auth.currentUser == null) return true;
+    try {
+      final res = await client.rpc(
+        'check_and_record_ai_usage',
+        params: {
+          'p_request_id': requestId,
+          'p_provider': provider,
+          'p_task_type': taskType,
+          'p_status': status,
+        },
+      );
+      if (res is Map && res['allowed'] == false) {
+        return false;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // USER PROFILES
   // ---------------------------------------------------------------------------
