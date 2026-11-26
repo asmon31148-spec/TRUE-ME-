@@ -3,6 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trueme/core/ai/ai_gateway_client.dart';
 import 'package:trueme/core/ai/ai_router.dart';
+import 'package:trueme/core/ai/monitor/ai_model_registry.dart';
+import 'package:trueme/core/ai/monitor/ai_monitor_models.dart';
+import 'package:trueme/core/ai/monitor/ai_telemetry_service.dart';
+import 'package:trueme/core/ai/monitor/provider_quota_adapters.dart';
+import 'package:trueme/core/ai/monitor/quota_calculation_engine.dart';
 import 'package:trueme/core/ai/cognitive/student_cognitive_profile.dart';
 import 'package:trueme/core/ai/rag_service.dart';
 import 'package:trueme/core/ai/syllabus_service.dart';
@@ -196,6 +201,141 @@ void main() {
       } finally {
         await tmp.delete(recursive: true);
       }
+    });
+  });
+
+  group('AI Model & Quota Monitor', () {
+    setUp(() {
+      AiTelemetryService.resetForTest();
+    });
+
+    test('AiModelRegistry discovers all configured providers and dynamically merges new models', () {
+      final base = AiModelRegistry.discoverModels();
+      final providers = base.map((m) => m.provider).toSet();
+      expect(providers, containsAll(['gemini', 'groq', 'openrouter', 'cohere', 'cloudflare']));
+      expect(base.length, greaterThanOrEqualTo(16));
+
+      final withNew = AiModelRegistry.discoverModels(
+        snapshots: {
+          'gemini': ProviderSnapshot(
+            provider: 'gemini',
+            status: DataSourceBadge.official,
+            fetchedAt: DateTime.now(),
+            discoveredModelIds: const ['gemini-4.0-flash'],
+            modelContextLimits: const {'gemini-4.0-flash': 2000000},
+          ),
+        },
+      );
+      expect(withNew.any((m) => m.modelId == 'gemini-4.0-flash'), isTrue);
+    });
+
+    test('QuotaCalculationEngine prioritizes official OpenRouter credits & Groq headers over estimates', () {
+      final orModel = AiModelRegistry.discoverModels()
+          .firstWhere((m) => m.provider == 'openrouter');
+      final orSnap = ProviderSnapshot(
+        provider: 'openrouter',
+        status: DataSourceBadge.official,
+        fetchedAt: DateTime.now(),
+        officialCreditLimit: 10.0,
+        officialCreditUsed: 2.5,
+        officialCreditRemaining: 7.5,
+        limitReset: 'monthly',
+      );
+      final orState = QuotaCalculationEngine.evaluateModel(
+        model: orModel,
+        records: const [],
+        todayRecords: const [],
+        snapshot: orSnap,
+      );
+      expect(orState.primaryQuota?.source, DataSourceBadge.official);
+      expect(orState.primaryQuota?.total, 10.0);
+      expect(orState.primaryQuota?.remaining, 7.5);
+
+      final groqModel = AiModelRegistry.discoverModels()
+          .firstWhere((m) => m.modelId == 'openai/gpt-oss-120b');
+      final groqState = QuotaCalculationEngine.evaluateModel(
+        model: groqModel,
+        records: const [],
+        todayRecords: const [],
+        latestRateHeaders: const {
+          'x-ratelimit-limit-requests': '1000',
+          'x-ratelimit-remaining-requests': '940',
+        },
+      );
+      expect(groqState.primaryQuota?.source, DataSourceBadge.official);
+      expect(groqState.primaryQuota?.used, 60.0);
+      expect(groqState.primaryQuota?.remaining, 940.0);
+    });
+
+    test('QuotaCalculationEngine produces range estimates when official RPD is unavailable', () {
+      final geminiModel = AiModelRegistry.discoverModels()
+          .firstWhere((m) => m.modelId == 'gemini-2.5-flash');
+      final state = QuotaCalculationEngine.evaluateModel(
+        model: geminiModel,
+        records: const [],
+        todayRecords: const [],
+      );
+      expect(state.primaryQuota?.source, DataSourceBadge.estimated);
+      expect(state.primaryQuota?.isRangeEstimate, isTrue);
+      expect(state.primaryQuota?.totalMin, 250);
+      expect(state.primaryQuota?.totalMax, 1500);
+    });
+
+    test('AiTelemetryService deduplicates requestIds and isolates provider adapter failures', () async {
+      await AiTelemetryService.recordFromGateway(
+        requestId: 'req_unique_1',
+        featureName: 'Study Assistant (Sage)',
+        callbackRoute: 'AiGatewayClient.chat(heavy_reasoning)',
+        fallbackProvider: 'groq',
+        fallbackModel: 'openai/gpt-oss-120b',
+        promptChars: 400,
+        responseChars: 800,
+        status: 'success',
+        gatewayTelemetry: {
+          'provider': 'gemini',
+          'model': 'gemini-2.5-flash',
+          'inputTokens': 110,
+          'outputTokens': 220,
+          'totalTokens': 330,
+          'tokenSource': 'OFFICIAL',
+          'fallbackUsed': true,
+          'attemptCount': 2,
+        },
+      );
+      await AiTelemetryService.recordFromGateway(
+        requestId: 'req_unique_1',
+        featureName: 'Study Assistant (Sage)',
+        callbackRoute: 'AiGatewayClient.chat(heavy_reasoning)',
+        fallbackProvider: 'groq',
+        fallbackModel: 'openai/gpt-oss-120b',
+        promptChars: 400,
+        responseChars: 800,
+        status: 'success',
+      );
+
+      final records = await AiTelemetryService.getRecords(range: MonitorDateRange.allTime);
+      expect(records.length, 1);
+      expect(records.first.provider, 'gemini');
+      expect(records.first.modelId, 'gemini-2.5-flash');
+      expect(records.first.totalTokens, 330);
+      expect(records.first.tokenSource, DataSourceBadge.official);
+      expect(records.first.fallbackUsed, isTrue);
+
+      final snaps = ProviderQuotaAdapterRegistry.normalizeAll({
+        'fetchedAt': DateTime.now().toIso8601String(),
+        'providers': {
+          'openrouter': {'status': 'UNAVAILABLE', 'error': 'HTTP 503'},
+          'groq': {
+            'status': 'OFFICIAL',
+            'models': [
+              {'id': 'openai/gpt-oss-120b', 'contextWindow': 131072}
+            ],
+          },
+        },
+      });
+      expect(snaps['openrouter']?.status, DataSourceBadge.unavailable);
+      expect(snaps['groq']?.status, DataSourceBadge.official);
+      expect(snaps['groq']?.discoveredModelIds, contains('openai/gpt-oss-120b'));
     });
   });
 }

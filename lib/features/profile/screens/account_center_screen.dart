@@ -18,6 +18,7 @@ import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../widgets/mega_connect_sheet.dart';
+import 'ai_monitor_screen.dart';
 
 class AccountCenterScreen extends ConsumerStatefulWidget {
   const AccountCenterScreen({super.key});
@@ -648,6 +649,24 @@ class _AccountCenterScreenState extends ConsumerState<AccountCenterScreen> {
                               title: 'True Me Drive Folder',
                               subtitle: '/True Me',
                               onTap: driveConnected ? null : _connectDrive,
+                            ),
+                            Divider(height: 1, color: context.borderColor),
+                            _AccountItemRow(
+                              icon: Icons.analytics_outlined,
+                              iconBg: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                              iconColor: context.accentColor,
+                              title: 'AI Model & Quota Monitor',
+                              subtitle: 'Official quotas, token usage & cost telemetry',
+                              trailing: TrueMeTonalPill(
+                                label: 'Open',
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const AiMonitorScreen()),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              ),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const AiMonitorScreen()),
+                              ),
                             ),
                             Divider(height: 1, color: context.borderColor),
                             _AccountItemRow(

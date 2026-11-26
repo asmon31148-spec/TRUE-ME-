@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../config/env_config.dart';
 import '../services/supabase_service.dart';
 import '../utils/rate_limiter.dart';
+import 'monitor/ai_telemetry_service.dart';
 
 /// Authenticated client for the Supabase Edge Function `ai-gateway`.
 /// Keeps all private AI provider keys exclusively on the backend.
@@ -66,6 +68,41 @@ class AiGatewayClient {
     throw StateError('$msg (${status ?? e.type.name})');
   }
 
+  static String _featureFromTaskType(String taskType) {
+    switch (taskType) {
+      case 'heavy_reasoning':
+      case 'groq_heavy':
+        return 'Study Assistant (Sage)';
+      case 'realtime_chat':
+      case 'groq_speed':
+        return 'Realtime Voice & Chat';
+      case 'chat_with_notes':
+        return 'Chat with Notes';
+      case 'quiz':
+        return 'Quiz Generator';
+      case 'flashcards':
+        return 'Flashcards';
+      case 'mindmap':
+        return 'Mindmap';
+      case 'study_plan':
+        return 'Study Planner';
+      case 'embedding':
+        return 'RAG Document Ingestion';
+      case 'rerank':
+        return 'RAG Chunk Reranking';
+      case 'transcribe':
+        return 'Audio & Lecture Transcription';
+      case 'cloudflare_summarize':
+        return 'Web Article & URL Summarizer';
+      case 'openrouter_fallback':
+        return 'Document Generation Fallback';
+      case 'gemini_chat':
+        return 'Study Assistant (Sage)';
+      default:
+        return taskType;
+    }
+  }
+
   Future<String> chat({
     required String prompt,
     String? systemPrompt,
@@ -105,8 +142,33 @@ class AiGatewayClient {
       if (text.isEmpty) {
         throw StateError('AI gateway returned an empty response.');
       }
+      final telemetry = map['telemetry'] is Map
+          ? Map<String, dynamic>.from(map['telemetry'] as Map)
+          : null;
+      unawaited(AiTelemetryService.recordFromGateway(
+        requestId: rid,
+        featureName: _featureFromTaskType(taskType),
+        callbackRoute: 'AiGatewayClient.chat($taskType)',
+        fallbackProvider: preferredProvider ?? map['provider']?.toString() ?? 'groq',
+        fallbackModel: modelHint ?? map['model']?.toString() ?? 'openai/gpt-oss-120b',
+        promptChars: prompt.length + (systemPrompt?.length ?? 0),
+        responseChars: text.length,
+        status: 'success',
+        gatewayTelemetry: telemetry,
+      ));
       return text;
     } on DioException catch (e) {
+      unawaited(AiTelemetryService.recordFromGateway(
+        requestId: rid,
+        featureName: _featureFromTaskType(taskType),
+        callbackRoute: 'AiGatewayClient.chat($taskType)',
+        fallbackProvider: preferredProvider ?? 'groq',
+        fallbackModel: modelHint ?? 'openai/gpt-oss-120b',
+        promptChars: prompt.length + (systemPrompt?.length ?? 0),
+        responseChars: 0,
+        status: 'error',
+        errorDetail: e.message ?? '${e.response?.statusCode ?? e.type.name}',
+      ));
       _throwFriendlyDioError(e);
     }
   }
@@ -136,6 +198,20 @@ class AiGatewayClient {
       if (vec.length != 768) {
         throw StateError('Invalid embedding vector length (${vec.length}).');
       }
+      final telemetry = map['telemetry'] is Map
+          ? Map<String, dynamic>.from(map['telemetry'] as Map)
+          : null;
+      unawaited(AiTelemetryService.recordFromGateway(
+        requestId: rid,
+        featureName: 'RAG Document Ingestion',
+        callbackRoute: 'AiGatewayClient.embed',
+        fallbackProvider: 'gemini',
+        fallbackModel: 'gemini-embedding-001',
+        promptChars: text.length,
+        responseChars: 0,
+        status: 'success',
+        gatewayTelemetry: telemetry,
+      ));
       return vec;
     } on DioException catch (e) {
       _throwFriendlyDioError(e);
@@ -168,6 +244,22 @@ class AiGatewayClient {
       final map = Map<String, dynamic>.from(res.data as Map);
       final raw = map['documents'] as List<dynamic>? ?? const [];
       final out = raw.map((e) => e.toString()).toList();
+      final telemetry = map['telemetry'] is Map
+          ? Map<String, dynamic>.from(map['telemetry'] as Map)
+          : null;
+      if (map['provider'] == 'cohere') {
+        unawaited(AiTelemetryService.recordFromGateway(
+          requestId: rid,
+          featureName: 'RAG Chunk Reranking',
+          callbackRoute: 'AiGatewayClient.rerank',
+          fallbackProvider: 'cohere',
+          fallbackModel: 'rerank-v3.5',
+          promptChars: query.length + documents.fold<int>(0, (s, d) => s + d.length),
+          responseChars: 0,
+          status: 'success',
+          gatewayTelemetry: telemetry,
+        ));
+      }
       return out.isNotEmpty ? out : documents.take(topN).toList();
     } catch (_) {
       return documents.take(topN).toList();
@@ -200,7 +292,22 @@ class AiGatewayClient {
         },
       );
       final map = Map<String, dynamic>.from(res.data as Map);
-      return map['text']?.toString() ?? '';
+      final text = map['text']?.toString() ?? '';
+      final telemetry = map['telemetry'] is Map
+          ? Map<String, dynamic>.from(map['telemetry'] as Map)
+          : null;
+      unawaited(AiTelemetryService.recordFromGateway(
+        requestId: rid,
+        featureName: 'Audio & Lecture Transcription',
+        callbackRoute: 'AiGatewayClient.transcribe',
+        fallbackProvider: 'groq',
+        fallbackModel: 'whisper-large-v3',
+        promptChars: 0,
+        responseChars: text.length,
+        status: 'success',
+        gatewayTelemetry: telemetry,
+      ));
+      return text;
     } on DioException catch (e) {
       _throwFriendlyDioError(e);
     }

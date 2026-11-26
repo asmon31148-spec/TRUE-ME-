@@ -1,5 +1,6 @@
-// TRUE ME — Authenticated AI Gateway Edge Function (SEC-01 / AI-01 / AI-02)
-// Supports: chat (with tier & provider fallback), embed (768-dim L2), rerank, transcribe.
+// TRUE ME — Authenticated AI Gateway Edge Function (SEC-01 / AI-01 / AI-02 / AI Monitor)
+// Supports: chat (with tier & provider fallback), embed (768-dim L2), rerank, transcribe,
+// and provider_quotas (official provider usage, credits, models & rate-limit discovery).
 // Secrets live exclusively in Supabase Edge Function Secrets:
 //   GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, COHERE_API_KEY,
 //   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN
@@ -15,6 +16,20 @@ const MAX_PROMPT_CHARS = 80000;
 const MAX_RERANK_DOCS = 50;
 const MAX_AUDIO_BASE64_CHARS = 35 * 1024 * 1024; // ~25 MB binary
 
+interface ProviderCallResult {
+  text: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  tokenSource: 'OFFICIAL' | 'ESTIMATED';
+  costUsd?: number;
+  costSource?: 'OFFICIAL' | 'ESTIMATED';
+  rateLimits: Record<string, string>;
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -22,15 +37,43 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
+function extractRateLimitHeaders(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  const keys = [
+    'x-ratelimit-limit-requests',
+    'x-ratelimit-remaining-requests',
+    'x-ratelimit-reset-requests',
+    'x-ratelimit-limit-tokens',
+    'x-ratelimit-remaining-tokens',
+    'x-ratelimit-reset-tokens',
+    'x-ratelimit-limit',
+    'x-ratelimit-remaining',
+    'x-ratelimit-reset',
+    'x-trial-endpoint-call-remaining',
+  ];
+  for (const k of keys) {
+    const v = headers.get(k);
+    if (v !== null && v.trim() !== '') out[k] = v.trim();
+  }
+  return out;
+}
+
+function estimateTokens(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return Math.max(1, Math.ceil(trimmed.length / 4));
+}
+
 async function callGroqChat(params: {
   apiKey: string;
+  providerName: string;
   model: string;
   prompt: string;
   systemPrompt?: string;
   jsonMode?: boolean;
   temperature?: number;
   maxTokens?: number;
-}): Promise<string | null> {
+}): Promise<ProviderCallResult | null> {
   if (!params.apiKey) return null;
   const messages = [
     ...(params.systemPrompt ? [{ role: 'system', content: params.systemPrompt }] : []),
@@ -53,7 +96,28 @@ async function callGroqChat(params: {
   if (!resp.ok) return null;
   const data = await resp.json();
   const text = data?.choices?.[0]?.message?.content;
-  return typeof text === 'string' && text.trim() ? text : null;
+  if (typeof text !== 'string' || !text.trim()) return null;
+
+  const usage = data?.usage;
+  const hasOfficial = typeof usage?.prompt_tokens === 'number' || typeof usage?.total_tokens === 'number';
+  const inputTokens = typeof usage?.prompt_tokens === 'number'
+    ? usage.prompt_tokens
+    : estimateTokens(`${params.systemPrompt ?? ''} ${params.prompt}`);
+  const outputTokens = typeof usage?.completion_tokens === 'number'
+    ? usage.completion_tokens
+    : estimateTokens(text);
+
+  return {
+    text,
+    provider: params.providerName,
+    model: String(data?.model || params.model),
+    inputTokens,
+    outputTokens,
+    cachedTokens: 0,
+    totalTokens: typeof usage?.total_tokens === 'number' ? usage.total_tokens : inputTokens + outputTokens,
+    tokenSource: hasOfficial ? 'OFFICIAL' : 'ESTIMATED',
+    rateLimits: extractRateLimitHeaders(resp.headers),
+  };
 }
 
 async function callGeminiChat(params: {
@@ -63,7 +127,7 @@ async function callGeminiChat(params: {
   jsonMode?: boolean;
   temperature?: number;
   maxTokens?: number;
-}): Promise<string | null> {
+}): Promise<ProviderCallResult | null> {
   if (!params.apiKey) return null;
   const models = [
     'gemini-3.5-flash',
@@ -94,7 +158,28 @@ async function callGeminiChat(params: {
     if (!resp.ok) continue;
     const data = await resp.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text === 'string' && text.trim()) return text;
+    if (typeof text === 'string' && text.trim()) {
+      const meta = data?.usageMetadata;
+      const hasOfficial = typeof meta?.promptTokenCount === 'number' || typeof meta?.totalTokenCount === 'number';
+      const inputTokens = typeof meta?.promptTokenCount === 'number'
+        ? meta.promptTokenCount
+        : estimateTokens(`${params.systemPrompt ?? ''} ${params.prompt}`);
+      const outputTokens = typeof meta?.candidatesTokenCount === 'number'
+        ? meta.candidatesTokenCount
+        : estimateTokens(text);
+      const cachedTokens = typeof meta?.cachedContentTokenCount === 'number' ? meta.cachedContentTokenCount : 0;
+      return {
+        text,
+        provider: 'gemini',
+        model,
+        inputTokens,
+        outputTokens,
+        cachedTokens,
+        totalTokens: typeof meta?.totalTokenCount === 'number' ? meta.totalTokenCount : inputTokens + outputTokens,
+        tokenSource: hasOfficial ? 'OFFICIAL' : 'ESTIMATED',
+        rateLimits: extractRateLimitHeaders(resp.headers),
+      };
+    }
   }
   return null;
 }
@@ -106,8 +191,9 @@ async function callOpenRouterChat(params: {
   systemPrompt?: string;
   jsonMode?: boolean;
   maxTokens?: number;
-}): Promise<string | null> {
+}): Promise<ProviderCallResult | null> {
   if (!params.apiKey) return null;
+  const targetModel = params.model || 'nvidia/nemotron-3.5-lightning:free';
   const messages = [
     ...(params.systemPrompt ? [{ role: 'system', content: params.systemPrompt }] : []),
     { role: 'user', content: params.prompt },
@@ -121,7 +207,7 @@ async function callOpenRouterChat(params: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: params.model || 'nvidia/nemotron-3.5-lightning:free',
+      model: targetModel,
       messages,
       ...(params.maxTokens ? { max_tokens: params.maxTokens } : {}),
       ...(params.jsonMode ? { response_format: { type: 'json_object' } } : {}),
@@ -130,7 +216,30 @@ async function callOpenRouterChat(params: {
   if (!resp.ok) return null;
   const data = await resp.json();
   const text = data?.choices?.[0]?.message?.content;
-  return typeof text === 'string' && text.trim() ? text : null;
+  if (typeof text !== 'string' || !text.trim()) return null;
+
+  const usage = data?.usage;
+  const hasOfficial = typeof usage?.prompt_tokens === 'number' || typeof usage?.total_tokens === 'number';
+  const inputTokens = typeof usage?.prompt_tokens === 'number'
+    ? usage.prompt_tokens
+    : estimateTokens(`${params.systemPrompt ?? ''} ${params.prompt}`);
+  const outputTokens = typeof usage?.completion_tokens === 'number'
+    ? usage.completion_tokens
+    : estimateTokens(text);
+
+  return {
+    text,
+    provider: 'openrouter',
+    model: String(data?.model || targetModel),
+    inputTokens,
+    outputTokens,
+    cachedTokens: 0,
+    totalTokens: typeof usage?.total_tokens === 'number' ? usage.total_tokens : inputTokens + outputTokens,
+    tokenSource: hasOfficial ? 'OFFICIAL' : 'ESTIMATED',
+    costUsd: typeof usage?.cost === 'number' ? usage.cost : undefined,
+    costSource: typeof usage?.cost === 'number' ? 'OFFICIAL' : undefined,
+    rateLimits: extractRateLimitHeaders(resp.headers),
+  };
 }
 
 async function callCohereChat(params: {
@@ -139,8 +248,9 @@ async function callCohereChat(params: {
   prompt: string;
   systemPrompt?: string;
   temperature?: number;
-}): Promise<string | null> {
+}): Promise<ProviderCallResult | null> {
   if (!params.apiKey) return null;
+  const targetModel = params.model || 'command-r-plus-08-2024';
   const messages = [
     ...(params.systemPrompt ? [{ role: 'system', content: params.systemPrompt }] : []),
     { role: 'user', content: params.prompt },
@@ -152,7 +262,7 @@ async function callCohereChat(params: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: params.model || 'command-r-plus-08-2024',
+      model: targetModel,
       messages,
       temperature: params.temperature ?? 0.3,
     }),
@@ -160,7 +270,28 @@ async function callCohereChat(params: {
   if (!resp.ok) return null;
   const data = await resp.json();
   const text = data?.message?.content?.[0]?.text;
-  return typeof text === 'string' && text.trim() ? text : null;
+  if (typeof text !== 'string' || !text.trim()) return null;
+
+  const tokens = data?.usage?.tokens ?? data?.meta?.tokens ?? data?.meta?.billed_units;
+  const hasOfficial = typeof tokens?.input_tokens === 'number' || typeof tokens?.output_tokens === 'number';
+  const inputTokens = typeof tokens?.input_tokens === 'number'
+    ? tokens.input_tokens
+    : estimateTokens(`${params.systemPrompt ?? ''} ${params.prompt}`);
+  const outputTokens = typeof tokens?.output_tokens === 'number'
+    ? tokens.output_tokens
+    : estimateTokens(text);
+
+  return {
+    text,
+    provider: 'cohere',
+    model: targetModel,
+    inputTokens,
+    outputTokens,
+    cachedTokens: 0,
+    totalTokens: inputTokens + outputTokens,
+    tokenSource: hasOfficial ? 'OFFICIAL' : 'ESTIMATED',
+    rateLimits: extractRateLimitHeaders(resp.headers),
+  };
 }
 
 async function callCloudflareSummarize(params: {
@@ -168,7 +299,7 @@ async function callCloudflareSummarize(params: {
   apiToken: string;
   text: string;
   maxTokens?: number;
-}): Promise<string | null> {
+}): Promise<ProviderCallResult | null> {
   if (!params.accountId || !params.apiToken) return null;
   const resp = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${params.accountId}/ai/run/@cf/meta/llama-3-8b-instruct`,
@@ -197,7 +328,173 @@ async function callCloudflareSummarize(params: {
   if (!resp.ok) return null;
   const data = await resp.json();
   const out = data?.result?.response;
-  return typeof out === 'string' && out.trim() ? out : null;
+  if (typeof out !== 'string' || !out.trim()) return null;
+
+  const inputTokens = estimateTokens(params.text);
+  const outputTokens = estimateTokens(out);
+  return {
+    text: out,
+    provider: 'cloudflare',
+    model: '@cf/meta/llama-3-8b-instruct',
+    inputTokens,
+    outputTokens,
+    cachedTokens: 0,
+    totalTokens: inputTokens + outputTokens,
+    tokenSource: 'ESTIMATED',
+    rateLimits: extractRateLimitHeaders(resp.headers),
+  };
+}
+
+async function fetchOfficialProviderQuotas(secrets: {
+  geminiKey: string;
+  groqKey: string;
+  openRouterKey: string;
+  cohereKey: string;
+  cfAccountId: string;
+  cfApiToken: string;
+}) {
+  const fetchedAt = new Date().toISOString();
+
+  const [openRouterRes, groqRes, geminiRes, cohereRes, cfRes] = await Promise.allSettled([
+    // 1. OpenRouter Official Key & Credits API
+    (async () => {
+      if (!secrets.openRouterKey) {
+        return { provider: 'openrouter', status: 'UNAVAILABLE', error: 'OPENROUTER_API_KEY not configured' };
+      }
+      const keyResp = await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { Authorization: `Bearer ${secrets.openRouterKey}` },
+      });
+      if (!keyResp.ok) {
+        return { provider: 'openrouter', status: 'UNAVAILABLE', error: `HTTP ${keyResp.status}` };
+      }
+      const keyJson = await keyResp.json();
+      const d = keyJson?.data ?? {};
+      return {
+        provider: 'openrouter',
+        status: 'OFFICIAL',
+        limit: d.limit ?? null,
+        limitRemaining: d.limit_remaining ?? null,
+        limitReset: d.limit_reset ?? null,
+        usageTotal: d.usage ?? null,
+        usageDaily: d.usage_daily ?? null,
+        usageWeekly: d.usage_weekly ?? null,
+        usageMonthly: d.usage_monthly ?? null,
+        isFreeTier: d.is_free_tier ?? null,
+        rateLimit: d.rate_limit ?? null,
+      };
+    })(),
+
+    // 2. Groq Official Models Discovery
+    (async () => {
+      if (!secrets.groqKey) {
+        return { provider: 'groq', status: 'UNAVAILABLE', error: 'GROQ_API_KEY not configured' };
+      }
+      const resp = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${secrets.groqKey}` },
+      });
+      if (!resp.ok) {
+        return { provider: 'groq', status: 'UNAVAILABLE', error: `HTTP ${resp.status}` };
+      }
+      const json = await resp.json();
+      const models = Array.isArray(json?.data)
+        ? json.data.map((m: Record<string, unknown>) => ({
+            id: String(m.id ?? ''),
+            active: m.active !== false,
+            contextWindow: m.context_window ?? null,
+          }))
+        : [];
+      return {
+        provider: 'groq',
+        status: 'OFFICIAL',
+        models,
+        rateLimits: extractRateLimitHeaders(resp.headers),
+        note: 'Groq exposes model inventory via /models and live RPM/TPM remaining via chat response headers.',
+      };
+    })(),
+
+    // 3. Google Gemini Official Models Discovery
+    (async () => {
+      if (!secrets.geminiKey) {
+        return { provider: 'gemini', status: 'UNAVAILABLE', error: 'GEMINI_API_KEY not configured' };
+      }
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${secrets.geminiKey}`
+      );
+      if (!resp.ok) {
+        return { provider: 'gemini', status: 'UNAVAILABLE', error: `HTTP ${resp.status}` };
+      }
+      const json = await resp.json();
+      const models = Array.isArray(json?.models)
+        ? json.models.map((m: Record<string, unknown>) => ({
+            id: String(m.name ?? '').replace(/^models\//, ''),
+            displayName: String(m.displayName ?? ''),
+            inputTokenLimit: m.inputTokenLimit ?? null,
+            outputTokenLimit: m.outputTokenLimit ?? null,
+          }))
+        : [];
+      return {
+        provider: 'gemini',
+        status: 'OFFICIAL',
+        models,
+        note: 'Google AI Studio API keys expose model limits & per-call usageMetadata; account RPD balance is not exposed by Google REST API.',
+      };
+    })(),
+
+    // 4. Cohere Official Models Discovery
+    (async () => {
+      if (!secrets.cohereKey) {
+        return { provider: 'cohere', status: 'UNAVAILABLE', error: 'COHERE_API_KEY not configured' };
+      }
+      const resp = await fetch('https://api.cohere.com/v1/models', {
+        headers: { Authorization: `Bearer ${secrets.cohereKey}` },
+      });
+      if (!resp.ok) {
+        return { provider: 'cohere', status: 'UNAVAILABLE', error: `HTTP ${resp.status}` };
+      }
+      const json = await resp.json();
+      const models = Array.isArray(json?.models)
+        ? json.models.map((m: Record<string, unknown>) => ({
+            id: String(m.name ?? ''),
+            contextLength: m.context_length ?? null,
+          }))
+        : [];
+      return {
+        provider: 'cohere',
+        status: 'OFFICIAL',
+        models,
+        rateLimits: extractRateLimitHeaders(resp.headers),
+      };
+    })(),
+
+    // 5. Cloudflare Workers AI Status
+    (async () => {
+      if (!secrets.cfAccountId || !secrets.cfApiToken) {
+        return { provider: 'cloudflare', status: 'UNAVAILABLE', error: 'Cloudflare credentials not configured' };
+      }
+      return {
+        provider: 'cloudflare',
+        status: 'OFFICIAL',
+        models: [{ id: '@cf/meta/llama-3-8b-instruct', active: true }],
+        dailyNeuronsLimit: 10000,
+      };
+    })(),
+  ]);
+
+  const unwrap = (r: PromiseSettledResult<Record<string, unknown>>, name: string) =>
+    r.status === 'fulfilled'
+      ? r.value
+      : { provider: name, status: 'UNAVAILABLE', error: String(r.reason ?? 'Fetch failed') };
+
+  return {
+    fetchedAt,
+    providers: {
+      openrouter: unwrap(openRouterRes, 'openrouter'),
+      groq: unwrap(groqRes, 'groq'),
+      gemini: unwrap(geminiRes, 'gemini'),
+      cohere: unwrap(cohereRes, 'cohere'),
+      cloudflare: unwrap(cfRes, 'cloudflare'),
+    },
+  };
 }
 
 Deno.serve(async (req) => {
@@ -227,6 +524,27 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action || 'chat');
+
+    const groqKey = Deno.env.get('GROQ_API_KEY') ?? '';
+    const geminiKey = Deno.env.get('GEMINI_API_KEY') ?? '';
+    const openRouterKey = Deno.env.get('OPENROUTER_API_KEY') ?? '';
+    const cohereKey = Deno.env.get('COHERE_API_KEY') ?? '';
+    const cfAccountId = Deno.env.get('CLOUDFLARE_ACCOUNT_ID') ?? '';
+    const cfApiToken = Deno.env.get('CLOUDFLARE_API_TOKEN') ?? '';
+
+    // Official Provider Quota & Model Discovery endpoint (does not consume user AI quota)
+    if (action === 'provider_quotas') {
+      const snapshot = await fetchOfficialProviderQuotas({
+        geminiKey,
+        groqKey,
+        openRouterKey,
+        cohereKey,
+        cfAccountId,
+        cfApiToken,
+      });
+      return jsonResponse(snapshot);
+    }
+
     const requestId = String(body.requestId || crypto.randomUUID());
     const taskType = String(body.taskType || action);
 
@@ -252,14 +570,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const groqKey = Deno.env.get('GROQ_API_KEY') ?? '';
-    const geminiKey = Deno.env.get('GEMINI_API_KEY') ?? '';
-    const openRouterKey = Deno.env.get('OPENROUTER_API_KEY') ?? '';
-    const cohereKey = Deno.env.get('COHERE_API_KEY') ?? '';
-    const cfAccountId = Deno.env.get('CLOUDFLARE_ACCOUNT_ID') ?? '';
-    const cfApiToken = Deno.env.get('CLOUDFLARE_API_TOKEN') ?? '';
-
     if (action === 'embed') {
+      const started = Date.now();
       const text = String(body.text || '').trim();
       if (!text || text.length > MAX_PROMPT_CHARS) {
         return jsonResponse({ error: 'Invalid embedding input' }, 400);
@@ -289,10 +601,30 @@ Deno.serve(async (req) => {
       }
       const norm = Math.sqrt(sliced.reduce((sum, v) => sum + v * v, 0));
       const embedding = norm > 0 ? sliced.map((v) => v / norm) : sliced;
-      return jsonResponse({ embedding, dimensions: 768, requestId, quota: quotaCheck });
+      const inTok = estimateTokens(text);
+      return jsonResponse({
+        embedding,
+        dimensions: 768,
+        requestId,
+        quota: quotaCheck,
+        telemetry: {
+          provider: 'gemini',
+          model: 'gemini-embedding-001',
+          inputTokens: inTok,
+          outputTokens: 0,
+          cachedTokens: 0,
+          totalTokens: inTok,
+          tokenSource: 'ESTIMATED',
+          latencyMs: Date.now() - started,
+          fallbackUsed: false,
+          attemptCount: 1,
+          rateLimits: extractRateLimitHeaders(resp.headers),
+        },
+      });
     }
 
     if (action === 'rerank') {
+      const started = Date.now();
       const query = String(body.query || '').trim();
       const documents: string[] = Array.isArray(body.documents)
         ? body.documents.slice(0, MAX_RERANK_DOCS).map((d: unknown) => String(d))
@@ -325,7 +657,29 @@ Deno.serve(async (req) => {
               .map((r: { index: number }) => documents[r.index])
               .filter((d: string | undefined) => typeof d === 'string');
             if (reranked.length > 0) {
-              return jsonResponse({ documents: reranked, provider: 'cohere', requestId, quota: quotaCheck });
+              const billed = data?.meta?.billed_units;
+              const inTok = typeof billed?.search_units === 'number'
+                ? billed.search_units * 100
+                : estimateTokens(`${query} ${documents.join(' ')}`);
+              return jsonResponse({
+                documents: reranked,
+                provider: 'cohere',
+                requestId,
+                quota: quotaCheck,
+                telemetry: {
+                  provider: 'cohere',
+                  model: 'rerank-v3.5',
+                  inputTokens: inTok,
+                  outputTokens: 0,
+                  cachedTokens: 0,
+                  totalTokens: inTok,
+                  tokenSource: billed ? 'OFFICIAL' : 'ESTIMATED',
+                  latencyMs: Date.now() - started,
+                  fallbackUsed: false,
+                  attemptCount: 1,
+                  rateLimits: extractRateLimitHeaders(resp.headers),
+                },
+              });
             }
           }
         } catch {
@@ -336,6 +690,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'transcribe') {
+      const started = Date.now();
       const audioBase64 = String(body.audioBase64 || '');
       const filename = String(body.filename || 'audio.m4a').replace(/[^a-zA-Z0-9._-]/g, '_');
       if (!audioBase64 || audioBase64.length > MAX_AUDIO_BASE64_CHARS) {
@@ -360,10 +715,31 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'Audio transcription failed' }, 502);
       }
       const data = await resp.json();
-      return jsonResponse({ text: String(data?.text || ''), provider: 'groq_whisper', requestId, quota: quotaCheck });
+      const text = String(data?.text || '');
+      const outTok = estimateTokens(text);
+      return jsonResponse({
+        text,
+        provider: 'groq_whisper',
+        requestId,
+        quota: quotaCheck,
+        telemetry: {
+          provider: 'groq',
+          model: 'whisper-large-v3',
+          inputTokens: 0,
+          outputTokens: outTok,
+          cachedTokens: 0,
+          totalTokens: outTok,
+          tokenSource: 'ESTIMATED',
+          latencyMs: Date.now() - started,
+          fallbackUsed: false,
+          attemptCount: 1,
+          rateLimits: extractRateLimitHeaders(resp.headers),
+        },
+      });
     }
 
     // Default action: 'chat'
+    const started = Date.now();
     const prompt = String(body.prompt || '');
     const systemPrompt = body.systemPrompt ? String(body.systemPrompt) : undefined;
     const jsonMode = Boolean(body.jsonMode);
@@ -377,11 +753,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Prompt must be between 1 and 80000 characters' }, 400);
     }
 
-    let text: string | null = null;
-    let usedProvider = '';
+    let result: ProviderCallResult | null = null;
+    let attemptCount = 0;
 
-    // Build ordered fallback chain preserving existing routing behavior
-    const attempts: Array<{ name: string; run: () => Promise<string | null> }> = [];
+    const attempts: Array<{ name: string; run: () => Promise<ProviderCallResult | null> }> = [];
 
     if (preferredProvider === 'cloudflare') {
       attempts.push({
@@ -409,11 +784,11 @@ Deno.serve(async (req) => {
       attempts.push(
         {
           name: 'groq_speed',
-          run: () => callGroqChat({ apiKey: groqKey, model: 'openai/gpt-oss-20b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-20b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
           name: 'groq_speed_fallback',
-          run: () => callGroqChat({ apiKey: groqKey, model: 'llama-3.1-8b-instant', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.1-8b-instant', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
           name: 'openrouter',
@@ -432,11 +807,11 @@ Deno.serve(async (req) => {
       attempts.push(
         {
           name: 'groq_heavy',
-          run: () => callGroqChat({ apiKey: groqKey, model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
           name: 'groq_heavy_fallback',
-          run: () => callGroqChat({ apiKey: groqKey, model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
           name: 'gemini',
@@ -456,11 +831,11 @@ Deno.serve(async (req) => {
     }
 
     for (const attempt of attempts) {
+      attemptCount++;
       try {
         const res = await attempt.run();
         if (res) {
-          text = res;
-          usedProvider = attempt.name;
+          result = res;
           break;
         }
       } catch {
@@ -468,11 +843,32 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!text) {
+    if (!result) {
       return jsonResponse({ error: 'All AI providers are currently unavailable.' }, 502);
     }
 
-    return jsonResponse({ text, provider: usedProvider, requestId, quota: quotaCheck });
+    return jsonResponse({
+      text: result.text,
+      provider: result.provider,
+      model: result.model,
+      requestId,
+      quota: quotaCheck,
+      telemetry: {
+        provider: result.provider,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        cachedTokens: result.cachedTokens,
+        totalTokens: result.totalTokens,
+        tokenSource: result.tokenSource,
+        costUsd: result.costUsd,
+        costSource: result.costSource,
+        rateLimits: result.rateLimits,
+        latencyMs: Date.now() - started,
+        fallbackUsed: attemptCount > 1,
+        attemptCount,
+      },
+    });
   } catch {
     return jsonResponse({ error: 'AI gateway request failed' }, 500);
   }
