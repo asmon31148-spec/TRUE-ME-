@@ -164,7 +164,10 @@ class DocumentParserService {
             .map((m) => _unescapeXml(m.group(1) ?? ''))
             .join('')
             .trim();
-        if (text.isNotEmpty) paragraphs.add(text);
+        if (text.isNotEmpty &&
+            !RegExp(r'^✦.*SLIDE\s+\d+/\d+.*✦$').hasMatch(text)) {
+          paragraphs.add(text);
+        }
       }
 
       final title = paragraphs.isNotEmpty ? paragraphs.first : 'Slide ${i + 1}';
