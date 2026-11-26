@@ -6,7 +6,6 @@ import '../../../app/theme/typography.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -116,14 +115,32 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         opacity: _logoFade.value,
                         child: Transform.scale(
                           scale: _logoScale.value,
-                          child: SizedBox(
-                            width: 176,
-                            height: 176,
-                            child: CustomPaint(
-                              painter: TrueMeOrbPainter(
-                                breath: breath,
-                                isDark: isDark,
-                                showCenterStar: true,
+                          child: Container(
+                            width: 152,
+                            height: 152,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(36),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(
+                                    alpha: isDark ? 0.28 : (0.16 + breath * 0.12),
+                                  ),
+                                  blurRadius: 28 + breath * 10,
+                                  offset: const Offset(0, 12),
+                                ),
+                              ],
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.14)
+                                    : Colors.white.withValues(alpha: 0.9),
+                                width: 2.5,
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(34),
+                              child: Image.asset(
+                                'assets/icons/app_icon.png',
+                                fit: BoxFit.cover,
                               ),
                             ),
                           ),
