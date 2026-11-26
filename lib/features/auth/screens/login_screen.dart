@@ -165,24 +165,24 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
+  Future<void> _handleOAuthSignIn(OAuthProvider provider, String label) async {
     setState(() {
       _isLoading = true;
       _errorText = null;
     });
     try {
-      final launched = await SupabaseService.instance.signInWithGoogleOAuth();
+      final launched = await SupabaseService.instance.signInWithOAuthProvider(provider);
       if (!launched && mounted) {
         setState(() {
           _isLoading = false;
-          _errorText = 'Could not open Google Sign-In. Please try again.';
+          _errorText = 'Could not open $label Sign-In. Please try again.';
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorText = 'Google Sign-In failed: $e';
+          _errorText = '$label Sign-In failed: $e';
         });
       }
     }
@@ -367,7 +367,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 AppSecondaryButton(
                   label: 'Continue with Google',
                   icon: const Icon(Icons.g_mobiledata_rounded, size: 22),
-                  onPressed: _isLoading ? null : _handleGoogleSignIn,
+                  onPressed: _isLoading
+                      ? null
+                      : () => _handleOAuthSignIn(OAuthProvider.google, 'Google'),
+                ),
+                const SizedBox(height: 10),
+                AppSecondaryButton(
+                  label: 'Continue with Facebook',
+                  icon: const Icon(Icons.facebook_rounded, size: 20),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _handleOAuthSignIn(OAuthProvider.facebook, 'Facebook'),
                 ),
                 const SizedBox(height: 14),
                 Center(
