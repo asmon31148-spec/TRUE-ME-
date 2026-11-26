@@ -165,7 +165,7 @@ class DocumentParserService {
             .join('')
             .trim();
         if (text.isNotEmpty &&
-            !RegExp(r'^[✦⚡].*SLIDE\s+\d+/\d+').hasMatch(text)) {
+            !RegExp(r'^(?:[✦⚡].*)?SLIDE\s+\d+/\d+.*$').hasMatch(text)) {
           paragraphs.add(text);
         }
       }

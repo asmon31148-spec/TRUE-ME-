@@ -111,8 +111,6 @@ class PdfExporter {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: pageMargin,
         pageTheme: pw.PageTheme(
           pageFormat: PdfPageFormat.a4,
           margin: pageMargin,
