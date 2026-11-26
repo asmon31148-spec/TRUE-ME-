@@ -103,10 +103,13 @@ class DocumentGenerationService {
         if (id.isNotEmpty) return id;
       }
     }
+    final resolvedTitle = (subject != null && subject.trim().isNotEmpty)
+        ? subject.trim()
+        : 'General Study';
     final created = await OfflineCacheService.createNotebook(
-      title: (subject != null && subject.trim().isNotEmpty) ? subject.trim() : 'General Study',
-      icon: '📚',
-      colorHex: '#4F46E5',
+      title: resolvedTitle,
+      subject: resolvedTitle,
+      colorValue: 0xFF4F46E5,
     );
     return created['id'].toString();
   }
