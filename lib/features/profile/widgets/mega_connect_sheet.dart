@@ -24,7 +24,7 @@ class MegaConnectSheet extends StatefulWidget {
   State<MegaConnectSheet> createState() => _MegaConnectSheetState();
 }
 
-class _MegaConnectSheetState extends State<MegaConnectSheet> {
+class _MegaConnectSheetState extends State<MegaConnectSheet> with WidgetsBindingObserver {
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _passCtrl = TextEditingController();
   late final TextEditingController _bridgeCtrl;
@@ -33,12 +33,15 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
   bool _obscurePassword = true;
   bool _showBridgeConfig = false;
   bool _isCreateTab = false;
+  bool _launchedSignup = false;
+  String? _infoBanner;
   String? _errorText;
   MegaStorageStats? _stats;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final savedEmail = OfflineCacheService.getUserEmail().trim();
     if (savedEmail.isNotEmpty && savedEmail.contains('@')) {
       _emailCtrl.text = savedEmail;
@@ -47,6 +50,18 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
     _showBridgeConfig = !MegaVaultService.instance.hasBridgeConfigured;
     if (MegaVaultService.instance.isSignedIn) {
       _loadStats();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _launchedSignup && mounted) {
+      setState(() {
+        _launchedSignup = false;
+        _isCreateTab = false;
+        _errorText = null;
+        _infoBanner = 'Returned from MEGA! Enter your new MEGA password below to connect & sync.';
+      });
     }
   }
 
@@ -59,6 +74,7 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _bridgeCtrl.dispose();
@@ -66,6 +82,7 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
   }
 
   Future<void> _openMegaRegister() async {
+    _launchedSignup = true;
     final uri = Uri.parse('https://mega.nz/register');
     try {
       final launched = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
@@ -467,6 +484,23 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
                                     ),
                                   ],
                                 ),
+                                if (_infoBanner != null) ...[
+                                  const SizedBox(height: 6),
+                                  TrueMeCard(
+                                    borderRadius: 14,
+                                    padding: const EdgeInsets.all(12),
+                                    color: isDark ? AppColors.darkAccentWash : AppColors.milkyLavender,
+                                    showShadow: false,
+                                    child: Text(
+                                      _infoBanner!,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 if (_errorText != null) ...[
                                   const SizedBox(height: 6),
                                   TrueMeCard(

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/env_config.dart';
 import 'offline_cache_service.dart';
+import 'supabase_service.dart';
 
 class MegaFileEntry {
   final String id;
@@ -92,13 +93,29 @@ class MegaVaultService {
     );
   }
 
-  /// Loads cached JWT from encrypted device keystore on app startup.
+  /// Loads cached JWT from encrypted device keystore (or Supabase user metadata after reinstall).
   Future<bool> restoreSession() async {
     try {
       _cachedToken = await _secure.read(key: _tokenKey);
       if (_cachedToken != null && _cachedToken!.isNotEmpty && hasBridgeConfigured) {
         await OfflineCacheService.saveMegaStatus(true, email: OfflineCacheService.getMegaEmail());
         return true;
+      }
+
+      // Reinstall / new-device recovery from authenticated user's Supabase metadata
+      final cloud = SupabaseService.instance.getMegaVaultSession();
+      if (cloud != null && hasBridgeConfigured) {
+        final token = cloud['token'] ?? '';
+        final email = cloud['email'] ?? '';
+        if (token.isNotEmpty) {
+          _cachedToken = token;
+          await _secure.write(key: _tokenKey, value: token);
+          await OfflineCacheService.saveMegaStatus(
+            true,
+            email: email.isNotEmpty ? email : null,
+          );
+          return true;
+        }
       }
     } catch (_) {}
     return false;
@@ -174,6 +191,10 @@ class MegaVaultService {
         usedBytes: used,
         totalBytes: total,
       );
+      await SupabaseService.instance.saveMegaVaultSession(
+        token: token,
+        email: email.trim(),
+      );
       return true;
     } catch (e) {
       lastError = _humanizeError(e);
@@ -181,13 +202,14 @@ class MegaVaultService {
     }
   }
 
-  /// Disconnects MEGA Vault and wipes encrypted session token from device.
+  /// Disconnects MEGA Vault and wipes encrypted session token from device & cloud profile.
   Future<void> disconnect() async {
     _cachedToken = null;
     lastError = null;
     try {
       await _secure.delete(key: _tokenKey);
     } catch (_) {}
+    await SupabaseService.instance.clearMegaVaultSession();
     await OfflineCacheService.saveMegaStatus(false);
   }
 

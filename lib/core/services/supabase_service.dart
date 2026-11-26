@@ -79,6 +79,51 @@ class SupabaseService {
     } catch (_) {}
   }
 
+  /// Persists encrypted MEGA Vault session token in the user's Supabase metadata
+  /// so reinstalling the app restores MEGA automatically without re-entering credentials.
+  Future<void> saveMegaVaultSession({
+    required String token,
+    required String email,
+  }) async {
+    final client = _clientOrNull;
+    if (client == null || client.auth.currentUser == null) return;
+    try {
+      await client.auth.updateUser(
+        UserAttributes(
+          data: {
+            'mega_vault_token': token,
+            'mega_vault_email': email,
+          },
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// Reads persisted MEGA Vault session from Supabase user metadata (for reinstall recovery).
+  Map<String, String>? getMegaVaultSession() {
+    final meta = _clientOrNull?.auth.currentUser?.userMetadata;
+    if (meta == null) return null;
+    final token = meta['mega_vault_token']?.toString() ?? '';
+    final email = meta['mega_vault_email']?.toString() ?? '';
+    if (token.isEmpty) return null;
+    return {'token': token, 'email': email};
+  }
+
+  Future<void> clearMegaVaultSession() async {
+    final client = _clientOrNull;
+    if (client == null || client.auth.currentUser == null) return;
+    try {
+      await client.auth.updateUser(
+        UserAttributes(
+          data: {
+            'mega_vault_token': null,
+            'mega_vault_email': null,
+          },
+        ),
+      );
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
   // USER PROFILES
   // ---------------------------------------------------------------------------
