@@ -54,6 +54,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
 
   // PPTX state
   List<ParsedPptxSlide> _pptxSlides = [];
+  double _pptxAspectRatio = 16 / 9;
   int _currentSlideIdx = 0;
   final PageController _slidePageCtrl = PageController();
 
@@ -137,6 +138,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
         if (mounted) setState(() => _isLoading = false);
       } else if (fmt == ParsedDocFormat.pptx) {
         _pptxSlides = DocumentParserService.parsePptx(bytes);
+        _pptxAspectRatio = DocumentParserService.parsePptxAspectRatio(bytes);
         if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
@@ -442,7 +444,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Center(
                     child: AspectRatio(
-                      aspectRatio: 4 / 3,
+                      aspectRatio: _pptxAspectRatio,
                       child: _buildSlideCard(slides[idx]),
                     ),
                   ),

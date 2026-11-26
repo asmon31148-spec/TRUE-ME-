@@ -59,35 +59,57 @@ class SyllabusService {
   }
 
   static Future<void> saveArtifact({
+    String? documentId,
     required String notebookId,
     required String artifactType,
     required String title,
     String? nodeId,
     String? topicLabel,
     String? depthLevel,
+    String? styleId,
+    String? styleVersion,
     String? filePath,
+    int? fileSize,
+    int? pageCount,
+    int? slideCount,
+    String generationState = 'ready',
     String? vaultId,
     String? sourceChatId,
+    List<String>? sourceRefs,
     Map<String, dynamic>? contentJson,
   }) async {
     try {
       final existing = getArtifacts(notebookId);
+      final id = documentId ?? 'art_${DateTime.now().millisecondsSinceEpoch}';
       final entry = {
-        'id': 'art_${DateTime.now().millisecondsSinceEpoch}',
+        'id': id,
+        'documentId': id,
         'notebookId': notebookId,
         'nodeId': nodeId,
         'artifactType': artifactType,
         'title': title,
         'topicLabel': topicLabel ?? title,
         'depthLevel': depthLevel ?? 'standard',
+        if (styleId != null) 'styleId': styleId,
+        if (styleVersion != null) 'styleVersion': styleVersion,
         if (filePath != null) 'filePath': filePath,
+        if (fileSize != null) 'fileSize': fileSize,
+        if (pageCount != null) 'pageCount': pageCount,
+        if (slideCount != null) 'slideCount': slideCount,
+        'generationState': generationState,
         if (vaultId != null) 'vaultId': vaultId,
         if (sourceChatId != null) 'sourceChatId': sourceChatId,
+        if (sourceRefs != null && sourceRefs.isNotEmpty) 'sourceRefs': sourceRefs,
         if (contentJson != null) 'contentJson': contentJson,
         'archived': false,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
       };
-      existing.insert(0, entry);
+      final idx = existing.indexWhere((a) => a['id'] == id || a['documentId'] == id);
+      if (idx >= 0) {
+        existing[idx] = entry;
+      } else {
+        existing.insert(0, entry);
+      }
       if (existing.length > 150) existing.removeRange(150, existing.length);
       await _notebooksBox.put('$_artifactBoxPrefix$notebookId', existing);
     } catch (_) {}

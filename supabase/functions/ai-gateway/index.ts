@@ -149,7 +149,7 @@ async function callGeminiChat(params: {
           contents: [{ role: 'user', parts: [{ text: params.prompt }] }],
           generationConfig: {
             temperature: params.temperature ?? (params.systemPrompt ? 0.3 : 0.4),
-            maxOutputTokens: params.maxTokens ?? (params.jsonMode ? 2048 : 4096),
+            maxOutputTokens: params.maxTokens ?? 8192,
             ...(params.jsonMode ? { responseMimeType: 'application/json' } : {}),
           },
         }),

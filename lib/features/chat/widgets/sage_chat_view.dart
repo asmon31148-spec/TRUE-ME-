@@ -12,6 +12,7 @@ import '../../../shared/widgets/ai_thinking_indicator.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../../export/screens/document_viewer_screen.dart';
+import '../../export/widgets/style_picker_sheet.dart';
 import '../providers/chat_provider.dart';
 import 'formatted_message_body.dart';
 
@@ -114,6 +115,29 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
       case SageActionType.exportPdf:
       case SageActionType.exportDocx:
       case SageActionType.exportPptx:
+        if (action.needsStylePicker && action.filePath == null) {
+          final format = action.type == SageActionType.exportPdf
+              ? 'pdf'
+              : (action.type == SageActionType.exportDocx ? 'docx' : 'pptx');
+          final picked = await StylePickerSheet.show(context, format: format);
+          if (picked == null || !mounted) return;
+          final generated = await ref.read(chatProvider(_scopeKey).notifier).generateDocumentWithStyle(
+                format: format,
+                styleId: picked.id,
+                topic: action.topic,
+                subject: action.pendingSubject ?? (widget.subject ?? 'Study'),
+                notebookId: action.pendingNotebookId ?? widget.notebookId,
+                sourceContext: action.pendingSourceContext,
+              );
+          if (generated != null && mounted) {
+            await DocumentViewerScreen.open(
+              context,
+              filePath: generated.filePath,
+              title: generated.title,
+            );
+          }
+          break;
+        }
         if (action.filePath != null && File(action.filePath!).existsSync()) {
           if (mounted) {
             await DocumentViewerScreen.open(

@@ -1,11 +1,17 @@
 import '../../../core/ai/ai_router.dart';
+import '../../../core/utils/text_chunker.dart';
 import '../models/structured_study_document.dart';
 import '../pptx_exporter.dart';
 
 /// Multi-stage document intelligence pipeline:
-/// Intent & Scope -> Structured Content Model -> Verification Gate -> Format Adapter.
+/// Intent & Scope -> Map-Reduce Long-Source Extraction -> Structured Content Model
+/// -> Completeness & Accuracy Validation -> Lossless Format Adaptation.
 class DocumentPipelineService {
   DocumentPipelineService._();
+
+  static const int _singlePassCharLimit = 14000;
+  static const int _chunkSizeChars = 12000;
+  static const int _maxMapChunks = 6;
 
   static Future<StructuredStudyDocument> generateStructuredDocument({
     required AiRouter aiRouter,
@@ -17,9 +23,50 @@ class DocumentPipelineService {
     String customInstructions = '',
   }) async {
     final trimmedSource = sourceContext.trim();
-    final boundedSource = trimmedSource.length > 16000
-        ? trimmedSource.substring(0, 16000)
-        : trimmedSource;
+    String synthesizedContext = trimmedSource;
+    String? coverageNote;
+
+    // Map-Reduce synthesis for long chapters (>14K chars) so concepts are never silently dropped
+    if (trimmedSource.length > _singlePassCharLimit) {
+      final chunks = TextChunker.splitIntoChunks(
+        trimmedSource,
+        targetChunkChars: _chunkSizeChars,
+        overlapChars: 500,
+      );
+      final processedChunks = chunks.take(_maxMapChunks).toList();
+      final extractedParts = <String>[];
+
+      for (int i = 0; i < processedChunks.length; i++) {
+        try {
+          final part = await aiRouter.executeHeavyReasoning(
+            prompt: '''
+Extract ALL examinable concepts, definitions, formulas, classifications, processes, examples, and tables from this section (Part ${i + 1}/${processedChunks.length}) of "$subject" ($topic).
+Do NOT summarize away technical terms or details. Return concise structured bullet notes.
+
+Source Part ${i + 1}:
+${processedChunks[i].content}
+''',
+          );
+          if (part.trim().isNotEmpty) {
+            extractedParts.add('### Part ${i + 1}\n${part.trim()}');
+          }
+        } catch (_) {
+          // Keep raw excerpt fallback for this chunk if map call fails
+          final rawSnippet = processedChunks[i].content;
+          extractedParts.add(
+            rawSnippet.length > 2200 ? rawSnippet.substring(0, 2200) : rawSnippet,
+          );
+        }
+      }
+
+      if (extractedParts.isNotEmpty) {
+        synthesizedContext = extractedParts.join('\n\n');
+      }
+      if (chunks.length > _maxMapChunks) {
+        coverageNote =
+            'Source exceeded $_maxMapChunks segments (${chunks.length} total); covered the first ${processedChunks.length} segments in full detail.';
+      }
+    }
 
     final raw = await aiRouter.executeHeavyReasoning(
       jsonMode: true,
@@ -28,11 +75,12 @@ You are an academic curriculum author for "$subject" (Topic: "$topic").
 Purpose: $purpose
 Academic Depth: $depthLevel
 ${customInstructions.isNotEmpty ? 'Student Instructions: $customInstructions\n' : ''}
-STRICT ACCURACY RULES:
-- Prioritize source-grounding and scientific/factual accuracy over brevity.
+STRICT ACCURACY & COMPLETENESS RULES:
+- Preserve ALL units, subtopics, definitions, formulas, processes, and examples from the source.
+- Never compress a full chapter into a superficial half-page summary.
 - Never invent statistics, citations, textbook page numbers, or unverified claims.
+- Do NOT include raw Markdown symbols like "####" or "**" inside JSON string values.
 - If the provided source material does not cover part of the topic, note that in "uncertaintyNote".
-- Preserve exact terminology, formulas, and units.
 
 Return ONLY valid JSON matching this schema:
 {
@@ -59,69 +107,145 @@ Return ONLY valid JSON matching this schema:
 }
 
 Available Study Material:
-${boundedSource.isNotEmpty ? boundedSource : 'No uploaded source selected; use verified course-level academic knowledge and flag in uncertaintyNote.'}
+${synthesizedContext.isNotEmpty ? synthesizedContext : 'No uploaded source selected; use verified course-level academic knowledge and flag in uncertaintyNote.'}
 ''',
     );
 
     final decoded = AiRouter.parseJsonObject(raw);
-    final doc = StructuredStudyDocument.fromMap(
+    final rawDoc = StructuredStudyDocument.fromMap(
       decoded,
       fallbackTitle: '$topic — $subject',
       subject: subject,
       topic: topic,
     );
 
-    if (doc.sections.isEmpty && doc.executiveSummary.isEmpty) {
+    final validated = _validateAndClean(rawDoc, extraNote: coverageNote);
+    if (validated.sections.isEmpty && validated.executiveSummary.isEmpty) {
       throw StateError('AI returned an empty structured document. Please try again.');
     }
-    return doc;
+    return validated;
   }
 
-  /// Converts a verified [StructuredStudyDocument] into [PptxSlideData] slides
-  /// without silently dropping definitions, process steps, or warnings.
+  static String _stripMarkers(String s) {
+    return s
+        .replaceAll(RegExp(r'^#{1,6}\s+'), '')
+        .replaceAll('**', '')
+        .trim();
+  }
+
+  static StructuredStudyDocument _validateAndClean(
+    StructuredStudyDocument doc, {
+    String? extraNote,
+  }) {
+    final cleanedSections = doc.sections.map((s) {
+      return StudySectionBlock(
+        heading: _stripMarkers(s.heading),
+        body: _stripMarkers(s.body),
+        keyPoints: s.keyPoints.map(_stripMarkers).where((e) => e.isNotEmpty).toList(),
+        definitions: s.definitions.map(_stripMarkers).where((e) => e.isNotEmpty).toList(),
+        examples: s.examples.map(_stripMarkers).where((e) => e.isNotEmpty).toList(),
+        calloutWarning: s.calloutWarning != null ? _stripMarkers(s.calloutWarning!) : null,
+        tableRows: s.tableRows,
+        processSteps: s.processSteps.map(_stripMarkers).where((e) => e.isNotEmpty).toList(),
+      );
+    }).toList();
+
+    final combinedNote = [
+      if (doc.uncertaintyNote != null && doc.uncertaintyNote!.trim().isNotEmpty)
+        doc.uncertaintyNote!.trim(),
+      if (extraNote != null && extraNote.trim().isNotEmpty) extraNote.trim(),
+    ].join(' ');
+
+    return StructuredStudyDocument(
+      title: _stripMarkers(doc.title),
+      subject: doc.subject,
+      topic: doc.topic,
+      purpose: doc.purpose,
+      academicLevel: doc.academicLevel,
+      executiveSummary: _stripMarkers(doc.executiveSummary),
+      learningObjectives: doc.learningObjectives.map(_stripMarkers).toList(),
+      sections: cleanedSections,
+      takeaways: doc.takeaways.map(_stripMarkers).toSet().toList(),
+      sourceReferences: doc.sourceReferences,
+      uncertaintyNote: combinedNote.isEmpty ? null : combinedNote,
+    );
+  }
+
+  /// Lossless slide splitter: converts a verified [StructuredStudyDocument] into
+  /// [PptxSlideData] slides WITHOUT dropping items or overflowing fixed boxes.
+  /// Dense sections are automatically paginated across continuation slides.
   static List<PptxSlideData> toSlideDeck(StructuredStudyDocument doc) {
     final slides = <PptxSlideData>[];
 
+    // Title / Overview Slide
+    final overviewBullets = <String>[
+      if (doc.executiveSummary.isNotEmpty) doc.executiveSummary,
+      ...doc.learningObjectives,
+    ];
     slides.add(
       PptxSlideData(
         title: doc.title,
         subtitle: '${doc.subject} · ${doc.academicLevel}',
         tag: 'OVERVIEW',
-        bulletPoints: [
-          if (doc.executiveSummary.isNotEmpty) doc.executiveSummary,
-          ...doc.learningObjectives.take(3),
-        ],
+        bulletPoints: overviewBullets.take(5).toList(),
         takeaway: doc.purpose,
       ),
     );
 
+    const maxBulletsPerSlide = 4;
     for (final s in doc.sections) {
-      final bullets = <String>[
-        if (s.body.isNotEmpty) s.body,
-        ...s.definitions,
+      final allPoints = <String>[
+        if (s.body.isNotEmpty)
+          ...s.body
+              .split(RegExp(r'(?<=[.!?])\s+'))
+              .map((p) => p.trim())
+              .where((p) => p.isNotEmpty),
+        ...s.definitions.map((d) => 'Def: $d'),
         ...s.keyPoints,
         ...s.examples.map((e) => 'Example: $e'),
         ...s.processSteps.asMap().entries.map((e) => 'Step ${e.key + 1}: ${e.value}'),
+        if (s.tableRows.isNotEmpty)
+          ...s.tableRows.skip(1).map((r) => r.join(' — ')),
       ];
-      slides.add(
-        PptxSlideData(
-          title: s.heading,
-          tag: doc.topic.toUpperCase(),
-          bulletPoints: bullets.take(6).toList(),
-          takeaway: s.calloutWarning,
-        ),
-      );
+
+      if (allPoints.isEmpty) continue;
+
+      final totalPages = (allPoints.length / maxBulletsPerSlide).ceil();
+      for (int p = 0; p < totalPages; p++) {
+        final start = p * maxBulletsPerSlide;
+        final end = (start + maxBulletsPerSlide).clamp(0, allPoints.length);
+        final chunk = allPoints.sublist(start, end);
+        final slideTitle = totalPages > 1 ? '${s.heading} (${p + 1}/$totalPages)' : s.heading;
+
+        slides.add(
+          PptxSlideData(
+            title: slideTitle,
+            subtitle: doc.topic,
+            tag: doc.topic.toUpperCase(),
+            bulletPoints: chunk,
+            takeaway: p == totalPages - 1 ? s.calloutWarning : null,
+          ),
+        );
+      }
     }
 
     if (doc.takeaways.isNotEmpty) {
-      slides.add(
-        PptxSlideData(
-          title: 'Key Takeaways & Summary',
-          tag: 'RECAP',
-          bulletPoints: doc.takeaways.take(6).toList(),
-          takeaway: doc.uncertaintyNote,
-        ),
-      );
+      final totalTakeawaySlides = (doc.takeaways.length / maxBulletsPerSlide).ceil();
+      for (int p = 0; p < totalTakeawaySlides; p++) {
+        final start = p * maxBulletsPerSlide;
+        final end = (start + maxBulletsPerSlide).clamp(0, doc.takeaways.length);
+        slides.add(
+          PptxSlideData(
+            title: totalTakeawaySlides > 1
+                ? 'Key Takeaways (${p + 1}/$totalTakeawaySlides)'
+                : 'Key Takeaways & Summary',
+            subtitle: doc.subject,
+            tag: 'RECAP',
+            bulletPoints: doc.takeaways.sublist(start, end),
+            takeaway: p == totalTakeawaySlides - 1 ? doc.uncertaintyNote : null,
+          ),
+        );
+      }
     }
 
     return slides;

@@ -1,20 +1,14 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/syllabus_service.dart';
-import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../features/export/docx_exporter.dart';
-import '../../../features/export/pdf_exporter.dart';
-import '../../../features/export/pptx_exporter.dart';
 import '../../../features/export/screens/document_viewer_screen.dart';
-import '../../../features/export/services/document_pipeline_service.dart';
+import '../../../features/export/services/document_generation_service.dart';
 import '../../../features/export/widgets/style_picker_sheet.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
@@ -325,129 +319,29 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     setState(() => _exportingFormat = format);
     try {
       final aiRouter = ref.read(aiRouterProvider);
-      final safeBase = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
-      final dir = await getApplicationDocumentsDirectory();
+      final styleKey = chosenStyle ??
+          (format == 'pptx'
+              ? OfflineCacheService.getPreferredPptxStyle()
+              : (format == 'docx'
+                  ? 'elegant_academic_notes'
+                  : OfflineCacheService.getPreferredPdfStyle()));
 
-      final structuredDoc = await DocumentPipelineService.generateStructuredDocument(
+      final result = await DocumentGenerationService.generateAndSave(
         aiRouter: aiRouter,
+        format: format,
+        styleId: styleKey,
         subject: title,
         topic: customDocTitle ?? title,
+        notebookId: widget.notebookId,
         sourceContext: combinedText,
       );
-      final structuredMd = structuredDoc.toStructuredMarkdown();
 
-      if (format == 'pdf') {
-        final styleKey = chosenStyle ?? OfflineCacheService.getPreferredPdfStyle();
-        final pdfStyle = PdfExporter.fromStyleId(styleKey);
-        final pdfBytes = await PdfExporter.generateStudyGuidePdf(
-          title: structuredDoc.title,
-          subject: title,
-          content: structuredMd,
-          style: pdfStyle,
+      if (mounted) {
+        await DocumentViewerScreen.open(
+          context,
+          filePath: result.filePath,
+          title: result.title,
         );
-        final fileName = '${safeBase}_${styleKey}_Guide.pdf';
-        final outFile = File('${dir.path}/$fileName');
-        await outFile.writeAsBytes(pdfBytes, flush: true);
-        await SyllabusService.saveArtifact(
-          notebookId: widget.notebookId,
-          artifactType: 'pdf',
-          title: structuredDoc.title,
-          topicLabel: structuredDoc.topic,
-          filePath: outFile.path,
-          contentJson: structuredDoc.toMap(),
-        );
-
-        if (CloudVaultService.isAnyVaultConnected) {
-          try {
-            await CloudVaultService.uploadFile(outFile, customName: fileName, subject: title, section: 'Notes');
-          } catch (_) {}
-        }
-
-        if (mounted) {
-          await DocumentViewerScreen.open(
-            context,
-            filePath: outFile.path,
-            title: structuredDoc.title,
-          );
-        }
-      } else if (format == 'docx') {
-        final styleKey = chosenStyle ?? 'elegant_academic_notes';
-        final docStyle = DocxExporter.fromStyleId(styleKey);
-        final docBytes = DocxExporter.createDocument(
-          title: structuredDoc.title,
-          subject: title,
-          content: structuredMd,
-          style: docStyle,
-        );
-        final fileName = '${safeBase}_${styleKey}_Guide.docx';
-        final outFile = File('${dir.path}/$fileName');
-        await outFile.writeAsBytes(docBytes, flush: true);
-        await SyllabusService.saveArtifact(
-          notebookId: widget.notebookId,
-          artifactType: 'docx',
-          title: structuredDoc.title,
-          topicLabel: structuredDoc.topic,
-          filePath: outFile.path,
-          contentJson: structuredDoc.toMap(),
-        );
-
-        if (CloudVaultService.isAnyVaultConnected) {
-          try {
-            await CloudVaultService.uploadFile(
-              outFile,
-              customName: fileName,
-              subject: title,
-              section: 'Notes',
-            );
-          } catch (_) {}
-        }
-
-        if (mounted) {
-          await DocumentViewerScreen.open(
-            context,
-            filePath: outFile.path,
-            title: structuredDoc.title,
-          );
-        }
-      } else if (format == 'pptx') {
-        final styleKey = chosenStyle ?? OfflineCacheService.getPreferredPptxStyle();
-        final pptxStyle = PptxExporter.fromStyleId(styleKey);
-        final slides = DocumentPipelineService.toSlideDeck(structuredDoc);
-        final pptxBytes = PptxExporter.createPresentation(
-          presentationTitle: structuredDoc.title,
-          slides: slides,
-          style: pptxStyle,
-        );
-        final fileName = '${safeBase}_${styleKey}_Slides.pptx';
-        final outFile = File('${dir.path}/$fileName');
-        await outFile.writeAsBytes(pptxBytes, flush: true);
-        await SyllabusService.saveArtifact(
-          notebookId: widget.notebookId,
-          artifactType: 'pptx',
-          title: structuredDoc.title,
-          topicLabel: structuredDoc.topic,
-          filePath: outFile.path,
-          contentJson: structuredDoc.toMap(),
-        );
-
-        if (CloudVaultService.isAnyVaultConnected) {
-          try {
-            await CloudVaultService.uploadFile(
-              outFile,
-              customName: fileName,
-              subject: title,
-              section: 'Notes',
-            );
-          } catch (_) {}
-        }
-
-        if (mounted) {
-          await DocumentViewerScreen.open(
-            context,
-            filePath: outFile.path,
-            title: structuredDoc.title,
-          );
-        }
       }
     } catch (e) {
       if (mounted) {

@@ -3,12 +3,13 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../core/models/flashcard_model.dart';
+import 'models/structured_study_document.dart';
 
 enum PdfStudyStyle {
-  handwritten, // Handwritten Cornell notebook with ruled margins, pastel highlighters, sticky notes
-  minimalCute, // Study-friendly minimal cute with pastel sakura/matcha cards & pill badges
-  zenPaperInk, // Zen Washi parchment, Sumi calligraphy ink & Vermilion Hanko seal
-  modernClean, // Executive high-yield exam review
+  handwritten, // Handwritten Notes (Cornell 2-column notebook + ruled lines)
+  minimalCute, // Cute Aesthetic (Pastel sakura/mint rounded cards)
+  zenPaperInk, // Vintage Academic (Warm parchment + serif + archival frame)
+  modernClean, // Modern Academic (Navy hero banner + crisp grid + tables)
 }
 
 class PdfExporter {
@@ -49,12 +50,305 @@ class PdfExporter {
         .replaceAll('×', 'x')
         .replaceAll('÷', '/')
         .replaceAll('…', '...')
+        .replaceAll('**', '')
         .replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]'), '');
   }
 
-  // ---------------------------------------------------------------------------
-  // CONTENT PARSER & STYLER
-  // ---------------------------------------------------------------------------
+  static pw.ThemeData _themeFor(PdfStudyStyle style) {
+    switch (style) {
+      case PdfStudyStyle.zenPaperInk:
+        return pw.ThemeData.withFont(
+          base: pw.Font.times(),
+          bold: pw.Font.timesBold(),
+          italic: pw.Font.timesItalic(),
+          boldItalic: pw.Font.timesBoldItalic(),
+        );
+      case PdfStudyStyle.handwritten:
+      case PdfStudyStyle.minimalCute:
+      case PdfStudyStyle.modernClean:
+        return pw.ThemeData.withFont(
+          base: pw.Font.helvetica(),
+          bold: pw.Font.helveticaBold(),
+          italic: pw.Font.helveticaOblique(),
+          boldItalic: pw.Font.helveticaBoldOblique(),
+        );
+    }
+  }
+
+  static Future<Uint8List> generateStudyGuidePdf({
+    required String title,
+    required String subject,
+    required String content,
+    List<String> keyTakeaways = const [],
+    StructuredStudyDocument? structuredDoc,
+    PdfStudyStyle style = PdfStudyStyle.handwritten,
+  }) async {
+    final pdf = pw.Document(theme: _themeFor(style));
+    final safeTitle = _sanitize(title);
+    final safeSubject = _sanitize(subject);
+
+    final bodyWidgets = structuredDoc != null
+        ? _buildFromStructured(structuredDoc, style)
+        : _buildFormattedContent(content, style);
+
+    final effectiveTakeaways = keyTakeaways.isNotEmpty
+        ? keyTakeaways
+        : (structuredDoc?.takeaways ?? const []);
+
+    PdfColor pageBgColor = PdfColors.white;
+    pw.EdgeInsets pageMargin = const pw.EdgeInsets.fromLTRB(32, 28, 32, 34);
+
+    if (style == PdfStudyStyle.handwritten) {
+      pageBgColor = PdfColor.fromHex('#FDFBF7');
+      pageMargin = const pw.EdgeInsets.fromLTRB(44, 28, 28, 34);
+    } else if (style == PdfStudyStyle.minimalCute) {
+      pageBgColor = PdfColor.fromHex('#FFF5F7');
+      pageMargin = const pw.EdgeInsets.fromLTRB(28, 28, 28, 34);
+    } else if (style == PdfStudyStyle.zenPaperInk) {
+      pageBgColor = PdfColor.fromHex('#FBF9F5');
+      pageMargin = const pw.EdgeInsets.fromLTRB(36, 34, 36, 38);
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: pageMargin,
+        pageTheme: pw.PageTheme(
+          pageFormat: PdfPageFormat.a4,
+          margin: pageMargin,
+          theme: _themeFor(style),
+          buildBackground: (pw.Context ctx) => _buildPageBackground(style, pageBgColor),
+        ),
+        footer: (pw.Context ctx) => _buildPageFooter(safeSubject, style, ctx),
+        build: (pw.Context ctx) {
+          return [
+            _buildHeaderBanner(safeTitle, safeSubject, style),
+            pw.SizedBox(height: 14),
+            if (effectiveTakeaways.isNotEmpty) ...[
+              _buildKeyTakeawaysBox(effectiveTakeaways, style),
+              pw.SizedBox(height: 14),
+            ],
+            ...bodyWidgets,
+          ];
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  static pw.Widget _buildPageBackground(PdfStudyStyle style, PdfColor bg) {
+    if (style == PdfStudyStyle.handwritten) {
+      return pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Container(
+          color: bg,
+          child: pw.Stack(
+            children: [
+              // Ruled notebook horizontal lines
+              pw.Column(
+                children: List.generate(
+                  34,
+                  (_) => pw.Container(
+                    height: 24,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border(
+                        bottom: pw.BorderSide(
+                          color: PdfColor.fromHex('#E2E8F0'),
+                          width: 0.45,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Red vertical Cornell margin line
+              pw.Positioned(
+                left: 34,
+                top: 0,
+                bottom: 0,
+                child: pw.Container(
+                  width: 1.2,
+                  color: PdfColor.fromHex('#FCA5A5'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (style == PdfStudyStyle.zenPaperInk) {
+      return pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Container(
+          color: bg,
+          padding: const pw.EdgeInsets.all(16),
+          child: pw.Container(
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColor.fromHex('#D6D3D1'), width: 1),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return pw.FullPage(
+      ignoreMargins: true,
+      child: pw.Container(color: bg),
+    );
+  }
+
+  static List<pw.Widget> _buildFromStructured(
+    StructuredStudyDocument doc,
+    PdfStudyStyle style,
+  ) {
+    final widgets = <pw.Widget>[];
+
+    if (doc.executiveSummary.isNotEmpty) {
+      widgets.add(_buildHeading1('Overview', style));
+      widgets.add(_buildParagraph(_sanitize(doc.executiveSummary), style));
+    }
+
+    if (doc.learningObjectives.isNotEmpty) {
+      widgets.add(_buildHeading2('Learning Objectives', style));
+      for (final obj in doc.learningObjectives) {
+        widgets.add(_buildBullet(_sanitize(obj), style));
+      }
+    }
+
+    for (int i = 0; i < doc.sections.length; i++) {
+      final s = doc.sections[i];
+      final headingText = style == PdfStudyStyle.modernClean
+          ? '${i + 1}. ${_sanitize(s.heading)}'
+          : _sanitize(s.heading);
+
+      if (style == PdfStudyStyle.handwritten) {
+        // Cornell 2-column block: Cue/Definitions on left, Detailed Notes on right
+        widgets.add(_buildHeading1(headingText, style));
+        final cueItems = <String>[
+          ...s.definitions.map(_sanitize),
+          if (s.calloutWarning != null && s.calloutWarning!.isNotEmpty)
+            'Alert: ${_sanitize(s.calloutWarning!)}',
+        ];
+        final noteItems = <pw.Widget>[
+          if (s.body.isNotEmpty) _buildParagraph(_sanitize(s.body), style),
+          ...s.keyPoints.map((k) => _buildBullet(_sanitize(k), style)),
+          ...s.examples.map((e) => _buildStickyCallout('Example: ${_sanitize(e)}', style)),
+          ...s.processSteps.asMap().entries.map(
+                (e) => _buildBullet('Step ${e.key + 1}: ${_sanitize(e.value)}', style),
+              ),
+          if (s.tableRows.isNotEmpty) _buildPdfTable(s.tableRows, style),
+        ];
+
+        widgets.add(
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                flex: 3,
+                child: pw.Container(
+                  padding: const pw.EdgeInsets.only(right: 10),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      right: pw.BorderSide(color: PdfColor.fromHex('#CBD5E1'), width: 0.8),
+                    ),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'CUES & TERMS',
+                        style: pw.TextStyle(
+                          font: pw.Font.courierBold(),
+                          fontSize: 7.5,
+                          color: PdfColor.fromHex('#B91C1C'),
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      if (cueItems.isEmpty)
+                        pw.Text(
+                          'Key concepts ->',
+                          style: pw.TextStyle(
+                            fontSize: 8.5,
+                            color: PdfColor.fromHex('#64748B'),
+                            fontStyle: pw.FontStyle.italic,
+                          ),
+                        )
+                      else
+                        ...cueItems.map(
+                          (c) => pw.Padding(
+                            padding: const pw.EdgeInsets.only(bottom: 4),
+                            child: pw.Text(
+                              c,
+                              style: pw.TextStyle(
+                                fontSize: 8.5,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColor.fromHex('#1E293B'),
+                                lineSpacing: 3.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                flex: 7,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: noteItems,
+                ),
+              ),
+            ],
+          ),
+        );
+        widgets.add(pw.SizedBox(height: 10));
+        continue;
+      }
+
+      widgets.add(_buildHeading1(headingText, style));
+      if (s.body.isNotEmpty) {
+        widgets.add(_buildParagraph(_sanitize(s.body), style));
+      }
+      for (final d in s.definitions) {
+        widgets.add(_buildStickyCallout('Definition: ${_sanitize(d)}', style));
+      }
+      for (final k in s.keyPoints) {
+        widgets.add(_buildBullet(_sanitize(k), style));
+      }
+      for (final ex in s.examples) {
+        widgets.add(_buildStickyCallout('Example: ${_sanitize(ex)}', style));
+      }
+      if (s.processSteps.isNotEmpty) {
+        widgets.add(_buildHeading3('Process Flow', style));
+        for (int p = 0; p < s.processSteps.length; p++) {
+          widgets.add(_buildBullet('Step ${p + 1}: ${_sanitize(s.processSteps[p])}', style));
+        }
+      }
+      if (s.tableRows.isNotEmpty) {
+        widgets.add(_buildPdfTable(s.tableRows, style));
+      }
+      if (s.calloutWarning != null && s.calloutWarning!.isNotEmpty) {
+        widgets.add(_buildStickyCallout('Exam Alert: ${_sanitize(s.calloutWarning!)}', style));
+      }
+    }
+
+    if (doc.sourceReferences.isNotEmpty) {
+      widgets.add(_buildHeading2('Sources', style));
+      for (final ref in doc.sourceReferences) {
+        widgets.add(_buildBullet(_sanitize(ref), style));
+      }
+    }
+    if (doc.uncertaintyNote != null && doc.uncertaintyNote!.isNotEmpty) {
+      widgets.add(_buildStickyCallout('Coverage Note: ${_sanitize(doc.uncertaintyNote!)}', style));
+    }
+
+    return widgets;
+  }
+
   static List<pw.Widget> _buildFormattedContent(String rawContent, PdfStudyStyle style) {
     final lines = _sanitize(rawContent).split('\n');
     final widgets = <pw.Widget>[];
@@ -66,60 +360,72 @@ class PdfExporter {
         continue;
       }
 
-      final cleanText = line.replaceAll('**', '');
-
-      // H3 - Subtopic Heading
-      if (cleanText.startsWith('### ')) {
-        final title = cleanText.substring(4).trim();
-        widgets.add(_buildHeading3(title, style));
-      }
-      // H2 - Section Heading
-      else if (cleanText.startsWith('## ')) {
-        final title = cleanText.substring(3).trim();
-        widgets.add(_buildHeading2(title, style));
-      }
-      // H1 - Major Unit Heading
-      else if (cleanText.startsWith('# ')) {
-        final title = cleanText.substring(2).trim();
-        widgets.add(_buildHeading1(title, style));
-      }
-      // Bullet Point
-      else if (cleanText.startsWith('- ') || cleanText.startsWith('* ')) {
-        final bulletText = cleanText.substring(2).trim();
-        widgets.add(_buildBullet(bulletText, style));
-      }
-      // Sticky Callout / Exam Alert (e.g. Note:, Tip:, Core idea:)
-      else if (cleanText.toLowerCase().startsWith('note:') ||
-          cleanText.toLowerCase().startsWith('tip:') ||
-          cleanText.toLowerCase().startsWith('exam alert:') ||
-          cleanText.toLowerCase().startsWith('warning:')) {
-        widgets.add(_buildStickyCallout(cleanText, style));
-      }
-      // Standard Paragraph
-      else {
-        widgets.add(_buildParagraph(cleanText, style));
+      if (RegExp(r'^#{3,6}\s+').hasMatch(line)) {
+        widgets.add(_buildHeading3(line.replaceFirst(RegExp(r'^#{3,6}\s+'), '').trim(), style));
+      } else if (line.startsWith('## ')) {
+        widgets.add(_buildHeading2(line.substring(3).trim(), style));
+      } else if (line.startsWith('# ')) {
+        widgets.add(_buildHeading1(line.substring(2).trim(), style));
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        widgets.add(_buildBullet(line.substring(2).trim(), style));
+      } else if (RegExp(r'^\d+\.\s+').hasMatch(line)) {
+        widgets.add(_buildBullet(line, style));
+      } else if (line.toLowerCase().startsWith('note:') ||
+          line.toLowerCase().startsWith('tip:') ||
+          line.toLowerCase().startsWith('exam alert:') ||
+          line.toLowerCase().startsWith('warning:')) {
+        widgets.add(_buildStickyCallout(line, style));
+      } else {
+        widgets.add(_buildParagraph(line, style));
       }
     }
     return widgets;
   }
 
-  // ---------------------------------------------------------------------------
-  // STYLED ELEMENTS BUILDERS
-  // ---------------------------------------------------------------------------
+  static pw.Widget _buildPdfTable(List<List<String>> rows, PdfStudyStyle style) {
+    final safeRows = rows.map((r) => r.map(_sanitize).toList()).toList();
+    if (safeRows.isEmpty) return pw.SizedBox();
+    final headerBg = style == PdfStudyStyle.minimalCute
+        ? PdfColor.fromHex('#FCE7F3')
+        : (style == PdfStudyStyle.zenPaperInk
+            ? PdfColor.fromHex('#EFECE6')
+            : PdfColor.fromHex('#EFF6FF'));
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 8),
+      child: pw.TableHelper.fromTextArray(
+        headers: safeRows.first,
+        data: safeRows.length > 1 ? safeRows.sublist(1) : const [],
+        headerStyle: pw.TextStyle(
+          fontSize: 9,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColor.fromHex('#0F172A'),
+        ),
+        headerDecoration: pw.BoxDecoration(color: headerBg),
+        cellStyle: pw.TextStyle(
+          fontSize: 9,
+          color: PdfColor.fromHex('#334155'),
+        ),
+        border: pw.TableBorder.all(color: PdfColor.fromHex('#CBD5E1'), width: 0.7),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      ),
+    );
+  }
+
   static pw.Widget _buildHeading1(String text, PdfStudyStyle style) {
     switch (style) {
       case PdfStudyStyle.handwritten:
         return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 14, bottom: 8),
+          margin: const pw.EdgeInsets.only(top: 12, bottom: 6),
           padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#FEF08A'), // Pastel yellow highlighter
+            color: PdfColor.fromHex('#FEF08A'),
             borderRadius: pw.BorderRadius.circular(4),
           ),
           child: pw.Text(
             text,
             style: pw.TextStyle(
-              fontSize: 14,
+              fontSize: 13.5,
               fontWeight: pw.FontWeight.bold,
               color: PdfColor.fromHex('#1E293B'),
             ),
@@ -128,21 +434,29 @@ class PdfExporter {
 
       case PdfStudyStyle.minimalCute:
         return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 14, bottom: 8),
-          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          margin: const pw.EdgeInsets.only(top: 12, bottom: 6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#FCE7F3'), // Pastel Sakura pink
-            borderRadius: pw.BorderRadius.circular(8),
+            color: PdfColor.fromHex('#FCE7F3'),
+            borderRadius: pw.BorderRadius.circular(10),
             border: pw.Border.all(color: PdfColor.fromHex('#FBCFE8'), width: 1),
           ),
           child: pw.Row(
             mainAxisSize: pw.MainAxisSize.min,
             children: [
-              pw.Text('✿ ', style: pw.TextStyle(fontSize: 12, color: PdfColor.fromHex('#EC4899'))),
+              pw.Container(
+                width: 7,
+                height: 7,
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#EC4899'),
+                  shape: pw.BoxShape.circle,
+                ),
+              ),
+              pw.SizedBox(width: 7),
               pw.Text(
                 text,
                 style: pw.TextStyle(
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: pw.FontWeight.bold,
                   color: PdfColor.fromHex('#831843'),
                 ),
@@ -153,46 +467,36 @@ class PdfExporter {
 
       case PdfStudyStyle.zenPaperInk:
         return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 14, bottom: 8),
+          margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
           padding: const pw.EdgeInsets.only(bottom: 4),
           decoration: pw.BoxDecoration(
             border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColor.fromHex('#1C1917'), width: 1.2),
+              bottom: pw.BorderSide(color: PdfColor.fromHex('#57534E'), width: 1.0),
             ),
           ),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(
-                text,
-                style: pw.TextStyle(
-                  fontSize: 14,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColor.fromHex('#1C1917'),
-                ),
-              ),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#DC2626'),
-                  borderRadius: pw.BorderRadius.circular(2),
-                ),
-                child: pw.Text(
-                  'TRUE ME',
-                  style: const pw.TextStyle(fontSize: 7, color: PdfColors.white),
-                ),
-              ),
-            ],
+          child: pw.Text(
+            text,
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#1C1917'),
+            ),
           ),
         );
 
       case PdfStudyStyle.modernClean:
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 14, bottom: 6),
+        return pw.Container(
+          margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
+          padding: const pw.EdgeInsets.only(left: 8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              left: pw.BorderSide(color: PdfColor.fromHex('#2563EB'), width: 3),
+            ),
+          ),
           child: pw.Text(
             text,
             style: pw.TextStyle(
-              fontSize: 15,
+              fontSize: 14.5,
               fontWeight: pw.FontWeight.bold,
               color: PdfColor.fromHex('#0F172A'),
             ),
@@ -202,77 +506,21 @@ class PdfExporter {
   }
 
   static pw.Widget _buildHeading2(String text, PdfStudyStyle style) {
-    switch (style) {
-      case PdfStudyStyle.handwritten:
-        return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 10, bottom: 4),
-          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#BBF7D0'), // Pastel mint highlighter
-            borderRadius: pw.BorderRadius.circular(3),
-          ),
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(
-              fontSize: 12,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#064E3B'),
-            ),
-          ),
-        );
-
-      case PdfStudyStyle.minimalCute:
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
-          child: pw.Row(
-            children: [
-              pw.Container(
-                width: 6,
-                height: 6,
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#F472B6'),
-                  shape: pw.BoxShape.circle,
-                ),
-              ),
-              pw.SizedBox(width: 6),
-              pw.Text(
-                text,
-                style: pw.TextStyle(
-                  fontSize: 12,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColor.fromHex('#BE185D'),
-                ),
-              ),
-            ],
-          ),
-        );
-
-      case PdfStudyStyle.zenPaperInk:
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(
-              fontSize: 12.5,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#292524'),
-            ),
-          ),
-        );
-
-      case PdfStudyStyle.modernClean:
-        return pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(
-              fontSize: 12.5,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#1E3A8A'),
-            ),
-          ),
-        );
-    }
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 12,
+          fontWeight: pw.FontWeight.bold,
+          color: style == PdfStudyStyle.minimalCute
+              ? PdfColor.fromHex('#BE185D')
+              : (style == PdfStudyStyle.zenPaperInk
+                  ? PdfColor.fromHex('#7C2D12')
+                  : PdfColor.fromHex('#1E3A8A')),
+        ),
+      ),
+    );
   }
 
   static pw.Widget _buildHeading3(String text, PdfStudyStyle style) {
@@ -281,82 +529,39 @@ class PdfExporter {
       child: pw.Text(
         text,
         style: pw.TextStyle(
-          fontSize: 11,
+          fontSize: 10.5,
           fontWeight: pw.FontWeight.bold,
-          color: style == PdfStudyStyle.minimalCute
-              ? PdfColor.fromHex('#7C3AED')
-              : (style == PdfStudyStyle.zenPaperInk
-                  ? PdfColor.fromHex('#DC2626')
-                  : PdfColor.fromHex('#334155')),
+          color: PdfColor.fromHex('#334155'),
         ),
       ),
     );
   }
 
   static pw.Widget _buildBullet(String text, PdfStudyStyle style) {
-    pw.Widget bulletIcon;
-    switch (style) {
-      case PdfStudyStyle.handwritten:
-        bulletIcon = pw.Container(
-          margin: const pw.EdgeInsets.only(top: 3, right: 6),
-          width: 5,
-          height: 5,
-          decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#EAB308'),
-            shape: pw.BoxShape.circle,
-          ),
-        );
-        break;
-      case PdfStudyStyle.minimalCute:
-        bulletIcon = pw.Container(
-          margin: const pw.EdgeInsets.only(top: 3, right: 6),
-          width: 5,
-          height: 5,
-          decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#EC4899'),
-            borderRadius: pw.BorderRadius.circular(2),
-          ),
-        );
-        break;
-      case PdfStudyStyle.zenPaperInk:
-        bulletIcon = pw.Container(
-          margin: const pw.EdgeInsets.only(top: 4, right: 6),
-          width: 4,
-          height: 4,
-          decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#DC2626'),
-            shape: pw.BoxShape.circle,
-          ),
-        );
-        break;
-      case PdfStudyStyle.modernClean:
-        bulletIcon = pw.Container(
-          margin: const pw.EdgeInsets.only(top: 4, right: 6),
-          width: 4,
-          height: 4,
-          decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#2563EB'),
-            shape: pw.BoxShape.circle,
-          ),
-        );
-        break;
-    }
-
+    final dotColor = switch (style) {
+      PdfStudyStyle.handwritten => PdfColor.fromHex('#EAB308'),
+      PdfStudyStyle.minimalCute => PdfColor.fromHex('#EC4899'),
+      PdfStudyStyle.zenPaperInk => PdfColor.fromHex('#7C2D12'),
+      PdfStudyStyle.modernClean => PdfColor.fromHex('#2563EB'),
+    };
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(left: 8, bottom: 4),
+      padding: const pw.EdgeInsets.only(left: 6, bottom: 4),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          bulletIcon,
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 4, right: 6),
+            width: 4.5,
+            height: 4.5,
+            decoration: pw.BoxDecoration(color: dotColor, shape: pw.BoxShape.circle),
+          ),
           pw.Expanded(
             child: pw.Text(
               text,
               style: pw.TextStyle(
-                fontSize: 9.5,
-                lineSpacing: 1.6,
-                color: style == PdfStudyStyle.zenPaperInk
-                    ? PdfColor.fromHex('#1C1917')
-                    : PdfColor.fromHex('#334155'),
+                fontSize: 10,
+                lineSpacing: 4.0,
+                color: PdfColor.fromHex('#1E293B'),
               ),
             ),
           ),
@@ -366,171 +571,63 @@ class PdfExporter {
   }
 
   static pw.Widget _buildStickyCallout(String text, PdfStudyStyle style) {
-    final bgColor = style == PdfStudyStyle.handwritten
-        ? PdfColor.fromHex('#FEF9C3') // Sticky note yellow
-        : (style == PdfStudyStyle.minimalCute
-            ? PdfColor.fromHex('#FDF2F8') // Cute Sakura pink
-            : PdfColor.fromHex('#F4F1EA'));
-
-    final borderColor = style == PdfStudyStyle.handwritten
-        ? PdfColor.fromHex('#FACC15')
-        : (style == PdfStudyStyle.minimalCute
-            ? PdfColor.fromHex('#FBCFE8')
-            : PdfColor.fromHex('#E7E3D9'));
+    final bgColor = switch (style) {
+      PdfStudyStyle.handwritten => PdfColor.fromHex('#FEF9C3'),
+      PdfStudyStyle.minimalCute => PdfColor.fromHex('#F5F3FF'),
+      PdfStudyStyle.zenPaperInk => PdfColor.fromHex('#F5F0E6'),
+      PdfStudyStyle.modernClean => PdfColor.fromHex('#EFF6FF'),
+    };
+    final borderColor = switch (style) {
+      PdfStudyStyle.handwritten => PdfColor.fromHex('#FACC15'),
+      PdfStudyStyle.minimalCute => PdfColor.fromHex('#DDD6FE'),
+      PdfStudyStyle.zenPaperInk => PdfColor.fromHex('#A8A29E'),
+      PdfStudyStyle.modernClean => PdfColor.fromHex('#93C5FD'),
+    };
 
     return pw.Container(
-      margin: const pw.EdgeInsets.symmetric(vertical: 6),
-      padding: const pw.EdgeInsets.all(10),
+      margin: const pw.EdgeInsets.symmetric(vertical: 5),
+      padding: const pw.EdgeInsets.all(9),
       decoration: pw.BoxDecoration(
         color: bgColor,
         borderRadius: pw.BorderRadius.circular(style == PdfStudyStyle.minimalCute ? 10 : 4),
-        border: pw.Border.all(color: borderColor, width: 1),
+        border: pw.Border.all(color: borderColor, width: 0.9),
       ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          if (style == PdfStudyStyle.handwritten) ...[
-            pw.Container(
-              width: 32,
-              height: 4,
-              margin: const pw.EdgeInsets.only(bottom: 6),
-              decoration: pw.BoxDecoration(
-                color: PdfColor.fromHex('#FDE047'), // Tape strip
-                borderRadius: pw.BorderRadius.circular(1),
-              ),
-            ),
-          ],
-          pw.Text(
-            text,
-            style: pw.TextStyle(
-              fontSize: 9.5,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#1E293B'),
-              lineSpacing: 1.5,
-            ),
-          ),
-        ],
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 9.5,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColor.fromHex('#1E293B'),
+          lineSpacing: 3.5,
+        ),
       ),
     );
   }
 
   static pw.Widget _buildParagraph(String text, PdfStudyStyle style) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 4),
+      padding: const pw.EdgeInsets.only(bottom: 5),
       child: pw.Text(
         text,
         style: pw.TextStyle(
-          fontSize: 9.5,
-          lineSpacing: 1.6,
-          color: style == PdfStudyStyle.zenPaperInk
-              ? PdfColor.fromHex('#1C1917')
-              : PdfColor.fromHex('#334155'),
+          fontSize: 10,
+          lineSpacing: 4.2,
+          color: PdfColor.fromHex('#1E293B'),
         ),
       ),
     );
-  }
-
-  // ---------------------------------------------------------------------------
-  // MAIN STUDY GUIDE PDF GENERATOR WITH STYLE THEMES
-  // ---------------------------------------------------------------------------
-  static Future<Uint8List> generateStudyGuidePdf({
-    required String title,
-    required String subject,
-    required String content,
-    List<String> keyTakeaways = const [],
-    PdfStudyStyle style = PdfStudyStyle.handwritten,
-  }) async {
-    final pdf = pw.Document();
-    final safeTitle = _sanitize(title);
-    final safeSubject = _sanitize(subject);
-    final contentWidgets = _buildFormattedContent(content, style);
-
-    // Style-specific colors & backgrounds
-    PdfColor pageBgColor = PdfColors.white;
-    pw.EdgeInsets pageMargin = const pw.EdgeInsets.all(32);
-
-    if (style == PdfStudyStyle.handwritten) {
-      pageBgColor = PdfColor.fromHex('#FDFBF7'); // Warm cream notebook paper
-      pageMargin = const pw.EdgeInsets.fromLTRB(40, 28, 28, 28);
-    } else if (style == PdfStudyStyle.minimalCute) {
-      pageBgColor = PdfColor.fromHex('#FCF9F9'); // Sakura cream
-      pageMargin = const pw.EdgeInsets.all(28);
-    } else if (style == PdfStudyStyle.zenPaperInk) {
-      pageBgColor = PdfColor.fromHex('#FBF9F5'); // Washi parchment
-      pageMargin = const pw.EdgeInsets.all(32);
-    }
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: pageMargin,
-        pageTheme: pw.PageTheme(
-          pageFormat: PdfPageFormat.a4,
-          margin: pageMargin,
-          buildBackground: (pw.Context context) {
-            return pw.FullPage(
-              ignoreMargins: true,
-              child: pw.Container(
-                color: pageBgColor,
-                child: style == PdfStudyStyle.handwritten
-                    ? pw.Stack(
-                        children: [
-                          // Red/Coral Cornell vertical margin line
-                          pw.Positioned(
-                            left: 32,
-                            top: 0,
-                            bottom: 0,
-                            child: pw.Container(
-                              width: 1,
-                              color: PdfColor.fromHex('#FCA5A5'),
-                            ),
-                          ),
-                        ],
-                      )
-                    : null,
-              ),
-            );
-          },
-        ),
-        build: (pw.Context context) {
-          return [
-            // Header Banner
-            _buildHeaderBanner(safeTitle, safeSubject, style),
-            pw.SizedBox(height: 16),
-
-            // Key Takeaways (Sticky Note Box)
-            if (keyTakeaways.isNotEmpty) ...[
-              _buildKeyTakeawaysBox(keyTakeaways, style),
-              pw.SizedBox(height: 16),
-            ],
-
-            // Content Body
-            ...contentWidgets,
-
-            pw.SizedBox(height: 20),
-            // Footer Note
-            _buildFooterStamp(safeSubject, style),
-          ];
-        },
-      ),
-    );
-
-    return pdf.save();
   }
 
   static pw.Widget _buildHeaderBanner(String title, String subject, PdfStudyStyle style) {
     switch (style) {
       case PdfStudyStyle.handwritten:
         return pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 12),
+          padding: const pw.EdgeInsets.only(bottom: 10),
           decoration: pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColor.fromHex('#E2E8F0'), width: 1.5),
-            ),
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColor.fromHex('#94A3B8'), width: 1.2)),
           ),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
               pw.Expanded(
                 child: pw.Column(
@@ -539,38 +636,23 @@ class PdfExporter {
                     pw.Text(
                       'CORNELL STUDY NOTEBOOK',
                       style: pw.TextStyle(
-                        color: PdfColor.fromHex('#94A3B8'),
-                        fontSize: 8,
-                        letterSpacing: 1.5,
-                        fontWeight: pw.FontWeight.bold,
+                        font: pw.Font.courierBold(),
+                        color: PdfColor.fromHex('#64748B'),
+                        fontSize: 8.5,
                       ),
                     ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      title,
-                      style: pw.TextStyle(
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColor.fromHex('#0F172A'),
-                      ),
-                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(title, style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#FEF08A'), // Highlighter badge
+                  color: PdfColor.fromHex('#FEF08A'),
                   borderRadius: pw.BorderRadius.circular(4),
                 ),
-                child: pw.Text(
-                  subject.toUpperCase(),
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColor.fromHex('#713F12'),
-                  ),
-                ),
+                child: pw.Text(subject.toUpperCase(), style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
               ),
             ],
           ),
@@ -580,9 +662,9 @@ class PdfExporter {
         return pw.Container(
           padding: const pw.EdgeInsets.all(14),
           decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#FFF5F7'),
-            borderRadius: pw.BorderRadius.circular(12),
-            border: pw.Border.all(color: PdfColor.fromHex('#FBCFE8'), width: 1),
+            color: PdfColor.fromHex('#FCE7F3'),
+            borderRadius: pw.BorderRadius.circular(14),
+            border: pw.Border.all(color: PdfColor.fromHex('#F9A8D4'), width: 1),
           ),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -591,47 +673,22 @@ class PdfExporter {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColor.fromHex('#FCE7F3'),
-                        borderRadius: pw.BorderRadius.circular(10),
-                      ),
-                      child: pw.Text(
-                        '✿ STUDY-FRIENDLY GUIDE ✿',
-                        style: pw.TextStyle(
-                          color: PdfColor.fromHex('#DB2777'),
-                          fontSize: 7.5,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
                     pw.Text(
-                      title,
-                      style: pw.TextStyle(
-                        fontSize: 17,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColor.fromHex('#831843'),
-                      ),
+                      'CUTE AESTHETIC STUDY GUIDE',
+                      style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#DB2777')),
                     ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(title, style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#831843'))),
                   ],
                 ),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#F472B6'),
-                  borderRadius: pw.BorderRadius.circular(20),
+                  color: PdfColor.fromHex('#EC4899'),
+                  borderRadius: pw.BorderRadius.circular(16),
                 ),
-                child: pw.Text(
-                  subject,
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white,
-                  ),
-                ),
+                child: pw.Text(subject, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
               ),
             ],
           ),
@@ -639,51 +696,27 @@ class PdfExporter {
 
       case PdfStudyStyle.zenPaperInk:
         return pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 12),
+          padding: const pw.EdgeInsets.only(bottom: 10),
           decoration: pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColor.fromHex('#1C1917'), width: 1.5),
-            ),
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColor.fromHex('#44403C'), width: 1.5)),
           ),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'TRUE ME • SCHOLAR ARCHIVE',
-                    style: pw.TextStyle(
-                      color: PdfColor.fromHex('#78716C'),
-                      fontSize: 8,
-                      letterSpacing: 2.0,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    title,
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#1C1917'),
-                    ),
-                  ),
-                ],
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('VINTAGE ACADEMIC ARCHIVE', style: pw.TextStyle(fontSize: 8, color: PdfColor.fromHex('#78716C'), letterSpacing: 1.5)),
+                    pw.SizedBox(height: 4),
+                    pw.Text(title, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1C1917'))),
+                  ],
+                ),
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#DC2626'),
-                  borderRadius: pw.BorderRadius.circular(3),
-                ),
-                child: pw.Text(
-                  subject,
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white,
-                  ),
-                ),
+                decoration: pw.BoxDecoration(color: PdfColor.fromHex('#7C2D12'), borderRadius: pw.BorderRadius.circular(2)),
+                child: pw.Text(subject, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
               ),
             ],
           ),
@@ -691,51 +724,28 @@ class PdfExporter {
 
       case PdfStudyStyle.modernClean:
         return pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 12),
+          padding: const pw.EdgeInsets.all(14),
           decoration: pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColor.fromHex('#2563EB'), width: 2),
-            ),
+            color: PdfColor.fromHex('#0F172A'),
+            borderRadius: pw.BorderRadius.circular(8),
           ),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'EXAM REVISION GUIDE',
-                    style: pw.TextStyle(
-                      color: PdfColor.fromHex('#2563EB'),
-                      fontSize: 8.5,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    title,
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#0F172A'),
-                    ),
-                  ),
-                ],
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('MODERN ACADEMIC REVIEW', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#93C5FD'))),
+                    pw.SizedBox(height: 4),
+                    pw.Text(title, style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+                  ],
+                ),
               ),
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#EFF6FF'),
-                  borderRadius: pw.BorderRadius.circular(6),
-                ),
-                child: pw.Text(
-                  subject.toUpperCase(),
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColor.fromHex('#1D4ED8'),
-                  ),
-                ),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: pw.BoxDecoration(color: PdfColor.fromHex('#2563EB'), borderRadius: pw.BorderRadius.circular(6)),
+                child: pw.Text(subject.toUpperCase(), style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
               ),
             ],
           ),
@@ -745,57 +755,28 @@ class PdfExporter {
 
   static pw.Widget _buildKeyTakeawaysBox(List<String> takeaways, PdfStudyStyle style) {
     final bgColor = style == PdfStudyStyle.handwritten
-        ? PdfColor.fromHex('#FEF9C3') // Sticky note
-        : (style == PdfStudyStyle.minimalCute
-            ? PdfColor.fromHex('#F0FDF4') // Matcha
-            : PdfColor.fromHex('#F4F1EA'));
-
+        ? PdfColor.fromHex('#FEF9C3')
+        : (style == PdfStudyStyle.minimalCute ? PdfColor.fromHex('#ECFDF5') : PdfColor.fromHex('#F8FAFC'));
     final borderColor = style == PdfStudyStyle.handwritten
         ? PdfColor.fromHex('#FACC15')
-        : (style == PdfStudyStyle.minimalCute
-            ? PdfColor.fromHex('#BBF7D0')
-            : PdfColor.fromHex('#E7E3D9'));
+        : (style == PdfStudyStyle.minimalCute ? PdfColor.fromHex('#A7F3D0') : PdfColor.fromHex('#CBD5E1'));
 
     return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
+      padding: const pw.EdgeInsets.all(11),
       decoration: pw.BoxDecoration(
         color: bgColor,
-        borderRadius: pw.BorderRadius.circular(style == PdfStudyStyle.minimalCute ? 10 : 6),
+        borderRadius: pw.BorderRadius.circular(8),
         border: pw.Border.all(color: borderColor, width: 1),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Row(
-            children: [
-              pw.Text(
-                style == PdfStudyStyle.minimalCute ? '✿ KEY EXAM TAKEAWAYS' : '📌 HIGH-YIELD EXAM TAKEAWAYS',
-                style: pw.TextStyle(
-                  fontSize: 9,
-                  fontWeight: pw.FontWeight.bold,
-                  color: style == PdfStudyStyle.minimalCute
-                      ? PdfColor.fromHex('#166534')
-                      : PdfColor.fromHex('#854D0E'),
-                ),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 8),
+          pw.Text('KEY EXAM TAKEAWAYS', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#0F172A'))),
+          pw.SizedBox(height: 6),
           ...takeaways.map(
             (t) => pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 3),
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('• ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                  pw.Expanded(
-                    child: pw.Text(
-                      _sanitize(t),
-                      style: pw.TextStyle(fontSize: 9.5, color: PdfColor.fromHex('#1F2937')),
-                    ),
-                  ),
-                ],
-              ),
+              child: pw.Text('- ${_sanitize(t)}', style: pw.TextStyle(fontSize: 9.5, lineSpacing: 3.0)),
             ),
           ),
         ],
@@ -803,29 +784,17 @@ class PdfExporter {
     );
   }
 
-  static pw.Widget _buildFooterStamp(String subject, PdfStudyStyle style) {
+  static pw.Widget _buildPageFooter(String subject, PdfStudyStyle style, pw.Context ctx) {
     return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 8),
+      padding: const pw.EdgeInsets.only(top: 6),
       decoration: pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(color: PdfColor.fromHex('#E2E8F0'), width: 0.8),
-        ),
+        border: pw.Border(top: pw.BorderSide(color: PdfColor.fromHex('#CBD5E1'), width: 0.6)),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(
-            style == PdfStudyStyle.minimalCute
-                ? '🌸 True Me • Study-Friendly Notes'
-                : (style == PdfStudyStyle.handwritten
-                    ? '📓 Cornell Study Sheet • Verified Notes'
-                    : 'True Me AI Study Platform'),
-            style: pw.TextStyle(fontSize: 8, color: PdfColor.fromHex('#94A3B8')),
-          ),
-          pw.Text(
-            'Subject: $subject',
-            style: pw.TextStyle(fontSize: 8, color: PdfColor.fromHex('#94A3B8')),
-          ),
+          pw.Text('TRUE ME · $subject', style: pw.TextStyle(fontSize: 8, color: PdfColor.fromHex('#64748B'))),
+          pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}', style: pw.TextStyle(fontSize: 8, color: PdfColor.fromHex('#64748B'))),
         ],
       ),
     );
@@ -837,88 +806,33 @@ class PdfExporter {
     required List<FlashcardModel> cards,
   }) async {
     final pdf = pw.Document();
-
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(24),
-        build: (pw.Context context) {
-          return [
-            pw.Text(
-              'Flashcard Review Sheet: $deckTitle',
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 16),
-            ...cards.map((card) {
-              return pw.Container(
+        build: (pw.Context context) => [
+          pw.Text('Flashcard Review Sheet: ${_sanitize(deckTitle)}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 16),
+          ...cards.map((card) => pw.Container(
                 margin: const pw.EdgeInsets.only(bottom: 12),
                 padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey300),
-                  borderRadius: pw.BorderRadius.circular(6),
-                ),
+                decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
                 child: pw.Row(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Expanded(
-                      flex: 4,
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'QUESTION',
-                            style: pw.TextStyle(
-                              fontSize: 8,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.indigo600,
-                            ),
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Text(card.front, style: const pw.TextStyle(fontSize: 10)),
-                        ],
-                      ),
-                    ),
-                    pw.Container(
-                      width: 1,
-                      height: 40,
-                      color: PdfColors.grey200,
-                      margin: const pw.EdgeInsets.symmetric(horizontal: 12),
-                    ),
-                    pw.Expanded(
-                      flex: 6,
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'ANSWER',
-                            style: pw.TextStyle(
-                              fontSize: 8,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.green700,
-                            ),
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Text(card.back, style: const pw.TextStyle(fontSize: 10)),
-                        ],
-                      ),
-                    ),
+                    pw.Expanded(flex: 4, child: pw.Text(_sanitize(card.front), style: const pw.TextStyle(fontSize: 10))),
+                    pw.SizedBox(width: 12),
+                    pw.Expanded(flex: 6, child: pw.Text(_sanitize(card.back), style: const pw.TextStyle(fontSize: 10))),
                   ],
                 ),
-              );
-            }),
-          ];
-        },
+              )),
+        ],
       ),
     );
-
     return pdf.save();
   }
 
-  /// Directly invokes print / share sheet on device.
   static Future<void> printPdf(Uint8List bytes, {String name = 'Study_Guide'}) async {
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => bytes,
-      name: name,
-    );
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => bytes, name: name);
   }
 }

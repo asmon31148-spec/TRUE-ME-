@@ -165,7 +165,7 @@ class DocumentParserService {
             .join('')
             .trim();
         if (text.isNotEmpty &&
-            !RegExp(r'^✦.*SLIDE\s+\d+/\d+.*✦$').hasMatch(text)) {
+            !RegExp(r'^[✦⚡].*SLIDE\s+\d+/\d+').hasMatch(text)) {
           paragraphs.add(text);
         }
       }
@@ -184,5 +184,22 @@ class DocumentParserService {
     }
 
     return slides;
+  }
+
+  static double parsePptxAspectRatio(Uint8List bytes) {
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes, verify: false);
+      final pres = archive.files.where((f) => f.name == 'ppt/presentation.xml').firstOrNull;
+      if (pres != null) {
+        final xml = utf8.decode(pres.content as List<int>, allowMalformed: true);
+        final m = RegExp(r'<p:sldSz\s+cx="(\d+)"\s+cy="(\d+)"').firstMatch(xml);
+        if (m != null) {
+          final cx = double.tryParse(m.group(1)!) ?? 0;
+          final cy = double.tryParse(m.group(2)!) ?? 0;
+          if (cx > 0 && cy > 0) return cx / cy;
+        }
+      }
+    } catch (_) {}
+    return 16 / 9;
   }
 }

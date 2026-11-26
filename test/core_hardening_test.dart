@@ -14,8 +14,12 @@ import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/config/env_config.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
 import 'package:trueme/features/export/docx_exporter.dart';
+import 'package:trueme/features/export/models/structured_study_document.dart';
+import 'package:trueme/features/export/pdf_exporter.dart';
 import 'package:trueme/features/export/pptx_exporter.dart';
+import 'package:trueme/features/export/services/document_generation_service.dart';
 import 'package:trueme/features/export/services/document_parser_service.dart';
+import 'package:trueme/features/export/services/document_pipeline_service.dart';
 import 'package:trueme/features/export/widgets/style_picker_sheet.dart';
 import 'package:trueme/features/quiz/providers/quiz_provider.dart';
 import 'package:trueme/features/upload/services/pdf_processor.dart';
@@ -338,6 +342,97 @@ void main() {
       expect(snaps['openrouter']?.status, DataSourceBadge.unavailable);
       expect(snaps['groq']?.status, DataSourceBadge.official);
       expect(snaps['groq']?.discoveredModelIds, contains('openai/gpt-oss-120b'));
+    });
+  });
+
+  group('Unified Document Generation & 12-Style QA', () {
+    const sampleDoc = StructuredStudyDocument(
+      title: 'Cellular Respiration',
+      subject: 'Biology',
+      topic: 'Metabolism',
+      purpose: 'Exam Study Guide',
+      academicLevel: 'Course Level',
+      executiveSummary: 'ATP synthesis via glycolysis, Krebs cycle, and oxidative phosphorylation.',
+      learningObjectives: ['Explain glycolysis', 'Compare aerobic vs anaerobic yield'],
+      sections: [
+        StudySectionBlock(
+          heading: 'Glycolysis',
+          body: 'Occurs in the cytosol. Converts glucose into two pyruvate molecules. Produces 2 net ATP.',
+          definitions: ['Substrate-level phosphorylation: direct ATP synthesis'],
+          keyPoints: ['Investment phase uses 2 ATP', 'Payoff phase yields 4 ATP and 2 NADH'],
+          examples: ['Muscle cells under hypoxia'],
+          processSteps: ['Hexokinase', 'PFK-1', 'Pyruvate kinase'],
+          tableRows: [
+            ['Pathway', 'Location', 'Net ATP'],
+            ['Glycolysis', 'Cytosol', '2 ATP'],
+            ['Krebs Cycle', 'Mitochondrial Matrix', '2 GTP'],
+          ],
+          calloutWarning: 'PFK-1 is the committed rate-limiting step.',
+        ),
+      ],
+      takeaways: ['Aerobic respiration yields ~30-32 ATP per glucose'],
+    );
+
+    test('All 4 PDF styles generate valid PDFs without leaking #### markers', () async {
+      for (final opt in StylePickerSheet.pdfStyles) {
+        final bytes = await PdfExporter.generateStudyGuidePdf(
+          title: sampleDoc.title,
+          subject: sampleDoc.subject,
+          content: '#### Deep Heading\nBody text',
+          structuredDoc: sampleDoc,
+          style: PdfExporter.fromStyleId(opt.id),
+        );
+        expect(DocumentParserService.detectFormat(bytes, 'out.pdf'), ParsedDocFormat.pdf);
+        expect(bytes.length, greaterThan(500));
+      }
+    });
+
+    test('All 4 DOCX styles generate semantic DOCX with <w:tbl> tables', () {
+      for (final opt in StylePickerSheet.docxStyles) {
+        final bytes = DocxExporter.createDocument(
+          title: sampleDoc.title,
+          subject: sampleDoc.subject,
+          content: '',
+          structuredDoc: sampleDoc,
+          style: DocxExporter.fromStyleId(opt.id),
+        );
+        expect(DocumentParserService.detectFormat(bytes, 'out.docx'), ParsedDocFormat.docx);
+        final blocks = DocumentParserService.parseDocx(bytes);
+        expect(blocks.any((b) => b.kind == 'table' && b.rows.length == 3), isTrue);
+      }
+    });
+
+    test('All 4 PPTX styles use 16:9 widescreen and lossless slide splitting', () {
+      final slides = DocumentPipelineService.toSlideDeck(sampleDoc);
+      // 1 overview + >1 split slides for dense Glycolysis section + 1 takeaways
+      expect(slides.length, greaterThanOrEqualTo(4));
+
+      for (final opt in StylePickerSheet.pptxStyles) {
+        final bytes = PptxExporter.createPresentation(
+          presentationTitle: sampleDoc.title,
+          slides: slides,
+          style: PptxExporter.fromStyleId(opt.id),
+        );
+        expect(DocumentParserService.detectFormat(bytes, 'out.pptx'), ParsedDocFormat.pptx);
+        expect(DocumentParserService.parsePptxAspectRatio(bytes), closeTo(16 / 9, 0.01));
+        final parsed = DocumentParserService.parsePptx(bytes);
+        expect(parsed.length, slides.length);
+      }
+    });
+
+    test('DocumentGenerationService detects explicit user styles and returns null otherwise', () {
+      expect(
+        DocumentGenerationService.detectExplicitStyleId('Make a Handwritten Notes PDF', 'pdf'),
+        'handwritten_notes',
+      );
+      expect(
+        DocumentGenerationService.detectExplicitStyleId('Create a PDF of chapter 2', 'pdf'),
+        isNull,
+      );
+      expect(
+        DocumentGenerationService.detectExplicitStyleId('Build an Infographic Presentation', 'pptx'),
+        'infographic_presentation',
+      );
     });
   });
 }

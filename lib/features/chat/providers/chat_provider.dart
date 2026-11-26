@@ -1,19 +1,12 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/cognitive/app_capabilities_manifest.dart';
 import '../../../core/ai/cognitive/student_cognitive_profile.dart';
 import '../../../core/ai/rag_service.dart';
-import '../../../core/ai/syllabus_service.dart';
-import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/utils/text_chunker.dart';
-import '../../export/docx_exporter.dart';
-import '../../export/pdf_exporter.dart';
-import '../../export/pptx_exporter.dart';
+import '../../export/services/document_generation_service.dart';
 
 enum SageActionType {
   exportPdf,
@@ -32,12 +25,20 @@ class SageAction {
   final String label;
   final String topic;
   final String? filePath;
+  final bool needsStylePicker;
+  final String? pendingSubject;
+  final String? pendingNotebookId;
+  final String? pendingSourceContext;
 
   const SageAction({
     required this.type,
     required this.label,
     required this.topic,
     this.filePath,
+    this.needsStylePicker = false,
+    this.pendingSubject,
+    this.pendingNotebookId,
+    this.pendingSourceContext,
   });
 
   Map<String, dynamic> toMap() => {
@@ -45,6 +46,9 @@ class SageAction {
         'label': label,
         'topic': topic,
         'filePath': filePath,
+        if (needsStylePicker) 'needsStylePicker': needsStylePicker,
+        if (pendingSubject != null) 'pendingSubject': pendingSubject,
+        if (pendingNotebookId != null) 'pendingNotebookId': pendingNotebookId,
       };
 
   factory SageAction.fromMap(Map<String, dynamic> map) {
@@ -58,6 +62,9 @@ class SageAction {
       label: map['label'] as String? ?? 'Open tool',
       topic: map['topic'] as String? ?? '',
       filePath: map['filePath'] as String?,
+      needsStylePicker: map['needsStylePicker'] == true,
+      pendingSubject: map['pendingSubject'] as String?,
+      pendingNotebookId: map['pendingNotebookId'] as String?,
     );
   }
 }
@@ -239,183 +246,95 @@ class ChatNotifier extends StateNotifier<ChatState> {
     return (clean, type, topic.isNotEmpty ? topic : defaultTopic);
   }
 
+  Future<GeneratedDocumentResult?> generateDocumentWithStyle({
+    required String format,
+    required String styleId,
+    required String topic,
+    required String subject,
+    String? notebookId,
+    String? sourceContext,
+  }) async {
+    state = state.copyWith(isThinking: true, error: null);
+    try {
+      final res = await DocumentGenerationService.generateAndSave(
+        aiRouter: _aiRouter,
+        format: format,
+        styleId: styleId,
+        subject: subject,
+        topic: topic,
+        notebookId: notebookId,
+        sourceContext: sourceContext,
+        sourceChatId: scopeKey,
+      );
+
+      final doneMsg = ChatMessage(
+        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+        isUser: false,
+        text: 'Generated your **${format.toUpperCase()}** ($styleId) for **$subject — $topic** and saved it to your Study Library.',
+        action: SageAction(
+          type: format == 'pdf'
+              ? SageActionType.exportPdf
+              : (format == 'docx' ? SageActionType.exportDocx : SageActionType.exportPptx),
+          label: 'Open ${format.toUpperCase()}',
+          topic: res.title,
+          filePath: res.filePath,
+        ),
+        timestamp: DateTime.now(),
+      );
+      state = state.copyWith(
+        messages: [...state.messages, doneMsg],
+        isThinking: false,
+      );
+      _persist();
+      return res;
+    } catch (e) {
+      state = state.copyWith(isThinking: false, error: e.toString());
+      return null;
+    }
+  }
+
   Future<SageAction> _executeAction({
     required SageActionType type,
     required String topic,
     required String subject,
     required String? notebookId,
     required String contentForExport,
+    String userQuestion = '',
   }) async {
-    final safeBase = subject.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
-    final dir = await getApplicationDocumentsDirectory();
-
     switch (type) {
       case SageActionType.exportPdf:
-        PdfStudyStyle pdfStyle = PdfStudyStyle.handwritten;
-        final lower = '$topic $contentForExport'.toLowerCase();
-        if (lower.contains('cute') || lower.contains('pastel') || lower.contains('minimal')) {
-          pdfStyle = PdfStudyStyle.minimalCute;
-        } else if (lower.contains('zen') || lower.contains('ink') || lower.contains('parchment')) {
-          pdfStyle = PdfStudyStyle.zenPaperInk;
-        } else if (lower.contains('modern') || lower.contains('clean')) {
-          pdfStyle = PdfStudyStyle.modernClean;
-        } else {
-          final pref = OfflineCacheService.getPreferredPdfStyle();
-          if (pref == 'minimalCute') {
-            pdfStyle = PdfStudyStyle.minimalCute;
-          } else if (pref == 'zenPaperInk') {
-            pdfStyle = PdfStudyStyle.zenPaperInk;
-          } else if (pref == 'modernClean') {
-            pdfStyle = PdfStudyStyle.modernClean;
-          } else {
-            pdfStyle = PdfStudyStyle.handwritten;
-          }
-        }
-
-        final bytes = await PdfExporter.generateStudyGuidePdf(
-          title: '$subject — $topic',
-          subject: subject,
-          content: contentForExport,
-          style: pdfStyle,
-        );
-        final styleTag = pdfStyle == PdfStudyStyle.handwritten
-            ? 'Handwritten_Notebook'
-            : (pdfStyle == PdfStudyStyle.minimalCute
-                ? 'Minimal_Cute'
-                : (pdfStyle == PdfStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
-        final fileName = '${safeBase}_${styleTag}_Guide.pdf';
-        final outFile = File('${dir.path}/$fileName');
-        await outFile.writeAsBytes(bytes, flush: true);
-        if (notebookId != null && notebookId.isNotEmpty) {
-          await SyllabusService.saveArtifact(
-            notebookId: notebookId,
-            artifactType: 'pdf',
-            title: '$subject — $topic',
-            topicLabel: topic,
-            filePath: outFile.path,
-            sourceChatId: notebookId,
-          );
-        }
-        if (CloudVaultService.isAnyVaultConnected) {
-          try {
-            await CloudVaultService.uploadFile(
-              outFile,
-              customName: fileName,
-              subject: subject,
-              section: 'Notes',
-            );
-          } catch (_) {}
-        }
-        return SageAction(
-          type: SageActionType.exportPdf,
-          label: 'Open / Share PDF ($fileName)',
-          topic: topic,
-          filePath: outFile.path,
-        );
-
       case SageActionType.exportDocx:
-        final bytes = DocxExporter.createDocument(
-          title: '$subject — $topic',
-          subject: subject,
-          content: contentForExport,
-        );
-        final fileName = '${safeBase}_Sage_Notes.docx';
-        final outFile = File('${dir.path}/$fileName');
-        await outFile.writeAsBytes(bytes, flush: true);
-        if (notebookId != null && notebookId.isNotEmpty) {
-          await SyllabusService.saveArtifact(
-            notebookId: notebookId,
-            artifactType: 'docx',
-            title: '$subject — $topic',
-            topicLabel: topic,
-            filePath: outFile.path,
-            sourceChatId: notebookId,
-          );
-        }
-        if (CloudVaultService.isAnyVaultConnected) {
-          try {
-            await CloudVaultService.uploadFile(
-              outFile,
-              customName: fileName,
-              subject: subject,
-              section: 'Notes',
-            );
-          } catch (_) {}
-        }
-        return SageAction(
-          type: SageActionType.exportDocx,
-          label: 'Open Word Document (.docx)',
-          topic: topic,
-          filePath: outFile.path,
-        );
-
       case SageActionType.exportPptx:
-        PptxStudyStyle pptxStyle = PptxStudyStyle.minimalCute;
-        final lowerPpt = '$topic $contentForExport'.toLowerCase();
-        if (lowerPpt.contains('handwritten') || lowerPpt.contains('notebook') || lowerPpt.contains('cornell')) {
-          pptxStyle = PptxStudyStyle.handwrittenNotebook;
-        } else if (lowerPpt.contains('zen') || lowerPpt.contains('ink') || lowerPpt.contains('parchment')) {
-          pptxStyle = PptxStudyStyle.zenPaperInk;
-        } else if (lowerPpt.contains('modern') || lowerPpt.contains('dark') || lowerPpt.contains('slate')) {
-          pptxStyle = PptxStudyStyle.modernHighYield;
-        } else if (lowerPpt.contains('cute') || lowerPpt.contains('pastel') || lowerPpt.contains('minimal')) {
-          pptxStyle = PptxStudyStyle.minimalCute;
-        } else {
-          final pref = OfflineCacheService.getPreferredPptxStyle();
-          if (pref == 'handwrittenNotebook') {
-            pptxStyle = PptxStudyStyle.handwrittenNotebook;
-          } else if (pref == 'zenPaperInk') {
-            pptxStyle = PptxStudyStyle.zenPaperInk;
-          } else if (pref == 'modernHighYield') {
-            pptxStyle = PptxStudyStyle.modernHighYield;
-          } else {
-            pptxStyle = PptxStudyStyle.minimalCute;
-          }
-        }
-
-        final slidesRaw = await _aiRouter.executeHeavyReasoning(
-          prompt:
-              'Convert this study material for "$subject" into 6 concise PowerPoint slides. Return ONLY a JSON array [{"title": "...", "bullets": ["...", "..."]}].\n\nMaterial:\n$contentForExport',
-        );
-        final slides = _parseSlides(slidesRaw, subject);
-        final bytes = PptxExporter.createPresentation(
-          presentationTitle: '$subject Slides',
-          slides: slides,
-          style: pptxStyle,
-        );
-        final styleTag = pptxStyle == PptxStudyStyle.minimalCute
-            ? 'Cute_Minimal'
-            : (pptxStyle == PptxStudyStyle.handwrittenNotebook
-                ? 'Handwritten_Notebook'
-                : (pptxStyle == PptxStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
-        final fileName = '${safeBase}_${styleTag}_Slides.pptx';
-        final outFile = File('${dir.path}/$fileName');
-        await outFile.writeAsBytes(bytes, flush: true);
-        if (notebookId != null && notebookId.isNotEmpty) {
-          await SyllabusService.saveArtifact(
-            notebookId: notebookId,
-            artifactType: 'pptx',
-            title: '$subject Slides',
-            topicLabel: topic,
-            filePath: outFile.path,
-            sourceChatId: notebookId,
+        final format = type == SageActionType.exportPdf
+            ? 'pdf'
+            : (type == SageActionType.exportDocx ? 'docx' : 'pptx');
+        final explicitStyle = DocumentGenerationService.detectExplicitStyleId(userQuestion, format);
+        if (explicitStyle == null) {
+          return SageAction(
+            type: type,
+            label: 'Choose Style & Generate ${format.toUpperCase()}',
+            topic: topic,
+            needsStylePicker: true,
+            pendingSubject: subject,
+            pendingNotebookId: notebookId,
+            pendingSourceContext: contentForExport,
           );
         }
-        if (CloudVaultService.isAnyVaultConnected) {
-          try {
-            await CloudVaultService.uploadFile(
-              outFile,
-              customName: fileName,
-              subject: subject,
-              section: 'Notes',
-            );
-          } catch (_) {}
-        }
-        return SageAction(
-          type: SageActionType.exportPptx,
-          label: 'Open PowerPoint ($fileName)',
+        final res = await DocumentGenerationService.generateAndSave(
+          aiRouter: _aiRouter,
+          format: format,
+          styleId: explicitStyle,
+          subject: subject,
           topic: topic,
-          filePath: outFile.path,
+          notebookId: notebookId,
+          sourceContext: contentForExport,
+          sourceChatId: scopeKey,
+        );
+        return SageAction(
+          type: type,
+          label: 'Open ${format.toUpperCase()} (${res.title})',
+          topic: res.title,
+          filePath: res.filePath,
         );
 
       case SageActionType.schedule:
@@ -478,32 +397,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
           topic: topic,
         );
     }
-  }
-
-  List<PptxSlideData> _parseSlides(String raw, String fallbackTitle) {
-    try {
-      String cleaned = raw.trim();
-      final start = cleaned.indexOf('[');
-      final end = cleaned.lastIndexOf(']');
-      if (start >= 0 && end > start) cleaned = cleaned.substring(start, end + 1);
-      final list = jsonDecode(cleaned) as List<dynamic>;
-      final slides = <PptxSlideData>[];
-      for (final item in list) {
-        if (item is Map) {
-          final t = (item['title'] as String? ?? 'Key Concept').trim();
-          final bList = (item['bullets'] as List? ?? []).map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
-          if (bList.isNotEmpty) slides.add(PptxSlideData(title: t, bulletPoints: bList));
-        }
-      }
-      if (slides.isNotEmpty) return slides;
-    } catch (_) {}
-    final lines = raw.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).take(6).toList();
-    return [
-      PptxSlideData(
-        title: fallbackTitle,
-        bulletPoints: lines.isNotEmpty ? lines : ['Summary of $fallbackTitle'],
-      ),
-    ];
   }
 
   Future<ChatMessage?> sendMessage({
@@ -645,8 +538,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
           subject: subjectLabel,
           notebookId: targetNbId,
           contentForExport: lastAiAnswer,
+          userQuestion: cleanQuestion,
         );
-        rawAnswer = 'Done! I generated your ${directIntent.name.replaceFirst('export', '').toUpperCase()} file for **$subjectLabel**. Tap the button below to open or share it.';
+        rawAnswer = finalAction.needsStylePicker
+            ? 'Choose a visual style for your **${directIntent.name.replaceFirst('export', '').toUpperCase()}** of **$subjectLabel**.'
+            : 'Done! I generated your ${directIntent.name.replaceFirst('export', '').toUpperCase()} file for **$subjectLabel**. Tap the button below to open it.';
       } else {
         try {
           if (retrievedExcerpts.isEmpty) {
@@ -718,6 +614,7 @@ $manifest
             subject: subjectLabel,
             notebookId: targetNbId,
             contentForExport: exportSource,
+            userQuestion: cleanQuestion,
           );
         }
       }

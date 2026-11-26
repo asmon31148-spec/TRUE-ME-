@@ -3,10 +3,10 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 
 enum PptxStudyStyle {
-  minimalCute,       // Study-friendly minimal cute with soft Sakura & Lavender cards, aesthetic pill badges
-  handwrittenNotebook, // Cornell notebook lined paper, yellow highlighter bar, sticky notes
-  zenPaperInk,       // Japanese Washi parchment, Sumi calligraphy ink, Vermilion Hanko seal
-  modernHighYield,   // Executive dark slate & glowing cyan cards
+  minimalCute,         // Creative Illustrated
+  handwrittenNotebook, // Minimal Editorial
+  zenPaperInk,         // Professional Scientific
+  modernHighYield,     // Infographic Presentation
 }
 
 class PptxSlideData {
@@ -46,7 +46,8 @@ class PptxExporter {
     }
   }
 
-  /// Assembles an OpenXML PowerPoint (.pptx) file with selectable study aesthetic styles.
+  /// Generates a 16:9 widescreen OpenXML PowerPoint (.pptx) presentation
+  /// with 4 distinct slide design systems and adaptive non-clipping layouts.
   static Uint8List createPresentation({
     required String presentationTitle,
     required List<PptxSlideData> slides,
@@ -54,7 +55,6 @@ class PptxExporter {
   }) {
     final archive = Archive();
 
-    // 1. [Content_Types].xml
     final contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -67,29 +67,27 @@ class PptxExporter {
 </Types>''';
     archive.addFile(_createArchiveFile('[Content_Types].xml', contentTypesXml));
 
-    // 2. _rels/.rels
     const rootRelsXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
 </Relationships>''';
     archive.addFile(_createArchiveFile('_rels/.rels', rootRelsXml));
 
-    // 3. ppt/presentation.xml
     final slideIdList = List.generate(
       slides.length,
       (i) => '<p:sldId id="${256 + i}" r:id="rId${i + 2}"/>',
     ).join('');
 
+    // 16:9 widescreen: 12192000 x 6858000 EMU (13.333" x 7.5")
     final presentationXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>
   <p:sldIdLst>$slideIdList</p:sldIdLst>
-  <p:sldSz cx="9144000" cy="6858000"/>
+  <p:sldSz cx="12192000" cy="6858000"/>
   <p:notesSz cx="6858000" cy="9144000"/>
 </p:presentation>''';
     archive.addFile(_createArchiveFile('ppt/presentation.xml', presentationXml));
 
-    // 4. ppt/_rels/presentation.xml.rels
     final presRelsXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
@@ -97,11 +95,8 @@ class PptxExporter {
 </Relationships>''';
     archive.addFile(_createArchiveFile('ppt/_rels/presentation.xml.rels', presRelsXml));
 
-    // 5. Theme XML
-    final themeXml = _buildThemeXml(style);
-    archive.addFile(_createArchiveFile('ppt/theme/theme1.xml', themeXml));
+    archive.addFile(_createArchiveFile('ppt/theme/theme1.xml', _buildThemeXml(style)));
 
-    // SlideMaster and SlideLayout
     const slideMasterXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>
@@ -129,12 +124,9 @@ class PptxExporter {
 </Relationships>''';
     archive.addFile(_createArchiveFile('ppt/slideLayouts/_rels/slideLayout1.xml.rels', slideLayoutRelsXml));
 
-    // 6. Generate Individual Styled Slides
     for (int i = 0; i < slides.length; i++) {
-      final s = slides[i];
-      final slideXml = _buildSlideXml(s, i, slides.length, presentationTitle, style);
+      final slideXml = _buildSlideXml(slides[i], i, slides.length, presentationTitle, style);
       archive.addFile(_createArchiveFile('ppt/slides/slide${i + 1}.xml', slideXml));
-
       const slideRelXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
@@ -147,9 +139,6 @@ class PptxExporter {
     return Uint8List.fromList(outputBytes!);
   }
 
-  // ---------------------------------------------------------------------------
-  // SLIDE XML BUILDER WITH RICH STYLES
-  // ---------------------------------------------------------------------------
   static String _buildSlideXml(
     PptxSlideData s,
     int index,
@@ -157,537 +146,208 @@ class PptxExporter {
     String deckTitle,
     PptxStudyStyle style,
   ) {
+    final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concept summary'];
+    final tagText = (s.tag != null && s.tag!.trim().isNotEmpty)
+        ? s.tag!.trim()
+        : 'SLIDE ${index + 1}/$totalSlides';
+
+    // Adaptive font size so dense slides never clip
+    final totalChars = safeBullets.fold<int>(0, (sum, b) => sum + b.length);
+    final bodySz = totalChars > 420 ? '1300' : (totalChars > 240 ? '1450' : '1600');
+
     switch (style) {
       case PptxStudyStyle.minimalCute:
-        return _buildMinimalCuteSlide(s, index, totalSlides, deckTitle);
-      case PptxStudyStyle.handwrittenNotebook:
-        return _buildHandwrittenSlide(s, index, totalSlides, deckTitle);
+        // Creative Illustrated (16:9 Pastel Sakura & Lavender)
+        return _renderStructured16x9Slide(
+          bgHex: 'FDF2F8',
+          cardHex: 'FFFFFF',
+          cardBorderHex: 'FBCFE8',
+          accentHex: 'DB2777',
+          titleHex: '831843',
+          bodyHex: '374151',
+          badgeBgHex: 'FCE7F3',
+          badgeText: tagText,
+          title: s.title,
+          bullets: safeBullets,
+          bulletGlyph: '•  ',
+          bodySz: bodySz,
+          takeaway: s.takeaway,
+          footerText: 'True Me • Creative Illustrated • ${_escapeXml(deckTitle)} (${index + 1}/$totalSlides)',
+        );
+
       case PptxStudyStyle.zenPaperInk:
-        return _buildZenSlide(s, index, totalSlides, deckTitle);
+        // Professional Scientific (16:9 Clean Navy & Slate)
+        return _renderStructured16x9Slide(
+          bgHex: 'F8FAFC',
+          cardHex: 'FFFFFF',
+          cardBorderHex: 'CBD5E1',
+          accentHex: '1E3A8A',
+          titleHex: '0F172A',
+          bodyHex: '1E293B',
+          badgeBgHex: 'DBEAFE',
+          badgeText: tagText,
+          title: s.title,
+          bullets: safeBullets,
+          bulletGlyph: '▪  ',
+          bodySz: bodySz,
+          takeaway: s.takeaway,
+          footerText: 'True Me • Professional Scientific • ${_escapeXml(deckTitle)} (${index + 1}/$totalSlides)',
+        );
+
+      case PptxStudyStyle.handwrittenNotebook:
+        // Minimal Editorial (16:9 Warm Ivory & Generous Whitespace)
+        return _renderStructured16x9Slide(
+          bgHex: 'FDFBF7',
+          cardHex: 'FFFFFF',
+          cardBorderHex: 'E7E5E4',
+          accentHex: '7C3AED',
+          titleHex: '1C1917',
+          bodyHex: '292524',
+          badgeBgHex: 'F5F3FF',
+          badgeText: tagText,
+          title: s.title,
+          bullets: safeBullets,
+          bulletGlyph: '—  ',
+          bodySz: bodySz,
+          takeaway: s.takeaway,
+          footerText: 'True Me • Minimal Editorial • ${_escapeXml(deckTitle)} (${index + 1}/$totalSlides)',
+        );
+
       case PptxStudyStyle.modernHighYield:
-        return _buildModernSlide(s, index, totalSlides, deckTitle);
+        // Infographic Presentation (16:9 Dark Slate & Neon Cyan Cards)
+        return _renderStructured16x9Slide(
+          bgHex: '0F172A',
+          cardHex: '1E293B',
+          cardBorderHex: '334155',
+          accentHex: '22D3EE',
+          titleHex: 'F8FAFC',
+          bodyHex: 'E2E8F0',
+          badgeBgHex: '083344',
+          badgeText: tagText,
+          title: s.title,
+          bullets: safeBullets,
+          bulletGlyph: '▸  ',
+          bodySz: bodySz,
+          takeaway: s.takeaway,
+          footerText: 'True Me • Infographic Presentation • ${_escapeXml(deckTitle)} (${index + 1}/$totalSlides)',
+        );
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 1. MINIMAL CUTE SLIDE (Pastel Sakura & Lavender with rounded cards)
-  // ---------------------------------------------------------------------------
-  static String _buildMinimalCuteSlide(
-    PptxSlideData s,
-    int index,
-    int totalSlides,
-    String deckTitle,
-  ) {
-    final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concept summary point'];
-    final bulletLinesXml = safeBullets.map((b) {
+  static String _renderStructured16x9Slide({
+    required String bgHex,
+    required String cardHex,
+    required String cardBorderHex,
+    required String accentHex,
+    required String titleHex,
+    required String bodyHex,
+    required String badgeBgHex,
+    required String badgeText,
+    required String title,
+    required List<String> bullets,
+    required String bulletGlyph,
+    required String bodySz,
+    String? takeaway,
+    required String footerText,
+  }) {
+    final bulletLinesXml = bullets.map((b) {
       return '''<a:p>
         <a:pPr marL="288000" indent="-288000"/>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500" b="1">
-            <a:solidFill><a:srgbClr val="EC4899"/></a:solidFill>
-          </a:rPr>
-          <a:t>✿  </a:t>
-        </a:r>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500">
-            <a:solidFill><a:srgbClr val="374151"/></a:solidFill>
-          </a:rPr>
-          <a:t>${_escapeXml(b)}</a:t>
-        </a:r>
+        <a:r><a:rPr lang="en-US" sz="$bodySz" b="1"><a:solidFill><a:srgbClr val="$accentHex"/></a:solidFill></a:rPr><a:t>$bulletGlyph</a:t></a:r>
+        <a:r><a:rPr lang="en-US" sz="$bodySz"><a:solidFill><a:srgbClr val="$bodyHex"/></a:solidFill></a:rPr><a:t>${_escapeXml(b)}</a:t></a:r>
       </a:p>
-      <a:p><a:endParaRPr sz="600"/></a:p>''';
+      <a:p><a:endParaRPr sz="500"/></a:p>''';
     }).join('');
 
-    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld>
-    <p:bg>
-      <p:bgPr>
-        <a:solidFill><a:srgbClr val="FDF2F8"/></a:solidFill>
-      </p:bgPr>
-    </p:bg>
-    <p:spTree>
-      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-      <p:grpSpPr/>
+    final hasTakeaway = takeaway != null && takeaway.trim().isNotEmpty;
+    final bodyWidth = hasTakeaway ? '7300000' : '10300000';
 
-      <!-- Main White Rounded Card Container -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="2" name="Card"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+    final takeawayXml = hasTakeaway
+        ? '''<p:sp>
+        <p:nvSpPr><p:cNvPr id="7" name="Takeaway"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
-          <a:xfrm><a:off x="548640" y="457200"/><a:ext cx="8046720" cy="5943600"/></a:xfrm>
-          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 2000"/></a:avLst></a:prstGeom>
-          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
-          <a:ln w="25400"><a:solidFill><a:srgbClr val="FBCFE8"/></a:solidFill></a:ln>
-        </p:spPr>
-      </p:sp>
-
-      <!-- Pill Badge: STUDY CARD -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="3" name="PillBadge"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="822960" y="731520"/><a:ext cx="2743200" cy="365760"/></a:xfrm>
-          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom>
-          <a:solidFill><a:srgbClr val="FCE7F3"/></a:solidFill>
-          <a:ln w="9525"><a:solidFill><a:srgbClr val="F472B6"/></a:solidFill></a:ln>
+          <a:xfrm><a:off x="8450000" y="1950000"/><a:ext cx="2850000" cy="3900000"/></a:xfrm>
+          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 3500"/></a:avLst></a:prstGeom>
+          <a:solidFill><a:srgbClr val="$badgeBgHex"/></a:solidFill>
+          <a:ln w="12700"><a:solidFill><a:srgbClr val="$accentHex"/></a:solidFill></a:ln>
         </p:spPr>
         <p:txBody>
-          <a:bodyPr rtlCol="0" anchor="ctr"/>
+          <a:bodyPr wrap="square" lIns="140000" rIns="140000" tIns="140000" bIns="140000"/>
           <a:lstStyle/>
-          <a:p>
-            <a:pPr algn="ctr"/>
-            <a:r>
-              <a:rPr lang="en-US" sz="1000" b="1">
-                <a:solidFill><a:srgbClr val="DB2777"/></a:solidFill>
-              </a:rPr>
-              <a:t>✦ SAGE STUDY DECK • SLIDE ${index + 1}/$totalSlides ✦</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-
-      <!-- Title -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="4" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="822960" y="1188720"/><a:ext cx="7500000" cy="731520"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="2400" b="1">
-                <a:solidFill><a:srgbClr val="831843"/></a:solidFill>
-              </a:rPr>
-              <a:t>${_escapeXml(s.title)}</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-
-      <!-- Bullets Body -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="5" name="Bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="822960" y="2011680"/><a:ext cx="7500000" cy="3800000"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          $bulletLinesXml
-        </p:txBody>
-      </p:sp>
-
-      <!-- Cute Footer Bar -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="6" name="Footer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="822960" y="5943600"/><a:ext cx="7500000" cy="274320"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="900">
-                <a:solidFill><a:srgbClr val="F472B6"/></a:solidFill>
-              </a:rPr>
-              <a:t>🌸 True Me • Minimal Cute Study Series • ${_escapeXml(deckTitle)}</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-    </p:spTree>
-  </p:cSld>
-</p:sld>''';
-  }
-
-  // ---------------------------------------------------------------------------
-  // 2. HANDWRITTEN CORNELL NOTEBOOK SLIDE
-  // ---------------------------------------------------------------------------
-  static String _buildHandwrittenSlide(
-    PptxSlideData s,
-    int index,
-    int totalSlides,
-    String deckTitle,
-  ) {
-    final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concept note'];
-    final bulletLinesXml = safeBullets.map((b) {
-      return '''<a:p>
-        <a:pPr marL="288000" indent="-288000"/>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500" b="1">
-            <a:solidFill><a:srgbClr val="CA8A04"/></a:solidFill>
-          </a:rPr>
-          <a:t>[✔]  </a:t>
-        </a:r>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500">
-            <a:solidFill><a:srgbClr val="1E293B"/></a:solidFill>
-          </a:rPr>
-          <a:t>${_escapeXml(b)}</a:t>
-        </a:r>
-      </a:p>
-      <a:p><a:endParaRPr sz="600"/></a:p>''';
-    }).join('');
-
-    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld>
-    <p:bg>
-      <p:bgPr>
-        <a:solidFill><a:srgbClr val="FDFBF7"/></a:solidFill>
-      </p:bgPr>
-    </p:bg>
-    <p:spTree>
-      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-      <p:grpSpPr/>
-
-      <!-- Cornell Left Red Margin Line -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="2" name="MarginLine"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="1000000" y="0"/><a:ext cx="25400" cy="6858000"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-          <a:solidFill><a:srgbClr val="FCA5A5"/></a:solidFill>
-        </p:spPr>
-      </p:sp>
-
-      <!-- Yellow Highlighter Behind Title -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="3" name="Highlighter"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="1200000" y="550000"/><a:ext cx="6500000" cy="700000"/></a:xfrm>
-          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 2000"/></a:avLst></a:prstGeom>
-          <a:solidFill><a:srgbClr val="FEF08A"/></a:solidFill>
-        </p:spPr>
-      </p:sp>
-
-      <!-- Title Text -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="4" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="1300000" y="600000"/><a:ext cx="6300000" cy="600000"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="2400" b="1">
-                <a:solidFill><a:srgbClr val="0F172A"/></a:solidFill>
-              </a:rPr>
-              <a:t>${_escapeXml(s.title)}</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-
-      <!-- Bullets Content -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="5" name="Content"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="1300000" y="1600000"/><a:ext cx="5200000" cy="4200000"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          $bulletLinesXml
-        </p:txBody>
-      </p:sp>
-
-      <!-- Sticky Note on Right Side -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="6" name="StickyNote"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="6700000" y="1600000"/><a:ext cx="2000000" cy="3000000"/></a:xfrm>
-          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 2000"/></a:avLst></a:prstGeom>
-          <a:solidFill><a:srgbClr val="FEF9C3"/></a:solidFill>
-          <a:ln w="19050"><a:solidFill><a:srgbClr val="FACC15"/></a:solidFill></a:ln>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="1100" b="1">
-                <a:solidFill><a:srgbClr val="854D0E"/></a:solidFill>
-              </a:rPr>
-              <a:t>📌 EXAM KEYNOTE</a:t>
-            </a:r>
-          </a:p>
+          <a:p><a:r><a:rPr lang="en-US" sz="1200" b="1"><a:solidFill><a:srgbClr val="$accentHex"/></a:solidFill></a:rPr><a:t>KEY TAKEAWAY</a:t></a:r></a:p>
           <a:p><a:endParaRPr sz="400"/></a:p>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="1000">
-                <a:solidFill><a:srgbClr val="713F12"/></a:solidFill>
-              </a:rPr>
-              <a:t>Active recall: test this concept without looking at notes.</a:t>
-            </a:r>
-          </a:p>
+          <a:p><a:r><a:rPr lang="en-US" sz="1300"><a:solidFill><a:srgbClr val="$bodyHex"/></a:solidFill></a:rPr><a:t>${_escapeXml(takeaway.trim())}</a:t></a:r></a:p>
         </p:txBody>
-      </p:sp>
-
-      <!-- Notebook Bottom Label -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="7" name="Footer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="1300000" y="6200000"/><a:ext cx="7000000" cy="300000"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="900">
-                <a:solidFill><a:srgbClr val="94A3B8"/></a:solidFill>
-              </a:rPr>
-              <a:t>📓 Cornell Handwritten Study Sheet • Slide ${index + 1}/$totalSlides • ${_escapeXml(deckTitle)}</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-    </p:spTree>
-  </p:cSld>
-</p:sld>''';
-  }
-
-  // ---------------------------------------------------------------------------
-  // 3. ZEN PAPER & INK SLIDE
-  // ---------------------------------------------------------------------------
-  static String _buildZenSlide(
-    PptxSlideData s,
-    int index,
-    int totalSlides,
-    String deckTitle,
-  ) {
-    final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concept summary point'];
-    final bulletLinesXml = safeBullets.map((b) {
-      return '''<a:p>
-        <a:pPr marL="288000" indent="-288000"/>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500" b="1">
-            <a:solidFill><a:srgbClr val="DC2626"/></a:solidFill>
-          </a:rPr>
-          <a:t>•  </a:t>
-        </a:r>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500">
-            <a:solidFill><a:srgbClr val="1C1917"/></a:solidFill>
-          </a:rPr>
-          <a:t>${_escapeXml(b)}</a:t>
-        </a:r>
-      </a:p>
-      <a:p><a:endParaRPr sz="600"/></a:p>''';
-    }).join('');
+      </p:sp>'''
+        : '';
 
     return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld>
-    <p:bg>
-      <p:bgPr>
-        <a:solidFill><a:srgbClr val="FBF9F5"/></a:solidFill>
-      </p:bgPr>
-    </p:bg>
+    <p:bg><p:bgPr><a:solidFill><a:srgbClr val="$bgHex"/></a:solidFill></p:bgPr></p:bg>
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
       <p:grpSpPr/>
 
-      <!-- Vermilion Seal Stamp -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="2" name="Hanko"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="685800" y="600000"/><a:ext cx="365760" cy="365760"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-          <a:solidFill><a:srgbClr val="DC2626"/></a:solidFill>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr rtlCol="0" anchor="ctr"/>
-          <a:lstStyle/>
-          <a:p>
-            <a:pPr algn="ctr"/>
-            <a:r>
-              <a:rPr lang="en-US" sz="1000" b="1">
-                <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
-              </a:rPr>
-              <a:t>TM</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-
-      <!-- Title -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="3" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="1200000" y="480000"/><a:ext cx="7000000" cy="731520"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="2600" b="1">
-                <a:solidFill><a:srgbClr val="1C1917"/></a:solidFill>
-              </a:rPr>
-              <a:t>${_escapeXml(s.title)}</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-
-      <!-- Calligraphic Divider -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="4" name="Divider"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="685800" y="1300000"/><a:ext cx="7772400" cy="19050"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-          <a:solidFill><a:srgbClr val="E7E3D9"/></a:solidFill>
-        </p:spPr>
-      </p:sp>
-
-      <!-- Bullets Body -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="5" name="Bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="685800" y="1600000"/><a:ext cx="7772400" cy="4200000"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          $bulletLinesXml
-        </p:txBody>
-      </p:sp>
-
-      <!-- Zen Footer -->
-      <p:sp>
-        <p:nvSpPr><p:cNvPr id="6" name="Footer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr>
-          <a:xfrm><a:off x="685800" y="6100000"/><a:ext cx="7772400" cy="274320"/></a:xfrm>
-          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-        </p:spPr>
-        <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="900">
-                <a:solidFill><a:srgbClr val="A8A29E"/></a:solidFill>
-              </a:rPr>
-              <a:t>True Me • Zen Paper &amp; Ink • Slide ${index + 1}/$totalSlides</a:t>
-            </a:r>
-          </a:p>
-        </p:txBody>
-      </p:sp>
-    </p:spTree>
-  </p:cSld>
-</p:sld>''';
-  }
-
-  // ---------------------------------------------------------------------------
-  // 4. MODERN HIGH-YIELD DARK SLATE SLIDE
-  // ---------------------------------------------------------------------------
-  static String _buildModernSlide(
-    PptxSlideData s,
-    int index,
-    int totalSlides,
-    String deckTitle,
-  ) {
-    final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concept summary point'];
-    final bulletLinesXml = safeBullets.map((b) {
-      return '''<a:p>
-        <a:pPr marL="288000" indent="-288000"/>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500" b="1">
-            <a:solidFill><a:srgbClr val="06B6D4"/></a:solidFill>
-          </a:rPr>
-          <a:t>▸  </a:t>
-        </a:r>
-        <a:r>
-          <a:rPr lang="en-US" sz="1500">
-            <a:solidFill><a:srgbClr val="E2E8F0"/></a:solidFill>
-          </a:rPr>
-          <a:t>${_escapeXml(b)}</a:t>
-        </a:r>
-      </a:p>
-      <a:p><a:endParaRPr sz="600"/></a:p>''';
-    }).join('');
-
-    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld>
-    <p:bg>
-      <p:bgPr>
-        <a:solidFill><a:srgbClr val="0F172A"/></a:solidFill>
-      </p:bgPr>
-    </p:bg>
-    <p:spTree>
-      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-      <p:grpSpPr/>
-
-      <!-- Dark Slate Card Container -->
       <p:sp>
         <p:nvSpPr><p:cNvPr id="2" name="Card"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
-          <a:xfrm><a:off x="548640" y="457200"/><a:ext cx="8046720" cy="5943600"/></a:xfrm>
+          <a:xfrm><a:off x="550000" y="420000"/><a:ext cx="11092000" cy="5960000"/></a:xfrm>
           <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 2000"/></a:avLst></a:prstGeom>
-          <a:solidFill><a:srgbClr val="1E293B"/></a:solidFill>
-          <a:ln w="25400"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:ln>
+          <a:solidFill><a:srgbClr val="$cardHex"/></a:solidFill>
+          <a:ln w="19050"><a:solidFill><a:srgbClr val="$cardBorderHex"/></a:solidFill></a:ln>
         </p:spPr>
       </p:sp>
 
-      <!-- Pill Badge -->
       <p:sp>
         <p:nvSpPr><p:cNvPr id="3" name="Badge"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
-          <a:xfrm><a:off x="822960" y="731520"/><a:ext cx="2200000" cy="320000"/></a:xfrm>
+          <a:xfrm><a:off x="880000" y="650000"/><a:ext cx="3000000" cy="340000"/></a:xfrm>
           <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom>
-          <a:solidFill><a:srgbClr val="083344"/></a:solidFill>
-          <a:ln w="9525"><a:solidFill><a:srgbClr val="06B6D4"/></a:solidFill></a:ln>
+          <a:solidFill><a:srgbClr val="$badgeBgHex"/></a:solidFill>
         </p:spPr>
         <p:txBody>
           <a:bodyPr rtlCol="0" anchor="ctr"/>
           <a:lstStyle/>
-          <a:p>
-            <a:pPr algn="ctr"/>
-            <a:r>
-              <a:rPr lang="en-US" sz="1000" b="1">
-                <a:solidFill><a:srgbClr val="22D3EE"/></a:solidFill>
-              </a:rPr>
-              <a:t>⚡ HIGH YIELD • SLIDE ${index + 1}/$totalSlides</a:t>
-            </a:r>
-          </a:p>
+          <a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="1000" b="1"><a:solidFill><a:srgbClr val="$accentHex"/></a:solidFill></a:rPr><a:t>${_escapeXml(badgeText)}</a:t></a:r></a:p>
         </p:txBody>
       </p:sp>
 
-      <!-- Title -->
       <p:sp>
         <p:nvSpPr><p:cNvPr id="4" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
-          <a:xfrm><a:off x="822960" y="1188720"/><a:ext cx="7500000" cy="731520"/></a:xfrm>
+          <a:xfrm><a:off x="880000" y="1080000"/><a:ext cx="10400000" cy="720000"/></a:xfrm>
           <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
         </p:spPr>
         <p:txBody>
-          <a:bodyPr/><a:lstStyle/>
-          <a:p>
-            <a:r>
-              <a:rPr lang="en-US" sz="2400" b="1">
-                <a:solidFill><a:srgbClr val="F8FAFC"/></a:solidFill>
-              </a:rPr>
-              <a:t>${_escapeXml(s.title)}</a:t>
-            </a:r>
-          </a:p>
+          <a:bodyPr wrap="square"/><a:lstStyle/>
+          <a:p><a:r><a:rPr lang="en-US" sz="2400" b="1"><a:solidFill><a:srgbClr val="$titleHex"/></a:solidFill></a:rPr><a:t>${_escapeXml(title)}</a:t></a:r></p:p>
         </p:txBody>
       </p:sp>
 
-      <!-- Bullets Body -->
       <p:sp>
         <p:nvSpPr><p:cNvPr id="5" name="Bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
-          <a:xfrm><a:off x="822960" y="2011680"/><a:ext cx="7500000" cy="3800000"/></a:xfrm>
+          <a:xfrm><a:off x="880000" y="1950000"/><a:ext cx="$bodyWidth" cy="3900000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" normAutofit="1"/><a:lstStyle/>
+          $bulletLinesXml
+        </p:txBody>
+      </p:sp>
+
+      $takeawayXml
+
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="6" name="Footer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+        <p:spPr>
+          <a:xfrm><a:off x="880000" y="6000000"/><a:ext cx="10400000" cy="280000"/></a:xfrm>
           <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
         </p:spPr>
         <p:txBody>
           <a:bodyPr/><a:lstStyle/>
-          $bulletLinesXml
+          <a:p><a:r><a:rPr lang="en-US" sz="900"><a:solidFill><a:srgbClr val="$accentHex"/></a:solidFill></a:rPr><a:t>$footerText</a:t></a:r></p:p>
         </p:txBody>
       </p:sp>
     </p:spTree>
@@ -695,9 +355,6 @@ class PptxExporter {
 </p:sld>''';
   }
 
-  // ---------------------------------------------------------------------------
-  // THEME COLOR XML BUILDER
-  // ---------------------------------------------------------------------------
   static String _buildThemeXml(PptxStudyStyle style) {
     String accent1 = '2563EB';
     String accent2 = 'EC4899';
@@ -705,11 +362,14 @@ class PptxExporter {
       accent1 = 'F472B6';
       accent2 = '8B5CF6';
     } else if (style == PptxStudyStyle.handwrittenNotebook) {
-      accent1 = 'EAB308';
-      accent2 = 'FCA5A5';
-    } else if (style == PptxStudyStyle.zenPaperInk) {
-      accent1 = 'DC2626';
+      accent1 = '7C3AED';
       accent2 = '1C1917';
+    } else if (style == PptxStudyStyle.zenPaperInk) {
+      accent1 = '1E3A8A';
+      accent2 = '0F172A';
+    } else {
+      accent1 = '22D3EE';
+      accent2 = '0F172A';
     }
 
     return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
