@@ -29,8 +29,18 @@ jobs:
           cache: true
 
       - name: Scaffold Official Android Project & Configure Build Settings
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: trueme-release.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter create . --platforms=android --org com.trueme.study --project-name trueme
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/trueme-release.jks
+            echo "Decoded release keystore from GitHub secret."
+          fi
           rm -rf test || true
           if [ -d "assets/icons" ]; then
             cp -r assets/icons/mipmap-* android/app/src/main/res/ || true
@@ -157,13 +167,19 @@ jobs:
       - name: Build Android APK (Release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANDROID_KEYSTORE_PATH: trueme-release.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter build apk --release --no-tree-shake-icons --dart-define-from-file=.env --build-name="1.0.${{ github.run_number }}" --build-number=${{ github.run_number }} > build.log 2>&1 || {
+            rm -f .env
             gh release delete debug-build --yes || true
             gh release create debug-build -t "Debug Build" -F build.log || true
             cat build.log
             exit 1
           }
+          rm -f .env
 
       - name: Prepare APK for Direct Release
         run: |

@@ -43,7 +43,6 @@ symbols/
 *.key
 *.pem
 *.jks
-!trueme-release.jks
 *.keystore
 
 # GSD transient staging
