@@ -61,7 +61,7 @@ class AiRouter {
     }
 
     // 3. Remove invalid trailing commas before closing braces/brackets
-    text = text.replaceAll(RegExp(r',\s*([}\]])'), r'$1');
+    text = text.replaceAllMapped(RegExp(r',\s*([}\]])'), (m) => m.group(1)!);
     return text;
   }
 

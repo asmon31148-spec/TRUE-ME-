@@ -16,7 +16,7 @@ class UrlProcessor {
   /// private/link-local IP ranges (SSRF protection, INGEST-01).
   static Uri validateSafeUri(String rawUrl) {
     var cleanUrl = rawUrl.trim();
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    if (!cleanUrl.contains('://')) {
       cleanUrl = 'https://$cleanUrl';
     }
     final uri = Uri.tryParse(cleanUrl);
