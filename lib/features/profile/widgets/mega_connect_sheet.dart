@@ -265,7 +265,7 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurfaceElevated : AppColors.softSurface,
+                            color: context.surfaceColor,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: context.borderColor),
                           ),
@@ -349,19 +349,19 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
                                   ),
                                 ),
                                 const SizedBox(height: 14),
-                                _StepRow(
+                                const _StepRow(
                                   number: '1',
                                   title: 'Create your MEGA account',
                                   subtitle: 'Tap the button below to open MEGA sign-up inside the app.',
                                 ),
                                 const SizedBox(height: 12),
-                                _StepRow(
+                                const _StepRow(
                                   number: '2',
                                   title: 'Verify your email',
                                   subtitle: 'Open the confirmation link MEGA sends to your inbox.',
                                 ),
                                 const SizedBox(height: 12),
-                                _StepRow(
+                                const _StepRow(
                                   number: '3',
                                   title: 'Come back & Sign In',
                                   subtitle: 'Return here and enter your new MEGA email & password.',
