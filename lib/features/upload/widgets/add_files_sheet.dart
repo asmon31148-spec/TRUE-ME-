@@ -8,7 +8,9 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/mega_vault_service.dart';
@@ -128,6 +130,16 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     });
 
     if (content.trim().length > 40) {
+      if (_targetSection.toLowerCase() == 'syllabus') {
+        unawaited(
+          SyllabusService.extractAndSaveSyllabus(
+            aiRouter: AiRouter(),
+            notebookId: widget.notebookId,
+            subject: widget.subjectName,
+            syllabusText: content,
+          ).catchError((_) => <Map<String, dynamic>>[]),
+        );
+      }
       unawaited(
         RagService()
             .ingestDocument(

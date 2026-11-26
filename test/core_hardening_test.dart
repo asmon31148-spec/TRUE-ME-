@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trueme/core/ai/ai_gateway_client.dart';
 import 'package:trueme/core/ai/ai_router.dart';
+import 'package:trueme/core/ai/cognitive/student_cognitive_profile.dart';
 import 'package:trueme/core/ai/rag_service.dart';
+import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/config/env_config.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
 import 'package:trueme/features/quiz/providers/quiz_provider.dart';
@@ -101,6 +103,35 @@ void main() {
         () => AiGatewayClient.instance.chat(prompt: 'Hello'),
         throwsStateError,
       );
+    });
+  });
+
+  group('Foundation Brief Acceptance Checks', () {
+    test('StudentCognitiveProfile tracks activeSubject isolation fields', () {
+      const scoped = StudentCognitiveProfile(
+        studentName: 'Test',
+        overallMasteryPercentage: 0,
+        tier: CognitiveTier.foundational,
+        daysToExam: 14,
+        urgencyTier: ExamUrgencyTier.approaching,
+        weakTopics: [],
+        dueFlashcardsCount: 0,
+        totalFlashcardsCount: 0,
+        quizzesTakenCount: 0,
+        todayMinutesStudied: 0,
+        streakDays: 0,
+        activeSubject: 'Chemistry',
+        activeSubjectMasteryPercentage: 0,
+        activeSubjectTier: CognitiveTier.foundational,
+      );
+      expect(scoped.activeSubject, 'Chemistry');
+      expect(scoped.toSageContextString(), contains('Chemistry'));
+    });
+
+    test('SyllabusService computeCoverageStats handles empty syllabus cleanly', () {
+      final stats = SyllabusService.computeCoverageStats('nonexistent_nb');
+      expect(stats['total'], 0);
+      expect(stats['uncovered'], 0);
     });
   });
 }

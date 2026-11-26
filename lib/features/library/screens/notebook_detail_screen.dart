@@ -10,6 +10,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
+import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/docx_exporter.dart';
@@ -23,6 +24,7 @@ import '../../../shared/widgets/true_me_ui.dart';
 import '../../chat/providers/chat_provider.dart';
 import '../../chat/widgets/sage_chat_view.dart';
 import '../../upload/widgets/add_files_sheet.dart';
+import '../widgets/study_tool_sheet.dart';
 
 class NotebookDetailScreen extends ConsumerStatefulWidget {
   final String notebookId;
@@ -408,6 +410,13 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final fileName = '${safeBase}_${styleTag}_Study_Guide.pdf';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pdfBytes, flush: true);
+        await SyllabusService.saveArtifact(
+          notebookId: widget.notebookId,
+          artifactType: 'pdf',
+          title: '$title Study Guide',
+          topicLabel: title,
+          filePath: outFile.path,
+        );
 
         if (CloudVaultService.isAnyVaultConnected) {
           try {
@@ -434,6 +443,13 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final fileName = '${safeBase}_Study_Guide.docx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(docBytes, flush: true);
+        await SyllabusService.saveArtifact(
+          notebookId: widget.notebookId,
+          artifactType: 'docx',
+          title: docHeading,
+          topicLabel: title,
+          filePath: outFile.path,
+        );
 
         bool uploadedToVault = false;
         if (CloudVaultService.isAnyVaultConnected) {
@@ -491,6 +507,13 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         final fileName = '${safeBase}_${styleTag}_Slides.pptx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pptxBytes, flush: true);
+        await SyllabusService.saveArtifact(
+          notebookId: widget.notebookId,
+          artifactType: 'pptx',
+          title: '$title Slides',
+          topicLabel: title,
+          filePath: outFile.path,
+        );
 
         bool uploadedToVault = false;
         if (CloudVaultService.isAnyVaultConnected) {
@@ -716,9 +739,36 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                               bgStart: isDark ? const Color(0xFF1D1B3B) : const Color(0xFFF3F1FF),
                               bgEnd: isDark ? const Color(0xFF26224C) : const Color(0xFFE4E0FD),
                               accent: context.accentColor,
-                              onTap: () => context.push(
-                                '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Create a comprehensive summary of all my $title sources.')}',
-                              ),
+                              onTap: () async {
+                                final scope = await StudyToolSheet.show(
+                                  context,
+                                  notebookId: widget.notebookId,
+                                  subject: title,
+                                  artifactType: 'summary',
+                                  toolTitle: 'Summary',
+                                );
+                                if (scope == null || !mounted) return;
+                                final extra = scope.customInstructions.isNotEmpty
+                                    ? ' Instructions: ${scope.customInstructions}'
+                                    : '';
+                                final src = scope.sourceFileName != null
+                                    ? ' using "${scope.sourceFileName}"'
+                                    : '';
+                                final prompt =
+                                    'Create a ${scope.depthLevel} summary for ${scope.topicLabel} in $title$src.$extra';
+                                await SyllabusService.saveArtifact(
+                                  notebookId: widget.notebookId,
+                                  artifactType: 'summary',
+                                  title: '${scope.topicLabel} Summary',
+                                  nodeId: scope.nodeId,
+                                  topicLabel: scope.topicLabel,
+                                  depthLevel: scope.depthLevel,
+                                );
+                                if (!mounted) return;
+                                context.push(
+                                  '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent(prompt)}',
+                                );
+                              },
                             ),
                             _StudyFeatureTile(
                               icon: Icons.style_rounded,
@@ -749,9 +799,28 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                               bgStart: isDark ? const Color(0xFF241938) : const Color(0xFFF6F1FF),
                               bgEnd: isDark ? const Color(0xFF2E2048) : const Color(0xFFEADFFD),
                               accent: isDark ? const Color(0xFFC4B5FD) : AppColors.pastelLavenderInk,
-                              onTap: () => context.push(
-                                '/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}',
-                              ),
+                              onTap: () async {
+                                final scope = await StudyToolSheet.show(
+                                  context,
+                                  notebookId: widget.notebookId,
+                                  subject: title,
+                                  artifactType: 'mindmap',
+                                  toolTitle: 'Mind Map',
+                                );
+                                if (scope == null || !mounted) return;
+                                await SyllabusService.saveArtifact(
+                                  notebookId: widget.notebookId,
+                                  artifactType: 'mindmap',
+                                  title: '${scope.topicLabel} Mind Map',
+                                  nodeId: scope.nodeId,
+                                  topicLabel: scope.topicLabel,
+                                  depthLevel: scope.depthLevel,
+                                );
+                                if (!mounted) return;
+                                context.push(
+                                  '/mindmap?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(scope.topicLabel)}',
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -762,9 +831,28 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                           borderRadius: 22,
                           padding: EdgeInsets.zero,
                           gradient: isDark ? AppColors.heroFocusDarkGradient : AppColors.heroFocusLightGradient,
-                          onTap: () => context.push(
-                            '/explainer?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(title)}',
-                          ),
+                          onTap: () async {
+                            final scope = await StudyToolSheet.show(
+                              context,
+                              notebookId: widget.notebookId,
+                              subject: title,
+                              artifactType: 'explainer',
+                              toolTitle: 'Audio Explainer',
+                            );
+                            if (scope == null || !mounted) return;
+                            await SyllabusService.saveArtifact(
+                              notebookId: widget.notebookId,
+                              artifactType: 'explainer',
+                              title: '${scope.topicLabel} Explainer',
+                              nodeId: scope.nodeId,
+                              topicLabel: scope.topicLabel,
+                              depthLevel: scope.depthLevel,
+                            );
+                            if (!mounted) return;
+                            context.push(
+                              '/explainer?notebookId=${widget.notebookId}&topic=${Uri.encodeComponent(scope.topicLabel)}',
+                            );
+                          },
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(22),
                             child: Stack(
@@ -834,7 +922,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                 accent: AppColors.accent,
                                 bg: isDark ? AppColors.darkAccentWash : AppColors.milkyLavender,
                                 isBusy: _exportingFormat == 'pdf',
-                                onTap: _exportingFormat != null ? null : () => _launchExportStudio('pdf'),
+                                onTap: _exportingFormat != null
+                                    ? null
+                                    : () async {
+                                        final scope = await StudyToolSheet.show(
+                                          context,
+                                          notebookId: widget.notebookId,
+                                          subject: title,
+                                          artifactType: 'pdf',
+                                          toolTitle: 'PDF Sheet',
+                                        );
+                                        if (scope != null && mounted) _launchExportStudio('pdf');
+                                      },
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -846,7 +945,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                 accent: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
                                 bg: isDark ? const Color(0xFF11233D) : const Color(0xFFEAF3FF),
                                 isBusy: _exportingFormat == 'docx',
-                                onTap: _exportingFormat != null ? null : () => _launchExportStudio('docx'),
+                                onTap: _exportingFormat != null
+                                    ? null
+                                    : () async {
+                                        final scope = await StudyToolSheet.show(
+                                          context,
+                                          notebookId: widget.notebookId,
+                                          subject: title,
+                                          artifactType: 'docx',
+                                          toolTitle: 'Word Document',
+                                        );
+                                        if (scope != null && mounted) _launchExportStudio('docx');
+                                      },
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -858,7 +968,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                 accent: isDark ? AppColors.darkWarning : const Color(0xFFEA580C),
                                 bg: isDark ? const Color(0xFF2B2110) : const Color(0xFFFFF2E6),
                                 isBusy: _exportingFormat == 'pptx',
-                                onTap: _exportingFormat != null ? null : () => _launchExportStudio('pptx'),
+                                onTap: _exportingFormat != null
+                                    ? null
+                                    : () async {
+                                        final scope = await StudyToolSheet.show(
+                                          context,
+                                          notebookId: widget.notebookId,
+                                          subject: title,
+                                          artifactType: 'pptx',
+                                          toolTitle: 'Slides Deck',
+                                        );
+                                        if (scope != null && mounted) _launchExportStudio('pptx');
+                                      },
                               ),
                             ),
                           ],

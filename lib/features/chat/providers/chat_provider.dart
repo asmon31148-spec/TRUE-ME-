@@ -7,6 +7,7 @@ import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/cognitive/app_capabilities_manifest.dart';
 import '../../../core/ai/cognitive/student_cognitive_profile.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/utils/text_chunker.dart';
@@ -285,6 +286,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final fileName = '${safeBase}_${styleTag}_Guide.pdf';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
+        if (notebookId != null && notebookId.isNotEmpty) {
+          await SyllabusService.saveArtifact(
+            notebookId: notebookId,
+            artifactType: 'pdf',
+            title: '$subject — $topic',
+            topicLabel: topic,
+            filePath: outFile.path,
+            sourceChatId: notebookId,
+          );
+        }
         if (CloudVaultService.isAnyVaultConnected) {
           try {
             await CloudVaultService.uploadFile(
@@ -311,6 +322,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final fileName = '${safeBase}_Sage_Notes.docx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
+        if (notebookId != null && notebookId.isNotEmpty) {
+          await SyllabusService.saveArtifact(
+            notebookId: notebookId,
+            artifactType: 'docx',
+            title: '$subject — $topic',
+            topicLabel: topic,
+            filePath: outFile.path,
+            sourceChatId: notebookId,
+          );
+        }
         if (CloudVaultService.isAnyVaultConnected) {
           try {
             await CloudVaultService.uploadFile(
@@ -370,6 +391,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final fileName = '${safeBase}_${styleTag}_Slides.pptx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(bytes, flush: true);
+        if (notebookId != null && notebookId.isNotEmpty) {
+          await SyllabusService.saveArtifact(
+            notebookId: notebookId,
+            artifactType: 'pptx',
+            title: '$subject Slides',
+            topicLabel: topic,
+            filePath: outFile.path,
+            sourceChatId: notebookId,
+          );
+        }
         if (CloudVaultService.isAnyVaultConnected) {
           try {
             await CloudVaultService.uploadFile(
