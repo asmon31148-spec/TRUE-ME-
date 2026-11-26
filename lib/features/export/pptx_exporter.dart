@@ -321,7 +321,7 @@ class PptxExporter {
         </p:spPr>
         <p:txBody>
           <a:bodyPr wrap="square"/><a:lstStyle/>
-          <a:p><a:r><a:rPr lang="en-US" sz="2400" b="1"><a:solidFill><a:srgbClr val="$titleHex"/></a:solidFill></a:rPr><a:t>${_escapeXml(title)}</a:t></a:r></p:p>
+          <a:p><a:r><a:rPr lang="en-US" sz="2400" b="1"><a:solidFill><a:srgbClr val="$titleHex"/></a:solidFill></a:rPr><a:t>${_escapeXml(title)}</a:t></a:r></a:p>
         </p:txBody>
       </p:sp>
 
