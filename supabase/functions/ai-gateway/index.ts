@@ -65,7 +65,13 @@ async function callGeminiChat(params: {
   maxTokens?: number;
 }): Promise<string | null> {
   if (!params.apiKey) return null;
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  const models = [
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+  ];
   for (const model of models) {
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${params.apiKey}`,
@@ -403,21 +409,33 @@ Deno.serve(async (req) => {
       attempts.push(
         {
           name: 'groq_speed',
+          run: () => callGroqChat({ apiKey: groqKey, model: 'openai/gpt-oss-20b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'groq_speed_fallback',
           run: () => callGroqChat({ apiKey: groqKey, model: 'llama-3.1-8b-instant', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
           name: 'openrouter',
-          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint, prompt, systemPrompt, jsonMode, maxTokens }),
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint || 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
         },
         {
           name: 'gemini',
           run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'openrouter_liquid',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'liquid/lfm-3-1.7b:free', prompt, systemPrompt, jsonMode, maxTokens }),
         }
       );
     } else {
       attempts.push(
         {
           name: 'groq_heavy',
+          run: () => callGroqChat({ apiKey: groqKey, model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'groq_heavy_fallback',
           run: () => callGroqChat({ apiKey: groqKey, model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
@@ -426,7 +444,7 @@ Deno.serve(async (req) => {
         },
         {
           name: 'openrouter',
-          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint, prompt, systemPrompt, jsonMode, maxTokens }),
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint || 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
         }
       );
       if (!jsonMode) {
