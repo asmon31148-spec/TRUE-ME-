@@ -26,9 +26,10 @@ void main() async {
     debugPrint('OfflineCacheService init failed: $e');
   }
 
-  // 3. Initialize Supabase Client
+  // 3. Initialize Supabase Client & flush any queued offline writes
   try {
     await SupabaseService.initialize();
+    await SupabaseService.instance.flushPendingSync();
   } catch (e) {
     debugPrint('SupabaseService init failed: $e');
   }

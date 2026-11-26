@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
 import '../models/document_chunk_model.dart';
+import 'sync_outbox_service.dart';
 
 class SupabaseService {
   static final SupabaseService instance = SupabaseService._internal();
@@ -43,6 +44,42 @@ class SupabaseService {
 
   bool get isReady => _clientOrNull != null;
   String? get authUserId => _clientOrNull?.auth.currentUser?.id;
+
+  /// Observable last cloud sync/query error (DATA-01). Cleared on successful sync.
+  String? lastSyncError;
+
+  Future<int> flushPendingSync() async {
+    final client = _clientOrNull;
+    if (client == null || client.auth.currentUser == null) return 0;
+    return SyncOutboxService.flush((opType, payload) async {
+      switch (opType) {
+        case 'upsert_profile':
+          return _execUpsertProfile(client, payload);
+        case 'upsert_notebook':
+          return _execUpsertNotebook(client, payload);
+        case 'delete_notebook':
+          return _execDeleteNotebook(client, payload['id']?.toString() ?? '');
+        case 'sync_study_tasks':
+          return _execSyncStudyTasks(
+            client,
+            payload['planDate']?.toString() ?? '',
+            (payload['tasks'] as List? ?? [])
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList(),
+          );
+        case 'insert_study_session':
+          return _execInsertStudySession(client, payload);
+        case 'insert_quiz_attempt':
+          return _execInsertQuizAttempt(client, payload);
+        case 'upsert_flashcard_deck':
+          return _execUpsertFlashcardDeck(client, payload);
+        case 'delete_flashcard_deck':
+          return _execDeleteFlashcardDeck(client, payload['id']?.toString() ?? '');
+        default:
+          return true;
+      }
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // AUTHENTICATION
@@ -127,7 +164,13 @@ class SupabaseService {
   // ---------------------------------------------------------------------------
   // USER PROFILES
   // ---------------------------------------------------------------------------
-  Future<void> upsertProfile({
+  Future<bool> _execUpsertProfile(SupabaseClient client, Map<String, dynamic> row) async {
+    await client.from('user_profiles').upsert(row);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> upsertProfile({
     required String userId,
     required String name,
     required String email,
@@ -136,21 +179,36 @@ class SupabaseService {
     required DateTime targetExamDate,
     DateTime? setupStartedAt,
   }) async {
+    final row = <String, dynamic>{
+      'id': userId,
+      'name': name,
+      'email': email,
+      'subjects': subjects,
+      'learning_style': learningStyle,
+      'target_exam_date': targetExamDate.toIso8601String(),
+      if (setupStartedAt != null) 'setup_started_at': setupStartedAt.toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'upsert_profile',
+        dedupKey: 'profile_$userId',
+        payload: row,
+      );
+      return false;
+    }
     try {
-      await client.from('user_profiles').upsert({
-        'id': userId,
-        'name': name,
-        'email': email,
-        'subjects': subjects,
-        'learning_style': learningStyle,
-        'target_exam_date': targetExamDate.toIso8601String(),
-        if (setupStartedAt != null) 'setup_started_at': setupStartedAt.toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      return await _execUpsertProfile(client, row);
     } catch (e) {
-      debugPrint('Supabase upsertProfile skipped: $e');
+      lastSyncError = 'Profile sync failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'upsert_profile',
+        dedupKey: 'profile_$userId',
+        payload: row,
+      );
+      return false;
     }
   }
 
@@ -163,9 +221,11 @@ class SupabaseService {
           .select()
           .eq('id', userId)
           .maybeSingle();
+      lastSyncError = null;
       if (res != null) return Map<String, dynamic>.from(res);
     } catch (e) {
-      debugPrint('Supabase fetchProfile skipped: $e');
+      lastSyncError = 'Profile fetch failed: $e';
+      debugPrint(lastSyncError);
     }
     return null;
   }
@@ -173,26 +233,47 @@ class SupabaseService {
   // ---------------------------------------------------------------------------
   // NOTEBOOKS & FILES
   // ---------------------------------------------------------------------------
-  Future<void> upsertNotebook({
+  Future<bool> _execUpsertNotebook(SupabaseClient client, Map<String, dynamic> row) async {
+    await client.from('notebooks').upsert(row);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> upsertNotebook({
     required String id,
     required String userId,
     required String title,
     required String subject,
     required List<Map<String, dynamic>> documents,
   }) async {
+    final row = <String, dynamic>{
+      'id': id,
+      'user_id': userId,
+      'title': title,
+      'subject': subject,
+      'documents': documents,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'upsert_notebook',
+        dedupKey: 'notebook_$id',
+        payload: row,
+      );
+      return false;
+    }
     try {
-      await client.from('notebooks').upsert({
-        'id': id,
-        'user_id': userId,
-        'title': title,
-        'subject': subject,
-        'documents': documents,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      return await _execUpsertNotebook(client, row);
     } catch (e) {
-      debugPrint('Supabase upsertNotebook skipped: $e');
+      lastSyncError = 'Notebook sync failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'upsert_notebook',
+        dedupKey: 'notebook_$id',
+        payload: row,
+      );
+      return false;
     }
   }
 
@@ -205,61 +286,106 @@ class SupabaseService {
           .select()
           .eq('user_id', userId)
           .order('created_at', ascending: true);
+      lastSyncError = null;
       return (res as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
-      debugPrint('Supabase fetchNotebooks skipped: $e');
+      lastSyncError = 'Notebooks fetch failed: $e';
+      debugPrint(lastSyncError);
       return [];
     }
   }
 
-  Future<void> deleteNotebook(String notebookId) async {
+  Future<bool> _execDeleteNotebook(SupabaseClient client, String notebookId) async {
+    await client.from('notebooks').delete().eq('id', notebookId);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> deleteNotebook(String notebookId) async {
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'delete_notebook',
+        dedupKey: 'notebook_$notebookId',
+        payload: {'id': notebookId},
+      );
+      return false;
+    }
     try {
-      await client.from('notebooks').delete().eq('id', notebookId);
+      return await _execDeleteNotebook(client, notebookId);
     } catch (e) {
-      debugPrint('Supabase deleteNotebook skipped: $e');
+      lastSyncError = 'Notebook delete failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'delete_notebook',
+        dedupKey: 'notebook_$notebookId',
+        payload: {'id': notebookId},
+      );
+      return false;
     }
   }
 
   // ---------------------------------------------------------------------------
-  // DAILY STUDY TASKS (TODAY & SCHEDULE)
+  // DAILY STUDY TASKS (TODAY & SCHEDULE) — Atomic RPC (DATA-02)
   // ---------------------------------------------------------------------------
-  Future<void> syncStudyTasksForDate({
+  Future<bool> _execSyncStudyTasks(
+    SupabaseClient client,
+    String planDate,
+    List<Map<String, dynamic>> tasks,
+  ) async {
+    final normalized = List.generate(tasks.length, (i) {
+      final t = tasks[i];
+      return {
+        'id': t['id']?.toString(),
+        'title': t['title'] ?? 'Study task',
+        'subject': t['subject'] ?? 'General',
+        'type': t['type'] ?? 'reading',
+        'duration': (t['duration'] as num? ?? 20).toInt(),
+        'completed': t['completed'] == true,
+      };
+    });
+
+    await client.rpc(
+      'sync_study_tasks_for_date',
+      params: {
+        'p_plan_date': planDate,
+        'p_tasks': normalized,
+      },
+    );
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> syncStudyTasksForDate({
     required String userId,
     required String planDate,
     required List<Map<String, dynamic>> tasks,
   }) async {
+    final payload = {
+      'userId': userId,
+      'planDate': planDate,
+      'tasks': tasks,
+    };
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'sync_study_tasks',
+        dedupKey: 'tasks_${userId}_$planDate',
+        payload: payload,
+      );
+      return false;
+    }
     try {
-      // Replace tasks for this user & date atomically
-      await client
-          .from('study_tasks')
-          .delete()
-          .eq('user_id', userId)
-          .eq('plan_date', planDate);
-
-      if (tasks.isNotEmpty) {
-        final rows = List.generate(tasks.length, (i) {
-          final t = tasks[i];
-          return {
-            'id': t['id'] ?? 'task_${userId}_${planDate}_$i',
-            'user_id': userId,
-            'plan_date': planDate,
-            'title': t['title'] ?? 'Study task',
-            'subject': t['subject'] ?? 'General',
-            'task_type': t['type'] ?? 'reading',
-            'duration_min': (t['duration'] as num? ?? 20).toInt(),
-            'completed': t['completed'] == true,
-            'sort_order': i,
-            'updated_at': DateTime.now().toIso8601String(),
-          };
-        });
-        await client.from('study_tasks').upsert(rows);
-      }
+      return await _execSyncStudyTasks(client, planDate, tasks);
     } catch (e) {
-      debugPrint('Supabase syncStudyTasksForDate skipped: $e');
+      lastSyncError = 'Study tasks sync failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'sync_study_tasks',
+        dedupKey: 'tasks_${userId}_$planDate',
+        payload: payload,
+      );
+      return false;
     }
   }
 
@@ -297,7 +423,13 @@ class SupabaseService {
   // ---------------------------------------------------------------------------
   // STUDY SESSIONS & QUIZ ATTEMPTS
   // ---------------------------------------------------------------------------
-  Future<void> insertStudySession({
+  Future<bool> _execInsertStudySession(SupabaseClient client, Map<String, dynamic> row) async {
+    await client.from('study_sessions').insert(row);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> insertStudySession({
     required String userId,
     required String subject,
     required String topic,
@@ -306,20 +438,36 @@ class SupabaseService {
     double? score,
     Map<String, dynamic>? metadata,
   }) async {
+    final row = <String, dynamic>{
+      'user_id': userId,
+      'subject': subject,
+      'topic': topic,
+      'session_type': sessionType,
+      'duration_min': durationMin,
+      if (score != null) 'score': score,
+      'metadata': metadata ?? {},
+    };
+    final dedup = 'session_${userId}_${DateTime.now().millisecondsSinceEpoch}';
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'insert_study_session',
+        dedupKey: dedup,
+        payload: row,
+      );
+      return false;
+    }
     try {
-      await client.from('study_sessions').insert({
-        'user_id': userId,
-        'subject': subject,
-        'topic': topic,
-        'session_type': sessionType,
-        'duration_min': durationMin,
-        if (score != null) 'score': score,
-        'metadata': metadata ?? {},
-      });
+      return await _execInsertStudySession(client, row);
     } catch (e) {
-      debugPrint('Supabase insertStudySession skipped: $e');
+      lastSyncError = 'Study session sync failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'insert_study_session',
+        dedupKey: dedup,
+        payload: row,
+      );
+      return false;
     }
   }
 
@@ -333,14 +481,22 @@ class SupabaseService {
           .eq('user_id', userId)
           .order('created_at', ascending: false)
           .limit(50);
+      lastSyncError = null;
       return (res as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
-      debugPrint('Supabase fetchStudySessions skipped: $e');
+      lastSyncError = 'Study sessions fetch failed: $e';
+      debugPrint(lastSyncError);
       return [];
     }
   }
 
-  Future<void> insertQuizAttempt({
+  Future<bool> _execInsertQuizAttempt(SupabaseClient client, Map<String, dynamic> row) async {
+    await client.from('quiz_attempts').upsert(row);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> insertQuizAttempt({
     required String id,
     required String userId,
     required String subject,
@@ -350,21 +506,36 @@ class SupabaseService {
     required int percentage,
     required List<String> missedTopics,
   }) async {
+    final row = <String, dynamic>{
+      'id': id,
+      'user_id': userId,
+      'subject': subject,
+      'topic': topic,
+      'score': score,
+      'total': total,
+      'percentage': percentage,
+      'missed_topics': missedTopics,
+    };
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'insert_quiz_attempt',
+        dedupKey: 'quiz_$id',
+        payload: row,
+      );
+      return false;
+    }
     try {
-      await client.from('quiz_attempts').upsert({
-        'id': id,
-        'user_id': userId,
-        'subject': subject,
-        'topic': topic,
-        'score': score,
-        'total': total,
-        'percentage': percentage,
-        'missed_topics': missedTopics,
-      });
+      return await _execInsertQuizAttempt(client, row);
     } catch (e) {
-      debugPrint('Supabase insertQuizAttempt skipped: $e');
+      lastSyncError = 'Quiz attempt sync failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'insert_quiz_attempt',
+        dedupKey: 'quiz_$id',
+        payload: row,
+      );
+      return false;
     }
   }
 
@@ -378,9 +549,11 @@ class SupabaseService {
           .eq('user_id', userId)
           .order('created_at', ascending: false)
           .limit(50);
+      lastSyncError = null;
       return (res as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
-      debugPrint('Supabase fetchQuizAttempts skipped: $e');
+      lastSyncError = 'Quiz attempts fetch failed: $e';
+      debugPrint(lastSyncError);
       return [];
     }
   }
@@ -388,21 +561,43 @@ class SupabaseService {
   // ---------------------------------------------------------------------------
   // FLASHCARD DECKS
   // ---------------------------------------------------------------------------
-  Future<void> upsertFlashcardDeck(String userId, Map<String, dynamic> deckMap) async {
+  Future<bool> _execUpsertFlashcardDeck(SupabaseClient client, Map<String, dynamic> row) async {
+    await client.from('flashcard_decks').upsert(row);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> upsertFlashcardDeck(String userId, Map<String, dynamic> deckMap) async {
+    final deckId = deckMap['id']?.toString() ?? '';
+    final row = <String, dynamic>{
+      'id': deckId,
+      'user_id': userId,
+      'notebook_id': deckMap['notebookId'],
+      'subject': deckMap['subject'] ?? 'General',
+      'topic': deckMap['topic'] ?? 'Flashcards',
+      'cards': deckMap['cards'] ?? [],
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'upsert_flashcard_deck',
+        dedupKey: 'deck_$deckId',
+        payload: row,
+      );
+      return false;
+    }
     try {
-      await client.from('flashcard_decks').upsert({
-        'id': deckMap['id'],
-        'user_id': userId,
-        'notebook_id': deckMap['notebookId'],
-        'subject': deckMap['subject'] ?? 'General',
-        'topic': deckMap['topic'] ?? 'Flashcards',
-        'cards': deckMap['cards'] ?? [],
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      return await _execUpsertFlashcardDeck(client, row);
     } catch (e) {
-      debugPrint('Supabase upsertFlashcardDeck skipped: $e');
+      lastSyncError = 'Flashcard deck sync failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'upsert_flashcard_deck',
+        dedupKey: 'deck_$deckId',
+        payload: row,
+      );
+      return false;
     }
   }
 
@@ -415,19 +610,43 @@ class SupabaseService {
           .select()
           .eq('user_id', userId)
           .order('updated_at', ascending: false);
+      lastSyncError = null;
       return (res as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
-      debugPrint('Supabase fetchFlashcardDecks skipped: $e');
+      lastSyncError = 'Flashcard decks fetch failed: $e';
+      debugPrint(lastSyncError);
       return [];
     }
   }
 
-  Future<void> deleteFlashcardDeck(String deckId) async {
+  Future<bool> _execDeleteFlashcardDeck(SupabaseClient client, String deckId) async {
+    await client.from('flashcard_decks').delete().eq('id', deckId);
+    lastSyncError = null;
+    return true;
+  }
+
+  Future<bool> deleteFlashcardDeck(String deckId) async {
     final client = _clientOrNull;
-    if (client == null) return;
+    if (client == null) {
+      await SyncOutboxService.enqueue(
+        opType: 'delete_flashcard_deck',
+        dedupKey: 'deck_$deckId',
+        payload: {'id': deckId},
+      );
+      return false;
+    }
     try {
-      await client.from('flashcard_decks').delete().eq('id', deckId);
-    } catch (_) {}
+      return await _execDeleteFlashcardDeck(client, deckId);
+    } catch (e) {
+      lastSyncError = 'Flashcard deck delete failed: $e';
+      debugPrint(lastSyncError);
+      await SyncOutboxService.enqueue(
+        opType: 'delete_flashcard_deck',
+        dedupKey: 'deck_$deckId',
+        payload: {'id': deckId},
+      );
+      return false;
+    }
   }
 
   /// Deletes all cloud records belonging to [userId] across all tables.
