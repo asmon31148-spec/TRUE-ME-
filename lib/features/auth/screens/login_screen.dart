@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../shared/widgets/app_components.dart';
@@ -23,9 +26,38 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   String? _errorText;
   bool _isLoading = false;
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSub = SupabaseService.instance.onAuthStateChange?.listen((data) async {
+      if (data.event == AuthChangeEvent.signedIn && data.session != null && mounted) {
+        final user = data.session!.user;
+        final meta = user.userMetadata ?? {};
+        final name = (meta['full_name'] ?? meta['name'] ?? user.email?.split('@').first ?? 'Student')
+            .toString();
+        final email = user.email ?? 'student@trueme.app';
+
+        await OfflineCacheService.saveUserProfile(
+          userId: user.id,
+          name: name,
+          email: email,
+          isLoggedIn: true,
+          hasCompletedOnboarding: true,
+        );
+        await MegaVaultService.instance.restoreSession();
+        if (mounted) {
+          setState(() => _isLoading = false);
+          context.go('/today');
+        }
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -133,8 +165,33 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+    try {
+      final launched = await SupabaseService.instance.signInWithGoogleOAuth();
+      if (!launched && mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorText = 'Could not open Google Sign-In. Please try again.';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorText = 'Google Sign-In failed: $e';
+        });
+      }
+    }
+  }
+
   Future<void> _handleGuest() async {
+    final anon = await SupabaseService.instance.signInAnonymously();
     await OfflineCacheService.saveUserProfile(
+      userId: anon?.user?.id,
       name: 'Student',
       email: 'student@trueme.app',
       isLoggedIn: true,
@@ -305,6 +362,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   label: _isSignUp ? 'Create Account' : 'Sign In',
                   isLoading: _isLoading,
                   onPressed: _handleSubmit,
+                ),
+                const SizedBox(height: 12),
+                AppSecondaryButton(
+                  label: 'Continue with Google',
+                  icon: const Icon(Icons.g_mobiledata_rounded, size: 22),
+                  onPressed: _isLoading ? null : _handleGoogleSignIn,
                 ),
                 const SizedBox(height: 14),
                 Center(

@@ -111,6 +111,28 @@ class SupabaseService {
     );
   }
 
+  Stream<AuthState>? get onAuthStateChange => _clientOrNull?.auth.onAuthStateChange;
+
+  Future<bool> signInWithGoogleOAuth() async {
+    final client = _clientOrNull;
+    if (client == null) return false;
+    return await client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: 'io.supabase.trueme://login-callback/',
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    );
+  }
+
+  Future<AuthResponse?> signInAnonymously() async {
+    final client = _clientOrNull;
+    if (client == null) return null;
+    try {
+      return await client.auth.signInAnonymously();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> signOut() async {
     try {
       await _clientOrNull?.auth.signOut();

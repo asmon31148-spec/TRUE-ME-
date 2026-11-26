@@ -70,6 +70,9 @@ jobs:
               q = '\n    <queries>\n        <intent>\n            <action android:name=\"android.intent.action.VIEW\" />\n            <data android:mimeType=\"application/vnd.android.package-archive\" />\n        </intent>\n        <intent>\n            <action android:name=\"android.intent.action.INSTALL_PACKAGE\" />\n            <data android:mimeType=\"application/vnd.android.package-archive\" />\n        </intent>\n        <intent>\n            <action android:name=\"android.intent.action.VIEW\" />\n            <category android:name=\"android.intent.category.BROWSABLE\" />\n            <data android:scheme=\"https\" />\n        </intent>\n    </queries>'
               if '<queries>' not in content:
                   content = content.replace('</manifest>', q + '\n</manifest>')
+              oauth_filter = '\n            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:scheme=\"io.supabase.trueme\" android:host=\"login-callback\" />\n            </intent-filter>'
+              if 'io.supabase.trueme' not in content and '</activity>' in content:
+                  content = content.replace('</activity>', oauth_filter + '\n        </activity>', 1)
               with open(m_path, 'w', encoding='utf-8') as f:
                   f.write(content)
               print('Successfully configured AndroidManifest.xml with install permissions and queries')
