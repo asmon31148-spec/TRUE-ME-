@@ -67,7 +67,7 @@ class StudentCognitiveProfile {
   factory StudentCognitiveProfile.buildLive({String? subjectScope}) {
     final name = OfflineCacheService.getUserName();
     final profile = OfflineCacheService.getUserProfile();
-    final examDateStr = profile['examDate'] as String?;
+    final examDateStr = (profile['targetExamDate'] ?? profile['examDate']) as String?;
     final examDate = examDateStr != null ? DateTime.tryParse(examDateStr) : null;
     final now = DateTime.now();
 
@@ -83,30 +83,50 @@ class StudentCognitiveProfile {
             ? ExamUrgencyTier.urgent
             : (days <= 21 ? ExamUrgencyTier.approaching : ExamUrgencyTier.steady));
 
-    // 2. Quiz Attempts & Overall Mastery
+    final hasSubjectScope = subjectScope != null && subjectScope.trim().isNotEmpty;
+    final scopeLower = hasSubjectScope ? subjectScope.trim().toLowerCase() : '';
+
+    // 2. Quiz Attempts & Mastery (strictly isolated to subjectScope when scoped)
     final allQuizzes = OfflineCacheService.getQuizAttempts();
-    int overallScore = 70;
-    if (allQuizzes.isNotEmpty) {
-      final sum = allQuizzes.fold<int>(
+    final relevantQuizzes = hasSubjectScope
+        ? allQuizzes
+            .where((q) => (q['subject'] as String? ?? '').trim().toLowerCase() == scopeLower)
+            .toList()
+        : allQuizzes;
+
+    int masteryScore = hasSubjectScope ? 0 : 70;
+    if (relevantQuizzes.isNotEmpty) {
+      final sum = relevantQuizzes.fold<int>(
         0,
         (prev, q) => prev + ((q['percentage'] as num?)?.toInt() ?? 0),
       );
-      overallScore = (sum / allQuizzes.length).round();
+      masteryScore = (sum / relevantQuizzes.length).round();
     }
 
-    final overallTier = overallScore < 60
+    final resolvedTier = masteryScore < 60
         ? CognitiveTier.foundational
-        : (overallScore < 85 ? CognitiveTier.reinforcing : CognitiveTier.mastery);
+        : (masteryScore < 85 ? CognitiveTier.reinforcing : CognitiveTier.mastery);
 
-    // 3. Weak Topics & Memory Decay Radar
-    final weakList = OfflineCacheService.getWeakTopics();
+    // 3. Weak Topics (strictly isolated to subjectScope when scoped)
+    final allWeak = OfflineCacheService.getWeakTopics();
+    final weakList = hasSubjectScope
+        ? allWeak
+            .where((w) => (w['subject'] as String? ?? '').trim().toLowerCase() == scopeLower)
+            .toList()
+        : allWeak;
 
-    // 4. Flashcard review pressure
+    // 4. Flashcard review pressure (strictly isolated to subjectScope when scoped)
     final allDecks = OfflineCacheService.getAllCachedDecks();
+    final relevantDecks = hasSubjectScope
+        ? allDecks
+            .where((d) => (d['subject'] as String? ?? '').trim().toLowerCase() == scopeLower)
+            .toList()
+        : allDecks;
+
     int totalCards = 0;
     int dueCards = 0;
     final nowPlus = now.add(const Duration(minutes: 5));
-    for (final d in allDecks) {
+    for (final d in relevantDecks) {
       final cards = d['cards'] as List? ?? [];
       totalCards += cards.length;
       for (final c in cards) {
@@ -127,44 +147,21 @@ class StudentCognitiveProfile {
     } catch (_) {}
     final streak = OfflineCacheService.getCurrentStreak();
 
-    // 6. Subject-specific drill-down if scoped
-    int? subjectMastery;
-    CognitiveTier? subjectTier;
-    if (subjectScope != null && subjectScope.trim().isNotEmpty) {
-      final s = subjectScope.trim().toLowerCase();
-      final subQuizzes = allQuizzes
-          .where((q) => (q['subject'] as String? ?? '').trim().toLowerCase() == s)
-          .toList();
-      if (subQuizzes.isNotEmpty) {
-        final sSum = subQuizzes.fold<int>(
-          0,
-          (prev, q) => prev + ((q['percentage'] as num?)?.toInt() ?? 0),
-        );
-        subjectMastery = (sSum / subQuizzes.length).round();
-        subjectTier = subjectMastery < 60
-            ? CognitiveTier.foundational
-            : (subjectMastery < 85 ? CognitiveTier.reinforcing : CognitiveTier.mastery);
-      } else {
-        subjectMastery = overallScore;
-        subjectTier = overallTier;
-      }
-    }
-
     return StudentCognitiveProfile(
       studentName: name.isNotEmpty ? name : 'Scholar',
-      overallMasteryPercentage: overallScore,
-      tier: overallTier,
+      overallMasteryPercentage: masteryScore,
+      tier: resolvedTier,
       daysToExam: days,
       urgencyTier: urgency,
       weakTopics: weakList,
       dueFlashcardsCount: dueCards,
       totalFlashcardsCount: totalCards,
-      quizzesTakenCount: allQuizzes.length,
+      quizzesTakenCount: relevantQuizzes.length,
       todayMinutesStudied: todayMinutes,
       streakDays: streak,
-      activeSubject: subjectScope,
-      activeSubjectMasteryPercentage: subjectMastery,
-      activeSubjectTier: subjectTier,
+      activeSubject: hasSubjectScope ? subjectScope.trim() : null,
+      activeSubjectMasteryPercentage: hasSubjectScope ? masteryScore : null,
+      activeSubjectTier: hasSubjectScope ? resolvedTier : null,
     );
   }
 
