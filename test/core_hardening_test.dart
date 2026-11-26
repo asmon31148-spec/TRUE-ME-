@@ -209,24 +209,26 @@ void main() {
       AiTelemetryService.resetForTest();
     });
 
-    test('AiModelRegistry discovers all configured providers and dynamically merges new models', () {
+    test('AiModelRegistry discovers all configured providers without catalog bloat', () {
       final base = AiModelRegistry.discoverModels();
       final providers = base.map((m) => m.provider).toSet();
       expect(providers, containsAll(['gemini', 'groq', 'openrouter', 'cohere', 'cloudflare']));
       expect(base.length, greaterThanOrEqualTo(16));
+      expect(base.length, lessThan(30));
 
-      final withNew = AiModelRegistry.discoverModels(
+      final enriched = AiModelRegistry.discoverModels(
         snapshots: {
           'gemini': ProviderSnapshot(
             provider: 'gemini',
             status: DataSourceBadge.official,
             fetchedAt: DateTime.now(),
-            discoveredModelIds: const ['gemini-4.0-flash'],
-            modelContextLimits: const {'gemini-4.0-flash': 2000000},
+            discoveredModelIds: const ['gemini-2.5-flash'],
+            modelContextLimits: const {'gemini-2.5-flash': 2000000},
           ),
         },
       );
-      expect(withNew.any((m) => m.modelId == 'gemini-4.0-flash'), isTrue);
+      final g25 = enriched.firstWhere((m) => m.modelId == 'gemini-2.5-flash');
+      expect(g25.contextWindow, 2000000);
     });
 
     test('QuotaCalculationEngine prioritizes official OpenRouter credits & Groq headers over estimates', () {

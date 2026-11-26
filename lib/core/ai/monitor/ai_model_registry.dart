@@ -220,7 +220,9 @@ class AiModelRegistry {
       callbackRoutes: ['CloudflareService.summarizeText', 'UrlProcessor.fetchAndSummarize'],
     ));
 
-    // 6. Merge any newly discovered active models from live official provider snapshots
+    // 6. Enrich configured models with live context limits from official provider snapshots.
+    // Do NOT flood the main list with 50+ unused catalog models (e.g. Cohere's full catalog);
+    // only merge a discovered model if it is already configured or has actual telemetry.
     for (final entry in snapshots.entries) {
       final provider = entry.key;
       final snap = entry.value;
@@ -233,38 +235,11 @@ class AiModelRegistry {
             isActive: true,
             contextWindow: ctx ?? existing.contextWindow,
           );
-        } else {
-          // Only auto-append newly discovered models if they are relevant text/chat models
-          // (avoids flooding with 50+ legacy deprecated Gemini/Groq sub-variants unless used)
-          if (_isRelevantDiscoveredModel(provider, modelId)) {
-            byKey[key] = ModelRegistryEntry(
-              provider: provider,
-              modelId: modelId,
-              displayName: _humanizeModelId(modelId),
-              isActive: true,
-              isFallback: true,
-              isFreeTier: modelId.endsWith(':free') || provider == 'groq' || provider == 'gemini',
-              contextWindow: ctx,
-              assignedFeatures: const ['Discovered via Provider API'],
-              callbackRoutes: const ['Dynamic Discovery'],
-            );
-          }
         }
       }
     }
 
     return byKey.values.toList();
-  }
-
-  static bool _isRelevantDiscoveredModel(String provider, String modelId) {
-    final lower = modelId.toLowerCase();
-    if (provider == 'gemini') {
-      return lower.contains('flash') || lower.contains('pro') || lower.contains('embedding');
-    }
-    if (provider == 'groq') {
-      return lower.contains('llama') || lower.contains('gpt-oss') || lower.contains('whisper');
-    }
-    return true;
   }
 
   static String _humanizeModelId(String id) {

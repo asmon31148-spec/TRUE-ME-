@@ -265,6 +265,20 @@ class _AiMonitorScreenState extends State<AiMonitorScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   )
+                                else if (p == 'openrouter' && snap?.officialDailyUsage != null)
+                                  Text(
+                                    'Spend: \$${snap!.officialDailyUsage!.toStringAsFixed(4)} today · \$${(snap.officialMonthlyUsage ?? 0).toStringAsFixed(4)}/mo',
+                                    style: AppTypography.bodySmall.copyWith(color: context.textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                else if (p == 'cohere' && snap?.rateLimitHeaders['x-trial-endpoint-call-remaining'] != null)
+                                  Text(
+                                    'Trial Left: ${snap!.rateLimitHeaders['x-trial-endpoint-call-remaining']} / 1,000 calls',
+                                    style: AppTypography.bodySmall.copyWith(color: context.textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
                                 else if (snap != null && snap.discoveredModelIds.isNotEmpty)
                                   Text(
                                     '${snap.discoveredModelIds.length} active models verified',

@@ -247,7 +247,104 @@ class AiTelemetryService {
       await _persist();
     } catch (_) {}
 
+    await _backfillFromSupabase();
     return Map.unmodifiable(_memorySnapshots);
+  }
+
+  /// Loads historical usage from Supabase `ai_request_telemetry` and `ai_usage_ledger`
+  /// so the monitor shows real past usage immediately after install/login.
+  static Future<void> _backfillFromSupabase() async {
+    try {
+      final client = SupabaseService.instance.clientOrNull;
+      final uid = SupabaseService.instance.authUserId;
+      if (client == null || uid == null) return;
+
+      final knownIds = _memoryRecords.map((r) => r.requestId).toSet();
+
+      // 1. Load rich telemetry rows if table exists
+      try {
+        final rows = await client
+            .from('ai_request_telemetry')
+            .select()
+            .eq('user_id', uid)
+            .order('created_at', ascending: false)
+            .limit(300);
+        for (final raw in (rows as List)) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          final rid = m['request_id']?.toString() ?? '';
+          if (rid.isEmpty || knownIds.contains(rid)) continue;
+          knownIds.add(rid);
+          _memoryRecords.add(AiRequestRecord(
+            requestId: rid,
+            provider: m['provider']?.toString() ?? 'unknown',
+            modelId: m['model_id']?.toString() ?? 'unknown',
+            featureName: m['feature_name']?.toString() ?? 'General',
+            callbackRoute: m['callback_route']?.toString() ?? 'unknown',
+            timestamp: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
+            status: m['status']?.toString() ?? 'success',
+            inputTokens: (m['input_tokens'] as num? ?? 0).toInt(),
+            outputTokens: (m['output_tokens'] as num? ?? 0).toInt(),
+            cachedTokens: (m['cached_tokens'] as num? ?? 0).toInt(),
+            totalTokens: (m['total_tokens'] as num? ?? 0).toInt(),
+            tokenSource: m['token_source']?.toString() == 'OFFICIAL'
+                ? DataSourceBadge.official
+                : DataSourceBadge.estimated,
+            providerCostUsd: (m['provider_cost_usd'] as num?)?.toDouble(),
+            calculatedCostUsd: (m['calculated_cost_usd'] as num? ?? 0).toDouble(),
+            costSource: m['cost_source']?.toString() == 'OFFICIAL'
+                ? DataSourceBadge.official
+                : DataSourceBadge.estimated,
+            latencyMs: (m['latency_ms'] as num? ?? 0).toInt(),
+            retryCount: (m['retry_count'] as num? ?? 0).toInt(),
+            fallbackUsed: m['fallback_used'] == true,
+            errorDetail: m['error_detail']?.toString(),
+          ));
+        }
+      } catch (_) {}
+
+      // 2. Also pull legacy `ai_usage_ledger` rows so prior usage is visible
+      try {
+        final ledger = await client
+            .from('ai_usage_ledger')
+            .select()
+            .eq('user_id', uid)
+            .order('created_at', ascending: false)
+            .limit(300);
+        for (final raw in (ledger as List)) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          final rid = m['request_id']?.toString() ?? '';
+          if (rid.isEmpty || knownIds.contains(rid)) continue;
+          knownIds.add(rid);
+          final p = m['provider']?.toString() ?? 'groq';
+          final task = m['task_type']?.toString() ?? 'general';
+          _memoryRecords.add(AiRequestRecord(
+            requestId: rid,
+            provider: p == 'gateway' ? 'groq' : p,
+            modelId: task == 'embedding'
+                ? 'gemini-embedding-001'
+                : (task == 'rerank'
+                    ? 'rerank-v3.5'
+                    : (task == 'transcribe' ? 'whisper-large-v3' : 'openai/gpt-oss-120b')),
+            featureName: task,
+            callbackRoute: 'ai_usage_ledger',
+            timestamp: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
+            status: m['status']?.toString() ?? 'success',
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            tokenSource: DataSourceBadge.internallyTracked,
+            calculatedCostUsd: 0.0,
+            costSource: DataSourceBadge.unavailable,
+          ));
+        }
+      } catch (_) {}
+
+      _memoryRecords.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      if (_memoryRecords.length > _maxStoredRecords) {
+        _memoryRecords.removeRange(_maxStoredRecords, _memoryRecords.length);
+      }
+      await _persist();
+    } catch (_) {}
   }
 
   static Future<List<AiRequestRecord>> getRecords({

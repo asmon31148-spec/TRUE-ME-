@@ -180,7 +180,7 @@ class QuotaCalculationEngine {
     }
 
     final cohereTrialRem = double.tryParse(headers['x-trial-endpoint-call-remaining'] ?? '');
-    if (model.provider == 'cohere' && cohereTrialRem != null) {
+    if (model.provider == 'cohere' && cohereTrialRem != null && model.isPrimary) {
       const trialTotal = 1000.0;
       final used = math.max(0.0, trialTotal - cohereTrialRem);
       metrics.add(QuotaMetric(
@@ -189,7 +189,7 @@ class QuotaCalculationEngine {
         used: used,
         remaining: cohereTrialRem,
         percentage: ((used / trialTotal) * 100.0).clamp(0.0, 100.0),
-        unit: 'requests',
+        unit: 'account trial calls',
         source: DataSourceBadge.official,
         confidence: 'High',
         resetSchedule: ResetScheduleType.monthly,
