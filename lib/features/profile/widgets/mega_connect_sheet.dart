@@ -5,6 +5,7 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/services/mega_vault_service.dart';
+import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 
@@ -31,12 +32,17 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
   bool _isBusy = false;
   bool _obscurePassword = true;
   bool _showBridgeConfig = false;
+  bool _isCreateTab = false;
   String? _errorText;
   MegaStorageStats? _stats;
 
   @override
   void initState() {
     super.initState();
+    final savedEmail = OfflineCacheService.getUserEmail().trim();
+    if (savedEmail.isNotEmpty && savedEmail.contains('@')) {
+      _emailCtrl.text = savedEmail;
+    }
     _bridgeCtrl = TextEditingController(text: MegaVaultService.instance.bridgeUrl);
     _showBridgeConfig = !MegaVaultService.instance.hasBridgeConfigured;
     if (MegaVaultService.instance.isSignedIn) {
@@ -61,6 +67,10 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
 
   Future<void> _openMegaRegister() async {
     final uri = Uri.parse('https://mega.nz/register');
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+      if (launched) return;
+    } catch (_) {}
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
@@ -251,64 +261,72 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
                           onPressed: _isBusy ? null : _disconnect,
                         ),
                       ] else ...[
-                        // Clear Sign-Up vs Sign-In Guidance Card
-                        TrueMeCard(
-                          borderRadius: 18,
-                          padding: const EdgeInsets.all(14),
-                          color: isDark ? AppColors.darkAccentWash : AppColors.milkyLavender,
-                          showShadow: false,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        // Segmented Switcher: Sign In vs Create Free Account
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkSurfaceElevated : AppColors.softSurface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: context.borderColor),
+                          ),
+                          child: Row(
                             children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.info_outline_rounded,
-                                    size: 19,
-                                    color: context.accentColor,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() {
+                                    _isCreateTab = false;
+                                    _errorText = null;
+                                  }),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    padding: const EdgeInsets.symmetric(vertical: 11),
+                                    decoration: BoxDecoration(
+                                      color: !_isCreateTab
+                                          ? context.accentColor
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                     child: Text(
-                                      'Already have a MEGA account? Sign in below.',
+                                      'Sign In',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w700,
-                                        color: context.textPrimary,
+                                        color: !_isCreateTab
+                                            ? Colors.white
+                                            : context.textSecondary,
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'New to MEGA? First create & verify your free 20 GB account on mega.nz, then come back and sign in.',
-                                style: AppTypography.secondary.copyWith(
-                                  fontSize: 12.5,
-                                  color: context.textSecondary,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              GestureDetector(
-                                onTap: _openMegaRegister,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.open_in_new_rounded,
-                                      size: 15,
-                                      color: context.accentColor,
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() {
+                                    _isCreateTab = true;
+                                    _errorText = null;
+                                  }),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    padding: const EdgeInsets.symmetric(vertical: 11),
+                                    decoration: BoxDecoration(
+                                      color: _isCreateTab
+                                          ? context.accentColor
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      'Create free 20 GB MEGA account',
+                                    child: Text(
+                                      'Create 20 GB Account',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 13.5,
                                         fontWeight: FontWeight.w700,
-                                        color: context.accentColor,
+                                        color: _isCreateTab
+                                            ? Colors.white
+                                            : context.textSecondary,
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -316,102 +334,167 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
                         ),
                         const SizedBox(height: 18),
 
-                        TrueMeCard(
-                          borderRadius: 22,
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              AppInput(
-                                label: 'MEGA Email',
-                                hintText: 'you@example.com',
-                                controller: _emailCtrl,
-                                keyboardType: TextInputType.emailAddress,
-                                prefixIcon: Icon(
-                                  Icons.email_outlined,
-                                  size: 19,
-                                  color: context.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              AppInput(
-                                label: 'MEGA Password',
-                                hintText: 'Enter your MEGA password',
-                                controller: _passCtrl,
-                                obscureText: _obscurePassword,
-                                prefixIcon: Icon(
-                                  Icons.key_rounded,
-                                  size: 19,
-                                  color: context.textSecondary,
-                                ),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                    size: 19,
-                                    color: context.textSecondary,
+                        if (_isCreateTab) ...[
+                          TrueMeCard(
+                            borderRadius: 22,
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Get 20 GB Free in 3 Quick Steps',
+                                  style: AppTypography.sectionHeading.copyWith(
+                                    fontSize: 16.5,
+                                    color: context.textPrimary,
                                   ),
-                                  onPressed: () =>
-                                      setState(() => _obscurePassword = !_obscurePassword),
                                 ),
-                              ),
-                              if (_showBridgeConfig) ...[
                                 const SizedBox(height: 14),
-                                AppInput(
-                                  label: 'MEGA Bridge Server URL',
-                                  hintText: 'https://trueme-mega-bridge.onrender.com',
-                                  controller: _bridgeCtrl,
-                                  keyboardType: TextInputType.url,
-                                  prefixIcon: Icon(
-                                    Icons.dns_outlined,
-                                    size: 19,
-                                    color: context.textSecondary,
+                                _StepRow(
+                                  number: '1',
+                                  title: 'Create your MEGA account',
+                                  subtitle: 'Tap the button below to open MEGA sign-up inside the app.',
+                                ),
+                                const SizedBox(height: 12),
+                                _StepRow(
+                                  number: '2',
+                                  title: 'Verify your email',
+                                  subtitle: 'Open the confirmation link MEGA sends to your inbox.',
+                                ),
+                                const SizedBox(height: 12),
+                                _StepRow(
+                                  number: '3',
+                                  title: 'Come back & Sign In',
+                                  subtitle: 'Return here and enter your new MEGA email & password.',
+                                ),
+                                const SizedBox(height: 20),
+                                TrueMePrimaryButton(
+                                  label: 'Open Free 20 GB Sign-Up',
+                                  leadingIcon: const Icon(
+                                    Icons.person_add_alt_1_rounded,
+                                    size: 18,
+                                    color: Colors.white,
                                   ),
+                                  onPressed: _openMegaRegister,
+                                ),
+                                const SizedBox(height: 12),
+                                AppSecondaryButton(
+                                  label: 'I Verified My Account → Sign In',
+                                  onPressed: () => setState(() => _isCreateTab = false),
                                 ),
                               ],
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () =>
-                                      setState(() => _showBridgeConfig = !_showBridgeConfig),
-                                  child: Text(
-                                    _showBridgeConfig ? 'Hide Server URL' : 'Server URL',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
+                            ),
+                          ),
+                        ] else ...[
+                          TrueMeCard(
+                            borderRadius: 22,
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AppInput(
+                                  label: 'MEGA Email',
+                                  hintText: 'you@example.com',
+                                  controller: _emailCtrl,
+                                  keyboardType: TextInputType.emailAddress,
+                                  prefixIcon: Icon(
+                                    Icons.email_outlined,
+                                    size: 19,
+                                    color: context.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                AppInput(
+                                  label: 'MEGA Password',
+                                  hintText: 'Enter your MEGA password',
+                                  controller: _passCtrl,
+                                  obscureText: _obscurePassword,
+                                  prefixIcon: Icon(
+                                    Icons.key_rounded,
+                                    size: 19,
+                                    color: context.textSecondary,
+                                  ),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                      size: 19,
+                                      color: context.textSecondary,
+                                    ),
+                                    onPressed: () =>
+                                        setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                ),
+                                if (_showBridgeConfig) ...[
+                                  const SizedBox(height: 14),
+                                  AppInput(
+                                    label: 'MEGA Bridge Server URL',
+                                    hintText: 'https://trueme-mega-bridge.onrender.com',
+                                    controller: _bridgeCtrl,
+                                    keyboardType: TextInputType.url,
+                                    prefixIcon: Icon(
+                                      Icons.dns_outlined,
+                                      size: 19,
                                       color: context.textSecondary,
                                     ),
                                   ),
+                                ],
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    TextButton(
+                                      onPressed: () => setState(() => _isCreateTab = true),
+                                      child: Text(
+                                        'New to MEGA? Create account',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.accentColor,
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          setState(() => _showBridgeConfig = !_showBridgeConfig),
+                                      child: Text(
+                                        _showBridgeConfig ? 'Hide URL' : 'Server URL',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: context.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              if (_errorText != null) ...[
-                                const SizedBox(height: 6),
-                                TrueMeCard(
-                                  borderRadius: 14,
-                                  padding: const EdgeInsets.all(12),
-                                  color: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
-                                  showShadow: false,
-                                  child: Text(
-                                    _errorText!,
-                                    style: const TextStyle(fontSize: 13, color: AppColors.error),
+                                if (_errorText != null) ...[
+                                  const SizedBox(height: 6),
+                                  TrueMeCard(
+                                    borderRadius: 14,
+                                    padding: const EdgeInsets.all(12),
+                                    color: isDark ? const Color(0xFF321822) : AppColors.pastelRose,
+                                    showShadow: false,
+                                    child: Text(
+                                      _errorText!,
+                                      style: const TextStyle(fontSize: 13, color: AppColors.error),
+                                    ),
                                   ),
+                                ],
+                                const SizedBox(height: 16),
+                                TrueMePrimaryButton(
+                                  label: _isBusy ? 'Connecting...' : 'Connect MEGA 20 GB Vault',
+                                  isLoading: _isBusy,
+                                  leadingIcon: const Icon(
+                                    Icons.cloud_upload_rounded,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: _isBusy ? null : _connect,
                                 ),
                               ],
-                              const SizedBox(height: 16),
-                              TrueMePrimaryButton(
-                                label: _isBusy ? 'Connecting...' : 'Connect MEGA 20 GB Vault',
-                                isLoading: _isBusy,
-                                leadingIcon: const Icon(
-                                  Icons.cloud_upload_rounded,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                                onPressed: _isBusy ? null : _connect,
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ],
                   ),
@@ -421,6 +504,68 @@ class _MegaConnectSheetState extends State<MegaConnectSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StepRow extends StatelessWidget {
+  final String number;
+  final String title;
+  final String subtitle;
+
+  const _StepRow({
+    required this.number,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: context.accentColor.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            number,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: context.accentColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: AppTypography.secondary.copyWith(
+                  fontSize: 12.5,
+                  color: context.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
