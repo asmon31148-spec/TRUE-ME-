@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trueme/core/ai/ai_gateway_client.dart';
@@ -12,6 +13,7 @@ import 'package:trueme/features/export/pptx_exporter.dart';
 import 'package:trueme/features/export/services/document_parser_service.dart';
 import 'package:trueme/features/export/widgets/style_picker_sheet.dart';
 import 'package:trueme/features/quiz/providers/quiz_provider.dart';
+import 'package:trueme/features/upload/services/pdf_processor.dart';
 import 'package:trueme/features/upload/services/url_processor.dart';
 
 void main() {
@@ -182,6 +184,18 @@ void main() {
         DocumentParserService.detectFormat(Uint8List.fromList([1, 2, 3]), 'bad.pdf'),
         ParsedDocFormat.unknown,
       );
+    });
+
+    test('PdfProcessor handles malformed PDF gracefully without crashing', () async {
+      final tmp = await Directory.systemTemp.createTemp('trueme_pdf_test_');
+      try {
+        final badPdf = File('${tmp.path}/large_broken.pdf');
+        await badPdf.writeAsString('%PDF-1.4\nBT (Microbiology Chapter One) Tj ET\n%%EOF');
+        final text = await PdfProcessor.extractText(badPdf);
+        expect(text, contains('Microbiology Chapter One'));
+      } finally {
+        await tmp.delete(recursive: true);
+      }
     });
   });
 }

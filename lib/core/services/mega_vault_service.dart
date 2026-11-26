@@ -285,7 +285,11 @@ class MegaVaultService {
     final res = await _client().post(
       '/mega/upload',
       data: formData,
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+      options: Options(
+        headers: {'Authorization': 'Bearer $token'},
+        sendTimeout: const Duration(minutes: 15),
+        receiveTimeout: const Duration(minutes: 15),
+      ),
     );
     final data = Map<String, dynamic>.from(res.data as Map);
     return data['fileId']?.toString() ?? '';

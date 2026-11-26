@@ -99,7 +99,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
       if (size > DocumentParserService.maxSupportedBytes) {
         setState(() {
           _isLoading = false;
-          _error = 'File exceeds 50 MB in-app viewer limit. Use Open Externally.';
+          _error = 'File exceeds 150 MB in-app viewer limit. Use Open Externally.';
         });
         return;
       }

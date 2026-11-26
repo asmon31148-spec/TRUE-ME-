@@ -35,7 +35,7 @@ class ParsedPptxSlide {
 class DocumentParserService {
   DocumentParserService._();
 
-  static const int maxSupportedBytes = 50 * 1024 * 1024; // 50 MB safety cap
+  static const int maxSupportedBytes = 150 * 1024 * 1024; // 150 MB safety cap
 
   static ParsedDocFormat detectFormat(Uint8List bytes, String filePath) {
     if (bytes.length >= 4 &&

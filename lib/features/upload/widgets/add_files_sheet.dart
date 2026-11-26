@@ -182,16 +182,32 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       final file = File(result.files.single.path!);
       final fileName = result.files.single.name;
       final ext = fileName.split('.').last.toLowerCase();
+      final sizeMb = (await file.length()) / (1024 * 1024);
+
+      if (mounted) {
+        setState(() {
+          _statusText = sizeMb >= 10
+              ? 'Processing large file (${sizeMb.toStringAsFixed(1)} MB)...'
+              : 'Reading & extracting file content...';
+        });
+      }
 
       String extracted = '';
       if (ext == 'pdf') {
-        extracted = await PdfProcessor.extractText(file);
+        try {
+          extracted = await PdfProcessor.extractText(file);
+        } catch (_) {
+          extracted = '';
+        }
       } else {
         extracted = await file.readAsString();
       }
 
       if (extracted.trim().isEmpty) {
-        extracted = 'Uploaded file: $fileName (No selectable text found; consider using Photo OCR if scanned).';
+        extracted =
+            'Uploaded file: $fileName (${sizeMb.toStringAsFixed(1)} MB). '
+            'No selectable text could be extracted automatically (likely scanned or image-heavy PDF). '
+            'You can still back it up to your Cloud Vault or use Photo OCR for key pages.';
       }
 
       await _saveExtractedDocument(
