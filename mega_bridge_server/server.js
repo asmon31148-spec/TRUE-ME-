@@ -207,7 +207,10 @@ app.post('/mega/login', loginLimiter, async (req, res) => {
     console.error('MEGA login failed:', msg);
 
     if (/ENOENT|EACCESS|invalid.*password|bad.*password|incorrect/i.test(msg)) {
-      return res.status(401).json({ error: 'Invalid MEGA email or password.' });
+      return res.status(401).json({
+        error:
+          "Invalid MEGA email or password — or this email isn't registered on mega.nz yet. Create & verify your free MEGA account at mega.nz first, then sign in here.",
+      });
     }
     if (/2fa|mfa|second.?factor|EMFA/i.test(msg)) {
       return res.status(403).json({
