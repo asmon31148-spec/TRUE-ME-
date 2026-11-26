@@ -56,10 +56,18 @@ class MegaVaultService {
   MegaVaultService._internal();
 
   static const FlutterSecureStorage _secure = FlutterSecureStorage();
-  static const String _tokenKey = 'trueme_mega_jwt';
+
+  String get _tokenKey => 'trueme_mega_jwt_${OfflineCacheService.getUserId()}';
 
   String? _cachedToken;
   String? lastError;
+
+  /// Clears in-memory Mega session on logout/account switch without deleting
+  /// the outgoing TRUE ME user's persisted secure storage key.
+  void clearActiveMemorySession() {
+    _cachedToken = null;
+    lastError = null;
+  }
 
   String get bridgeUrl {
     final custom = OfflineCacheService.getMegaBridgeUrl().trim();
@@ -175,9 +183,21 @@ class MegaVaultService {
 
       final data = Map<String, dynamic>.from(res.data as Map);
       final token = data['token']?.toString() ?? '';
+      final megaIdentityHash = data['megaIdentityHash']?.toString() ?? '';
       if (token.isEmpty) {
         lastError = 'Bridge server returned an empty session token.';
         return false;
+      }
+
+      if (megaIdentityHash.isNotEmpty) {
+        final conflictError = await SupabaseService.instance.claimMegaIdentity(
+          megaEmail: email.trim(),
+          megaIdentityHash: megaIdentityHash,
+        );
+        if (conflictError != null) {
+          lastError = conflictError;
+          return false;
+        }
       }
 
       _cachedToken = token;
@@ -209,6 +229,7 @@ class MegaVaultService {
     try {
       await _secure.delete(key: _tokenKey);
     } catch (_) {}
+    await SupabaseService.instance.unlinkMegaIdentity();
     await SupabaseService.instance.clearMegaVaultSession();
     await OfflineCacheService.saveMegaStatus(false);
   }

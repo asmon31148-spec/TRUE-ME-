@@ -1,5 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'mega_vault_service.dart';
 import 'supabase_service.dart';
+import 'sync_outbox_service.dart';
 
 /// Offline-first Persistence & Cloud Sync Service powered by Hive + Supabase.
 /// All writes happen instantly to Hive and synchronize asynchronously to Supabase.
@@ -61,6 +63,22 @@ class OfflineCacheService {
         SupabaseService.instance.authUserId ??
         (current['userId'] as String?) ??
         'usr_${resolvedEmail.toLowerCase().hashCode.abs()}';
+
+    // Strict account isolation: if switching to a different TRUE ME account on this
+    // device, wipe previous account's local boxes & memory tokens so B never sees A's data.
+    final prevOwner = box.get('active_cache_owner_id') as String?;
+    if (prevOwner != null && prevOwner.isNotEmpty && prevOwner != resolvedUserId) {
+      await clearAllCache();
+      await SyncOutboxService.clearAll();
+      await box.delete('drive_connected');
+      await box.delete('drive_email');
+      await box.delete('mega_connected');
+      await box.delete('mega_email');
+      await box.delete('mega_used_bytes');
+      await box.delete('mega_total_bytes');
+      MegaVaultService.instance.clearActiveMemorySession();
+    }
+    await box.put('active_cache_owner_id', resolvedUserId);
 
     final resolvedDeadline = targetExamDate ??
         DateTime.tryParse(current['targetExamDate']?.toString() ?? '') ??
@@ -327,10 +345,18 @@ class OfflineCacheService {
 
   static Future<void> logout() async {
     await SupabaseService.instance.signOut();
+    MegaVaultService.instance.clearActiveMemorySession();
+    await clearAllCache();
+    await SyncOutboxService.clearAll();
     final box = Hive.box(userProfileBox);
-    final profile = getUserProfile();
-    profile['isLoggedIn'] = false;
-    await box.put('current_user', profile);
+    await box.delete('current_user');
+    await box.delete('active_cache_owner_id');
+    await box.delete('drive_connected');
+    await box.delete('drive_email');
+    await box.delete('mega_connected');
+    await box.delete('mega_email');
+    await box.delete('mega_used_bytes');
+    await box.delete('mega_total_bytes');
   }
 
   // ---------------------------------------------------------------------------

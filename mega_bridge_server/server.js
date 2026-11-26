@@ -247,10 +247,16 @@ app.post('/mega/login', loginLimiter, async (req, res) => {
       { expiresIn: '60d' }
     );
 
+    const megaIdentityHash = crypto
+      .createHash('sha256')
+      .update(email.trim().toLowerCase())
+      .digest('hex');
+
     res.json({
       success: true,
       token,
       email,
+      megaIdentityHash,
       user: storage.name || email,
       storageUsed: quota.used,
       storageTotal: quota.total,

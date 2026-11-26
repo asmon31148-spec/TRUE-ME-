@@ -57,6 +57,11 @@ class SyncOutboxService {
     return box?.length ?? 0;
   }
 
+  static Future<void> clearAll() async {
+    final box = await _ensureBox();
+    await box?.clear();
+  }
+
   /// Replays queued operations using [executor]. Stops early on network failure
   /// so remaining items stay persisted for the next retry.
   static Future<int> flush(

@@ -188,6 +188,42 @@ class SupabaseService {
     } catch (_) {}
   }
 
+  /// Claims 1-to-1 ownership of a Mega identity for the current TRUE ME account.
+  /// Returns `null` on success, or an error string if already linked to another account.
+  Future<String?> claimMegaIdentity({
+    required String megaEmail,
+    required String megaIdentityHash,
+  }) async {
+    final client = _clientOrNull;
+    if (client == null || client.auth.currentUser == null) return null;
+    try {
+      final res = await client.rpc(
+        'claim_mega_identity',
+        params: {
+          'p_mega_email': megaEmail.trim().toLowerCase(),
+          'p_mega_identity_hash': megaIdentityHash,
+        },
+      );
+      if (res is Map && res['ok'] == false) {
+        return res['error']?.toString() ??
+            'This MEGA account is already linked to another TRUE ME account.';
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Unlinks the Mega identity owned by the current TRUE ME account.
+  Future<void> unlinkMegaIdentity() async {
+    final client = _clientOrNull;
+    final uid = client?.auth.currentUser?.id;
+    if (client == null || uid == null) return;
+    try {
+      await client.from('mega_account_links').delete().eq('user_id', uid);
+    } catch (_) {}
+  }
+
   /// Idempotently records an AI request in the server-side `ai_usage_ledger` (AI-01 / AI-02).
   Future<bool> recordAiUsage({
     required String requestId,
