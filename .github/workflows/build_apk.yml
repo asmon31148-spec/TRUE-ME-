@@ -99,19 +99,13 @@ jobs:
 
           python3 .github/scripts/patch_gradle.py
 
-      - name: Create .env for Build
+      - name: Create Public Client .env for Build
         run: |
           cat << 'EOF' > .env
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
-          COHERE_API_KEY=${{ secrets.COHERE_API_KEY }}
-          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           GOOGLE_DRIVE_CLIENT_ID=${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           MEGA_BRIDGE_URL=${{ secrets.MEGA_BRIDGE_URL }}
-          CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
           EOF
 
       - name: Install Dependencies
@@ -191,6 +185,27 @@ jobs:
             exit 1
           }
           rm -f .env
+
+      - name: Verify APK Contains No Private AI Keys or Direct Endpoints
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          if unzip -l "$APK" | grep -q "flutter_assets/\.env"; then
+            echo "ERROR: .env asset found inside release APK!"
+            exit 1
+          fi
+          rm -rf /tmp/apk_scan && unzip -q "$APK" -d /tmp/apk_scan
+          if grep -E -a -q "gsk_[A-Za-z0-9]{16,}|sk-or-v1-[A-Za-z0-9]{16,}|api\.groq\.com|api\.cohere\.com|openrouter\.ai/api" /tmp/apk_scan/lib/*/*.so /tmp/apk_scan/assets/flutter_assets/* 2>/dev/null; then
+            echo "ERROR: Private AI provider credential or direct endpoint found in release APK!"
+            rm -rf /tmp/apk_scan
+            exit 1
+          fi
+          rm -rf /tmp/apk_scan
+          echo "Verified: release APK contains no .env asset, private AI keys, or direct provider endpoints."
+
+      - name: Cleanup Temporary Build Secrets
+        if: always()
+        run: |
+          rm -f .env android/app/trueme-release.jks
 
       - name: Prepare APK for Direct Release
         run: |

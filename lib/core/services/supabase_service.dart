@@ -44,6 +44,7 @@ class SupabaseService {
 
   bool get isReady => _clientOrNull != null;
   String? get authUserId => _clientOrNull?.auth.currentUser?.id;
+  String? get currentAccessToken => _clientOrNull?.auth.currentSession?.accessToken;
 
   /// Observable last cloud sync/query error (DATA-01). Cleared on successful sync.
   String? lastSyncError;

@@ -1,33 +1,16 @@
 import 'dart:io';
-import 'package:dio/dio.dart';
-import '../config/env_config.dart';
-import '../utils/rate_limiter.dart';
+import 'ai_gateway_client.dart';
 
+/// Gateway-backed Groq adapter. Private GROQ_API_KEY lives exclusively on the backend.
 class GroqService {
-  final String _apiKey;
-  final Dio _dio;
+  final AiGatewayClient _gateway;
 
-  static const String _baseUrl = 'https://api.groq.com/openai/v1';
+  GroqService({String? apiKey, dynamic dio, AiGatewayClient? gateway})
+      : _gateway = gateway ?? AiGatewayClient.instance;
 
-  GroqService({String? apiKey, Dio? dio})
-      : _apiKey = apiKey ?? EnvConfig.get('GROQ_API_KEY'),
-        _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: _baseUrl,
-                connectTimeout: const Duration(seconds: 8),
-                receiveTimeout: const Duration(seconds: 22),
-              ),
-            );
+  bool get isConfigured => _gateway.isConfigured;
 
-  bool get isConfigured => _apiKey.isNotEmpty;
-
-  Map<String, String> get _headers => {
-        'Authorization': 'Bearer $_apiKey',
-        'Content-Type': 'application/json',
-      };
-
-  /// High-volume completion using fast inference model.
+  /// High-volume fast completion routed via authenticated Supabase AI Gateway.
   Future<String> complete8B({
     required String prompt,
     String? systemPrompt,
@@ -35,30 +18,18 @@ class GroqService {
     double temperature = 0.3,
     int? maxTokens,
   }) async {
-    try {
-      return await _callChatCompletion(
-        model: 'openai/gpt-oss-20b',
-        rateLimitKey: 'groq_speed',
-        prompt: prompt,
-        systemPrompt: systemPrompt,
-        jsonMode: jsonMode,
-        temperature: temperature,
-        maxTokens: maxTokens,
-      );
-    } catch (_) {
-      return await _callChatCompletion(
-        model: 'qwen/qwen3.8-27b',
-        rateLimitKey: 'groq_heavy',
-        prompt: prompt,
-        systemPrompt: systemPrompt,
-        jsonMode: jsonMode,
-        temperature: temperature,
-        maxTokens: maxTokens,
-      );
-    }
+    return _gateway.chat(
+      prompt: prompt,
+      systemPrompt: systemPrompt,
+      tier: 'realtime',
+      taskType: 'groq_speed',
+      jsonMode: jsonMode,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
   }
 
-  /// Complex reasoning and RAG chat.
+  /// Complex reasoning and RAG chat routed via authenticated Supabase AI Gateway.
   Future<String> complete70B({
     required String prompt,
     String? systemPrompt,
@@ -66,116 +37,19 @@ class GroqService {
     double temperature = 0.3,
     int? maxTokens,
   }) async {
-    try {
-      return await _callChatCompletion(
-        model: 'openai/gpt-oss-120b',
-        rateLimitKey: 'groq_heavy',
-        prompt: prompt,
-        systemPrompt: systemPrompt,
-        jsonMode: jsonMode,
-        temperature: temperature,
-        maxTokens: maxTokens,
-      );
-    } catch (_) {
-      return await _callChatCompletion(
-        model: 'qwen/qwen3.8-27b',
-        rateLimitKey: 'groq_heavy',
-        prompt: prompt,
-        systemPrompt: systemPrompt,
-        jsonMode: jsonMode,
-        temperature: temperature,
-        maxTokens: maxTokens,
-      );
-    }
-  }
-
-  Future<String> _callChatCompletion({
-    required String model,
-    required String rateLimitKey,
-    required String prompt,
-    String? systemPrompt,
-    bool jsonMode = false,
-    double temperature = 0.3,
-    int? maxTokens,
-  }) async {
-    if (!isConfigured) {
-      throw StateError('GROQ_API_KEY is not configured in .env');
-    }
-
-    final hasQuota = await LocalRateLimiter.hasQuota(rateLimitKey);
-    if (!hasQuota) {
-      throw StateError('Groq $model daily quota reached');
-    }
-
-    final List<Map<String, String>> messages = [];
-    if (systemPrompt != null && systemPrompt.isNotEmpty) {
-      messages.add({'role': 'system', 'content': systemPrompt});
-    }
-    messages.add({'role': 'user', 'content': prompt});
-
-    final data = {
-      'model': model,
-      'messages': messages,
-      'temperature': temperature,
-      if (maxTokens != null) 'max_tokens': maxTokens,
-      if (jsonMode) 'response_format': {'type': 'json_object'},
-    };
-
-    final response = await _dio.post(
-      '/chat/completions',
-      options: Options(headers: _headers),
-      data: data,
+    return _gateway.chat(
+      prompt: prompt,
+      systemPrompt: systemPrompt,
+      tier: 'heavy',
+      taskType: 'groq_heavy',
+      jsonMode: jsonMode,
+      temperature: temperature,
+      maxTokens: maxTokens,
     );
-
-    await LocalRateLimiter.incrementUsage(rateLimitKey);
-
-    if (response.statusCode == 200) {
-      final choices = response.data['choices'] as List<dynamic>?;
-      if (choices != null && choices.isNotEmpty) {
-        return choices[0]['message']['content'] as String? ?? '';
-      }
-    }
-
-    throw StateError('Groq API error: ${response.statusCode} - ${response.data}');
   }
 
-  /// Groq Whisper Large v3 audio transcription (7,200 req/day).
+  /// Audio transcription via authenticated Supabase AI Gateway (Whisper Large v3).
   Future<String> transcribeAudio(File audioFile) async {
-    if (!isConfigured) {
-      throw StateError('GROQ_API_KEY is not configured in .env');
-    }
-
-    final hasQuota = await LocalRateLimiter.hasQuota('groq_whisper');
-    if (!hasQuota) {
-      throw StateError('Groq Whisper daily quota reached');
-    }
-
-    final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        audioFile.path,
-        filename: audioFile.path.split(Platform.pathSeparator).last,
-      ),
-      'model': 'whisper-large-v3',
-      'response_format': 'json',
-      'language': 'en',
-    });
-
-    final response = await _dio.post(
-      '/audio/transcriptions',
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $_apiKey',
-        },
-      ),
-      data: formData,
-    );
-
-    await LocalRateLimiter.incrementUsage('groq_whisper');
-
-    if (response.statusCode == 200) {
-      return response.data['text'] as String? ?? '';
-    }
-
-    throw StateError('Whisper transcription failed: ${response.statusCode}');
+    return _gateway.transcribe(audioFile: audioFile);
   }
 }
