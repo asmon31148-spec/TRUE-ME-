@@ -1,0 +1,86 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:trueme/core/ai/ai_router.dart';
+import 'package:trueme/core/ai/rag_service.dart';
+import 'package:trueme/core/models/document_chunk_model.dart';
+import 'package:trueme/features/quiz/providers/quiz_provider.dart';
+import 'package:trueme/features/upload/services/url_processor.dart';
+
+void main() {
+  group('LEARN-03 Quiz Question Validation', () {
+    test('rejects out-of-range correctOptionIndex instead of clamping', () {
+      final invalid = QuizNotifier.validateQuestionMap({
+        'question': 'What is osmosis?',
+        'options': ['Diffusion of water', 'Active transport'],
+        'correctOptionIndex': 5,
+      }, 0);
+      expect(invalid, isNull);
+    });
+
+    test('rejects duplicate options (case-insensitive)', () {
+      final dup = QuizNotifier.validateQuestionMap({
+        'question': 'Pick one',
+        'options': ['ATP', 'atp', 'ADP'],
+        'correctOptionIndex': 0,
+      }, 0);
+      expect(dup, isNull);
+    });
+
+    test('accepts valid question preserving exact correctOptionIndex', () {
+      final valid = QuizNotifier.validateQuestionMap({
+        'question': 'Powerhouse of the cell?',
+        'options': ['Nucleus', 'Mitochondria', 'Ribosome'],
+        'correctOptionIndex': 1,
+        'explanation': 'Mitochondria generate ATP.',
+      }, 0);
+      expect(valid, isNotNull);
+      expect(valid!.correctOptionIndex, 1);
+    });
+  });
+
+  group('AiRouter JSON parsing', () {
+    test('extracts fenced JSON object cleanly', () {
+      final parsed = AiRouter.parseJsonObject('```json\n{"cards": [{"front":"A","back":"B"}],}\n```');
+      expect(parsed['cards'], isA<List>());
+    });
+  });
+
+  group('INGEST-01 SSRF URL Guard', () {
+    test('blocks localhost and private IPs', () {
+      expect(() => UrlProcessor.validateSafeUri('http://localhost:8080/admin'), throwsArgumentError);
+      expect(() => UrlProcessor.validateSafeUri('http://127.0.0.1/secret'), throwsArgumentError);
+      expect(() => UrlProcessor.validateSafeUri('http://192.168.1.1/router'), throwsArgumentError);
+      expect(() => UrlProcessor.validateSafeUri('http://10.0.0.5/internal'), throwsArgumentError);
+      expect(() => UrlProcessor.validateSafeUri('http://169.254.169.254/latest/meta-data'), throwsArgumentError);
+      expect(() => UrlProcessor.validateSafeUri('file:///etc/passwd'), throwsArgumentError);
+    });
+
+    test('allows valid https URLs', () {
+      final uri = UrlProcessor.validateSafeUri('en.wikipedia.org/wiki/Cell_(biology)');
+      expect(uri.scheme, 'https');
+      expect(uri.host, 'en.wikipedia.org');
+    });
+  });
+
+  group('RAG-02 Grounded Citations', () {
+    test('discloses low evidence when chunks are empty', () {
+      final ctx = RagService.formatGroundedContextWithCitations(const []);
+      expect(ctx, contains('NO_MATCHING_STUDY_CHUNKS'));
+    });
+
+    test('includes source file and chunk index metadata', () {
+      final ctx = RagService.formatGroundedContextWithCitations([
+        DocumentChunkModel(
+          id: 'c1',
+          userId: 'u1',
+          notebookId: 'n1',
+          fileName: 'Biology.pdf',
+          chunkIndex: 3,
+          content: 'Mitosis produces two identical daughter cells.',
+          embedding: const [],
+        ),
+      ]);
+      expect(ctx, contains('Biology.pdf'));
+      expect(ctx, contains('Chunk #3'));
+    });
+  });
+}

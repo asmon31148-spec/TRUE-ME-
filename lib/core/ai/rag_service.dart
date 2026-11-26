@@ -27,6 +27,9 @@ class RagService {
     // 2. Generate embeddings and store in pgvector
     for (final chunk in chunks) {
       final embedding = await _geminiService.generateEmbedding(chunk.content);
+      if (embedding.length != 768) {
+        throw StateError('Embedding dimension mismatch: expected 768, got ${embedding.length}');
+      }
 
       await _supabaseService.insertChunk(
         userId: userId,
@@ -50,6 +53,9 @@ class RagService {
   }) async {
     // 1. Embed query
     final queryEmbedding = await _geminiService.generateEmbedding(query);
+    if (queryEmbedding.length != 768) {
+      throw StateError('Query embedding dimension mismatch: expected 768, got ${queryEmbedding.length}');
+    }
 
     // 2. Retrieve top-K most similar chunks from pgvector
     return await _supabaseService.searchSimilarChunks(
@@ -58,5 +64,21 @@ class RagService {
       userId: userId,
       notebookId: notebookId,
     );
+  }
+
+  /// Formats retrieved chunks with explicit source citations and low-evidence
+  /// disclosure for grounded generation (RAG-02).
+  static String formatGroundedContextWithCitations(List<DocumentChunkModel> chunks) {
+    if (chunks.isEmpty) {
+      return '[NO_MATCHING_STUDY_CHUNKS] No direct matches were found in the student\'s uploaded material. '
+          'Disclose clearly if answering from general knowledge.';
+    }
+    final buffer = StringBuffer();
+    for (final c in chunks) {
+      buffer.writeln('[Source: ${c.fileName} | Chunk #${c.chunkIndex}]');
+      buffer.writeln(c.content.trim());
+      buffer.writeln();
+    }
+    return buffer.toString().trim();
   }
 }

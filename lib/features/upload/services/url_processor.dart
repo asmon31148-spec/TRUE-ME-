@@ -10,16 +10,41 @@ class UrlProcessor {
       : _cloudflareService = cloudflareService ?? CloudflareService(),
         _aiRouter = aiRouter ?? AiRouter();
 
-  /// Fetches an article or web page URL, cleans HTML tags, and summarizes it.
-  Future<Map<String, String>> fetchAndSummarize(String url) async {
-    var cleanUrl = url.trim();
+  static const int _maxHtmlBytes = 2 * 1024 * 1024; // 2 MB cap (INGEST-01)
+
+  /// Validates that [rawUrl] is an http/https URL not targeting localhost or
+  /// private/link-local IP ranges (SSRF protection, INGEST-01).
+  static Uri validateSafeUri(String rawUrl) {
+    var cleanUrl = rawUrl.trim();
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       cleanUrl = 'https://$cleanUrl';
     }
     final uri = Uri.tryParse(cleanUrl);
-    if (uri == null || !uri.hasScheme) {
-      throw ArgumentError('Invalid URL provided: $url');
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      throw ArgumentError('Invalid or unsupported URL scheme: $rawUrl');
     }
+
+    final host = uri.host.toLowerCase();
+    if (host == 'localhost' ||
+        host == '::1' ||
+        host.endsWith('.local') ||
+        host.startsWith('127.') ||
+        host.startsWith('10.') ||
+        host.startsWith('192.168.') ||
+        host.startsWith('169.254.') ||
+        host.startsWith('0.')) {
+      throw ArgumentError('Blocked unsafe private/local host: $host');
+    }
+    final rfc1918 = RegExp(r'^172\.(1[6-9]|2\d|3[0-1])\.');
+    if (rfc1918.hasMatch(host)) {
+      throw ArgumentError('Blocked unsafe private network host: $host');
+    }
+    return uri;
+  }
+
+  /// Fetches an article or web page URL, cleans HTML tags, and summarizes it.
+  Future<Map<String, String>> fetchAndSummarize(String url) async {
+    final uri = validateSafeUri(url);
 
     final response = await http.get(
       uri,
@@ -31,6 +56,9 @@ class UrlProcessor {
 
     if (response.statusCode != 200) {
       throw StateError('Failed to fetch URL: HTTP ${response.statusCode}');
+    }
+    if (response.bodyBytes.length > _maxHtmlBytes) {
+      throw StateError('Webpage exceeds 2 MB safety limit.');
     }
 
     final rawHtml = response.body;

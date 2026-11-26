@@ -41,7 +41,7 @@ jobs:
             echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/trueme-release.jks
             echo "Decoded release keystore from GitHub secret."
           fi
-          rm -rf test || true
+          rm -f test/widget_test.dart || true
           if [ -d "assets/icons" ]; then
             cp -r assets/icons/mipmap-* android/app/src/main/res/ || true
             echo "Installed custom True Me app launcher icons into android/app/src/main/res/"
@@ -163,6 +163,9 @@ jobs:
             cat analyze.log
             exit 1
           }
+
+      - name: Run Unit Tests
+        run: flutter test
 
       - name: Build Android APK (Release)
         env:
