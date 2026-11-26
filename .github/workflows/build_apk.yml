@@ -165,7 +165,15 @@ jobs:
           }
 
       - name: Run Unit Tests
-        run: flutter test
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flutter test > test.log 2>&1 || {
+            gh release delete debug-analyze --yes || true
+            gh release create debug-analyze -t "Debug Test" -F test.log || true
+            cat test.log
+            exit 1
+          }
 
       - name: Build Android APK (Release)
         env:

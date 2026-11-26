@@ -69,14 +69,14 @@ void main() {
 
     test('includes source file and chunk index metadata', () {
       final ctx = RagService.formatGroundedContextWithCitations([
-        DocumentChunkModel(
+        const DocumentChunkModel(
           id: 'c1',
           userId: 'u1',
           notebookId: 'n1',
           fileName: 'Biology.pdf',
           chunkIndex: 3,
           content: 'Mitosis produces two identical daughter cells.',
-          embedding: const [],
+          similarity: 0.92,
         ),
       ]);
       expect(ctx, contains('Biology.pdf'));
