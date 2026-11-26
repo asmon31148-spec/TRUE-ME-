@@ -851,6 +851,35 @@ class OfflineCacheService {
     }
   }
 
+  /// Persists durable answer-level quiz events (LEARN-01) deduplicated by `id`.
+  static Future<void> saveQuizAnswerEvent(Map<String, dynamic> event) async {
+    try {
+      final box = Hive.box(analyticsBox);
+      final raw = (box.get('quiz_answer_events') as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final id = event['id']?.toString();
+      if (id != null && raw.any((e) => e['id']?.toString() == id)) {
+        return;
+      }
+      raw.insert(0, event);
+      if (raw.length > 500) {
+        raw.removeRange(500, raw.length);
+      }
+      await box.put('quiz_answer_events', raw);
+    } catch (_) {}
+  }
+
+  static List<Map<String, dynamic>> getQuizAnswerEvents() {
+    try {
+      final box = Hive.box(analyticsBox);
+      final raw = box.get('quiz_answer_events') as List? ?? [];
+      return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static List<Map<String, dynamic>> getWeakTopics() {
     final attempts = getQuizAttempts();
     if (attempts.isEmpty) return [];

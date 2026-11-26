@@ -174,7 +174,7 @@ class QuizNotifier extends StateNotifier<QuizState> {
     final isCorrect = selectedIdx == currentQ.correctOptionIndex;
 
     // Persist durable answer-level event (LEARN-01)
-    OfflineCacheService.addPracticeSession({
+    OfflineCacheService.saveQuizAnswerEvent({
       'id': 'resp_${quiz.id}_${currentQ.id}',
       'quizId': quiz.id,
       'questionId': currentQ.id,
