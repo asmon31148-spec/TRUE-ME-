@@ -179,7 +179,7 @@ class AiTelemetryService {
   static Future<void> _syncRecordToSupabase(AiRequestRecord record) async {
     try {
       final client = SupabaseService.instance.clientOrNull;
-      final uid = SupabaseService.instance.currentUserId;
+      final uid = SupabaseService.instance.authUserId;
       if (client == null || uid == null) return;
       await client.from('ai_request_telemetry').upsert({
         'request_id': record.requestId,

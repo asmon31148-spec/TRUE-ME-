@@ -43,6 +43,7 @@ class SupabaseService {
   }
 
   bool get isReady => _clientOrNull != null;
+  SupabaseClient? get clientOrNull => _clientOrNull;
   String? get authUserId => _clientOrNull?.auth.currentUser?.id;
   String? get currentAccessToken => _clientOrNull?.auth.currentSession?.accessToken;
 
