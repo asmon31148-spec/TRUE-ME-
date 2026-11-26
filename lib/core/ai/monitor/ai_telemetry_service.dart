@@ -347,6 +347,7 @@ class AiTelemetryService {
 
   /// Clears in-memory test state (for unit tests only).
   static void resetForTest() {
+    _initialized = true;
     _memoryRecords.clear();
     _memorySnapshots.clear();
     _latestProviderHeaders.clear();
