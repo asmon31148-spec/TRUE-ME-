@@ -84,18 +84,9 @@ class QuizNotifier extends StateNotifier<QuizState> {
       for (int i = 0; i < rawQuestions.length; i++) {
         final q = rawQuestions[i];
         if (q is! Map) continue;
-        final options = List<String>.from(q['options'] ?? const []);
-        if (options.length >= 2) {
-          questions.add(
-            QuizQuestionModel(
-              id: 'q_${DateTime.now().millisecondsSinceEpoch}_$i',
-              question: q['question'] as String? ?? 'Concept Question',
-              options: options,
-              correctOptionIndex: ((q['correctOptionIndex'] as num?)?.toInt() ?? 0)
-                  .clamp(0, options.length - 1),
-              explanation: q['explanation'] as String? ?? 'Grounded in core conceptual definitions.',
-            ),
-          );
+        final validated = validateQuestionMap(Map<String, dynamic>.from(q), i);
+        if (validated != null) {
+          questions.add(validated);
         }
       }
 
@@ -136,6 +127,38 @@ class QuizNotifier extends StateNotifier<QuizState> {
     }
   }
 
+  /// Validates a raw AI question map strictly without silently clamping invalid
+  /// answer indexes (LEARN-03). Returns `null` if malformed.
+  static QuizQuestionModel? validateQuestionMap(Map<String, dynamic> q, int index) {
+    final stem = (q['question'] as String? ?? '').trim();
+    if (stem.isEmpty) return null;
+
+    final rawOptions = q['options'];
+    if (rawOptions is! List) return null;
+    final options = rawOptions.map((o) => o.toString().trim()).where((s) => s.isNotEmpty).toList();
+    if (options.length < 2) return null;
+
+    // Reject duplicate choices (case-insensitive)
+    final uniqueNormalized = options.map((o) => o.toLowerCase()).toSet();
+    if (uniqueNormalized.length != options.length) return null;
+
+    final rawIdx = q['correctOptionIndex'];
+    if (rawIdx is! num) return null;
+    final correctIdx = rawIdx.toInt();
+    if (correctIdx < 0 || correctIdx >= options.length) return null;
+
+    final explanation = (q['explanation'] as String? ?? '').trim();
+    return QuizQuestionModel(
+      id: 'q_${DateTime.now().millisecondsSinceEpoch}_$index',
+      question: stem,
+      options: options,
+      correctOptionIndex: correctIdx,
+      explanation: explanation.isNotEmpty
+          ? explanation
+          : 'Grounded in core conceptual definitions.',
+    );
+  }
+
   void selectOption(int index) {
     if (state.hasSubmitted) return;
     state = state.copyWith(selectedOptionIndex: index);
@@ -147,7 +170,22 @@ class QuizNotifier extends StateNotifier<QuizState> {
     if (quiz == null) return;
 
     final currentQ = quiz.questions[state.currentQuestionIndex];
-    final isCorrect = state.selectedOptionIndex == currentQ.correctOptionIndex;
+    final selectedIdx = state.selectedOptionIndex!;
+    final isCorrect = selectedIdx == currentQ.correctOptionIndex;
+
+    // Persist durable answer-level event (LEARN-01)
+    OfflineCacheService.addPracticeSession({
+      'id': 'resp_${quiz.id}_${currentQ.id}',
+      'quizId': quiz.id,
+      'questionId': currentQ.id,
+      'type': 'quiz_answer',
+      'subject': quiz.subject,
+      'topic': quiz.topic,
+      'selectedOptionIndex': selectedIdx,
+      'correctOptionIndex': currentQ.correctOptionIndex,
+      'isCorrect': isCorrect,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+    });
 
     state = state.copyWith(
       hasSubmitted: true,

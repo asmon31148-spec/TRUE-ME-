@@ -5,6 +5,7 @@ import '../../../core/ai/error_boundary.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../core/services/supabase_service.dart';
 
 class FlashcardState {
   final List<FlashcardDeckModel> decks;
@@ -111,8 +112,13 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         createdAt: DateTime.now(),
       );
 
-      // Persist to Hive
-      await OfflineCacheService.cacheDeck(newDeck.id, newDeck.toMap());
+      // Persist to Hive + cloud (LEARN-04)
+      final deckMap = newDeck.toMap();
+      await OfflineCacheService.cacheDeck(newDeck.id, deckMap);
+      final uid = SupabaseService.instance.authUserId;
+      if (uid != null) {
+        await SupabaseService.instance.upsertFlashcardDeck(uid, deckMap);
+      }
 
       state = state.copyWith(
         decks: [newDeck, ...state.decks],
@@ -141,13 +147,19 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
       createdAt: DateTime.now(),
     );
 
-    await OfflineCacheService.cacheDeck(newDeck.id, newDeck.toMap());
+    final deckMap = newDeck.toMap();
+    await OfflineCacheService.cacheDeck(newDeck.id, deckMap);
+    final uid = SupabaseService.instance.authUserId;
+    if (uid != null) {
+      await SupabaseService.instance.upsertFlashcardDeck(uid, deckMap);
+    }
     state = state.copyWith(decks: [newDeck, ...state.decks]);
   }
 
-  /// Deletes a deck from state and Hive cache.
+  /// Deletes a deck from state, Hive cache, and cloud.
   Future<void> deleteDeck(String deckId) async {
     await OfflineCacheService.deleteDeck(deckId);
+    await SupabaseService.instance.deleteFlashcardDeck(deckId);
     state = state.copyWith(
       decks: state.decks.where((d) => d.id != deckId).toList(),
     );
@@ -210,7 +222,12 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         createdAt: deck.createdAt,
       );
 
-      OfflineCacheService.cacheDeck(deck.id, updated.toMap());
+      final updatedMap = updated.toMap();
+      OfflineCacheService.cacheDeck(deck.id, updatedMap);
+      final uid = SupabaseService.instance.authUserId;
+      if (uid != null) {
+        SupabaseService.instance.upsertFlashcardDeck(uid, updatedMap);
+      }
       return updated;
     }).toList();
 

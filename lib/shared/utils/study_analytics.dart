@@ -10,6 +10,7 @@ class SubjectMasterySnapshot {
   final int masteredCards;
   final int dueCards;
   final int mastery;
+  final bool hasEvidence;
 
   const SubjectMasterySnapshot({
     required this.subject,
@@ -21,6 +22,7 @@ class SubjectMasterySnapshot {
     required this.masteredCards,
     required this.dueCards,
     required this.mastery,
+    this.hasEvidence = false,
   });
 }
 
@@ -95,9 +97,10 @@ class StudyAnalyticsSnapshot {
       final docs = (nb['documents'] as List? ?? []);
 
       final subQuizzes = allQuizzes.where((q) {
+        final qNbId = (q['notebookId'] as String? ?? '').trim();
+        if (nbId.isNotEmpty && qNbId.isNotEmpty) return qNbId == nbId;
         final s = (q['subject'] as String? ?? '').trim().toLowerCase();
-        final t = (q['topic'] as String? ?? '').trim().toLowerCase();
-        return s == subject.toLowerCase() || t.contains(subject.toLowerCase());
+        return s == subject.toLowerCase();
       }).toList();
 
       final qCount = subQuizzes.length;
@@ -108,9 +111,10 @@ class StudyAnalyticsSnapshot {
           : 0;
 
       final subDecks = allDecks.where((d) {
+        final dNbId = (d['notebookId'] as String? ?? '').trim();
+        if (nbId.isNotEmpty && dNbId.isNotEmpty) return dNbId == nbId;
         final s = (d['subject'] as String? ?? '').trim().toLowerCase();
-        final t = (d['title'] as String? ?? '').trim().toLowerCase();
-        return s == subject.toLowerCase() || t.contains(subject.toLowerCase());
+        return s == subject.toLowerCase();
       }).toList();
 
       int sTotalCards = 0;
@@ -154,6 +158,7 @@ class StudyAnalyticsSnapshot {
           masteredCards: sMasteredCards,
           dueCards: sDueCards,
           mastery: score.round().clamp(0, 100),
+          hasEvidence: qCount > 0 || sTotalCards > 0,
         ),
       );
     }
