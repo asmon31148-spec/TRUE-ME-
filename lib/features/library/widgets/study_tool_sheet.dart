@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/true_me_ui.dart';
+import '../../export/screens/document_viewer_screen.dart';
 
 class StudyToolScopeSelection {
   final String? nodeId;
@@ -142,7 +142,11 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                             padding: const EdgeInsets.all(14),
                             onTap: () async {
                               if (path != null && File(path).existsSync()) {
-                                await OpenFilex.open(path);
+                                await DocumentViewerScreen.open(
+                                  context,
+                                  filePath: path,
+                                  title: art['title']?.toString(),
+                                );
                               } else if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('${art['title']} (${art['topicLabel']})')),

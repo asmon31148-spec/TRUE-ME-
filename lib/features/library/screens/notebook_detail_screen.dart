@@ -1,11 +1,8 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:printing/printing.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
@@ -16,7 +13,9 @@ import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/docx_exporter.dart';
 import '../../../features/export/pdf_exporter.dart';
 import '../../../features/export/pptx_exporter.dart';
-import '../../../features/export/widgets/export_studio_sheet.dart';
+import '../../../features/export/screens/document_viewer_screen.dart';
+import '../../../features/export/services/document_pipeline_service.dart';
+import '../../../features/export/widgets/style_picker_sheet.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
@@ -262,50 +261,6 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     );
   }
 
-  List<PptxSlideData> _parseSlidesFromAi(String raw, String fallbackTitle) {
-    try {
-      String cleaned = raw.trim();
-      final start = cleaned.indexOf('[');
-      final end = cleaned.lastIndexOf(']');
-      if (start >= 0 && end > start) {
-        cleaned = cleaned.substring(start, end + 1);
-      }
-      final list = jsonDecode(cleaned) as List<dynamic>;
-      final slides = <PptxSlideData>[];
-      for (final item in list) {
-        if (item is Map) {
-          final sTitle = (item['title'] as String? ?? 'Key Concept').trim();
-          final rawBullets = item['bullets'] as List? ?? item['bulletPoints'] as List? ?? [];
-          final bullets = rawBullets.map((b) => b.toString().trim()).where((b) => b.isNotEmpty).toList();
-          if (bullets.isNotEmpty) {
-            slides.add(PptxSlideData(title: sTitle, bulletPoints: bullets));
-          }
-        }
-      }
-      if (slides.isNotEmpty) return slides;
-    } catch (_) {}
-
-    final chunks = raw.split(RegExp(r'\n#{1,3}\s+')).where((s) => s.trim().isNotEmpty).toList();
-    if (chunks.isNotEmpty) {
-      return chunks.take(8).map((c) {
-        final lines = c.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
-        final sTitle = lines.isNotEmpty ? lines.first.replaceAll('#', '').trim() : fallbackTitle;
-        final bullets = lines.skip(1).take(5).map((l) => l.replaceFirst(RegExp(r'^[-*•]\s*'), '')).toList();
-        return PptxSlideData(
-          title: sTitle,
-          bulletPoints: bullets.isNotEmpty ? bullets : ['Summary of $sTitle'],
-        );
-      }).toList();
-    }
-
-    return [
-      PptxSlideData(
-        title: fallbackTitle,
-        bulletPoints: [raw.length > 250 ? raw.substring(0, 250) : raw],
-      ),
-    ];
-  }
-
   String _getPdfStyleDisplayName(String id) {
     switch (id) {
       case 'minimalCute':
@@ -344,17 +299,12 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       return;
     }
 
-    final cfg = await ExportStudioSheet.show(
-      context,
-      format: format,
-      subjectName: title,
-    );
-    if (cfg == null) return;
+    final style = await StylePickerSheet.show(context, format: format);
+    if (style == null || !mounted) return;
     await _exportStudyFile(
-      format: cfg.format,
-      chosenStyle: cfg.styleId,
-      customDocTitle: cfg.documentTitle,
-      slideCount: cfg.slideCount,
+      format: format,
+      chosenStyle: style.id,
+      customDocTitle: '$title Study Guide',
     );
   }
 
@@ -379,43 +329,33 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       final safeBase = title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
       final dir = await getApplicationDocumentsDirectory();
 
+      final structuredDoc = await DocumentPipelineService.generateStructuredDocument(
+        aiRouter: aiRouter,
+        subject: title,
+        topic: customDocTitle ?? title,
+        sourceContext: combinedText,
+      );
+      final structuredMd = structuredDoc.toStructuredMarkdown();
+
       if (format == 'pdf') {
         final styleKey = chosenStyle ?? OfflineCacheService.getPreferredPdfStyle();
-        PdfStudyStyle pdfStyle;
-        if (styleKey == 'minimalCute') {
-          pdfStyle = PdfStudyStyle.minimalCute;
-        } else if (styleKey == 'zenPaperInk') {
-          pdfStyle = PdfStudyStyle.zenPaperInk;
-        } else if (styleKey == 'modernClean') {
-          pdfStyle = PdfStudyStyle.modernClean;
-        } else {
-          pdfStyle = PdfStudyStyle.handwritten;
-        }
-
-        final synthesized = await aiRouter.executeHeavyReasoning(
-          prompt:
-              'Create a structured, high-yield exam study guide summarizing these notes for "$title". Use clear markdown headings (#, ##) and bullet points (- ).\n\nNotes:\n$combinedText',
-        );
+        final pdfStyle = PdfExporter.fromStyleId(styleKey);
         final pdfBytes = await PdfExporter.generateStudyGuidePdf(
-          title: '$title Study Guide',
+          title: structuredDoc.title,
           subject: title,
-          content: synthesized,
+          content: structuredMd,
           style: pdfStyle,
         );
-        final styleTag = pdfStyle == PdfStudyStyle.handwritten
-            ? 'Handwritten_Notebook'
-            : (pdfStyle == PdfStudyStyle.minimalCute
-                ? 'Minimal_Cute'
-                : (pdfStyle == PdfStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
-        final fileName = '${safeBase}_${styleTag}_Study_Guide.pdf';
+        final fileName = '${safeBase}_${styleKey}_Guide.pdf';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pdfBytes, flush: true);
         await SyllabusService.saveArtifact(
           notebookId: widget.notebookId,
           artifactType: 'pdf',
-          title: '$title Study Guide',
-          topicLabel: title,
+          title: structuredDoc.title,
+          topicLabel: structuredDoc.topic,
           filePath: outFile.path,
+          contentJson: structuredDoc.toMap(),
         );
 
         if (CloudVaultService.isAnyVaultConnected) {
@@ -425,119 +365,88 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         }
 
         if (mounted) {
-          await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+          await DocumentViewerScreen.open(
+            context,
+            filePath: outFile.path,
+            title: structuredDoc.title,
+          );
         }
       } else if (format == 'docx') {
-        final docHeading = (customDocTitle != null && customDocTitle.trim().isNotEmpty)
-            ? customDocTitle.trim()
-            : '$title Study Guide';
-        final synthesized = await aiRouter.executeHeavyReasoning(
-          prompt:
-              'Create a structured, comprehensive Word study guide titled "$docHeading" for "$title". Use clear headings (#, ##) and bullet points (- ).\n\nNotes:\n$combinedText',
-        );
+        final styleKey = chosenStyle ?? 'elegant_academic_notes';
+        final docStyle = DocxExporter.fromStyleId(styleKey);
         final docBytes = DocxExporter.createDocument(
-          title: docHeading,
+          title: structuredDoc.title,
           subject: title,
-          content: synthesized,
+          content: structuredMd,
+          style: docStyle,
         );
-        final fileName = '${safeBase}_Study_Guide.docx';
+        final fileName = '${safeBase}_${styleKey}_Guide.docx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(docBytes, flush: true);
         await SyllabusService.saveArtifact(
           notebookId: widget.notebookId,
           artifactType: 'docx',
-          title: docHeading,
-          topicLabel: title,
+          title: structuredDoc.title,
+          topicLabel: structuredDoc.topic,
           filePath: outFile.path,
+          contentJson: structuredDoc.toMap(),
         );
 
-        bool uploadedToVault = false;
         if (CloudVaultService.isAnyVaultConnected) {
           try {
-            final res = await CloudVaultService.uploadFile(
+            await CloudVaultService.uploadFile(
               outFile,
               customName: fileName,
               subject: title,
               section: 'Notes',
             );
-            uploadedToVault = res != null;
           } catch (_) {}
         }
 
-        final openRes = await OpenFilex.open(outFile.path);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                openRes.type == ResultType.done
-                    ? 'Saved & opened $fileName${uploadedToVault ? ' (backed up)' : ''}'
-                    : 'Saved $fileName${uploadedToVault ? ' & backed up' : ''} (${openRes.message})',
-              ),
-            ),
+          await DocumentViewerScreen.open(
+            context,
+            filePath: outFile.path,
+            title: structuredDoc.title,
           );
         }
       } else if (format == 'pptx') {
         final styleKey = chosenStyle ?? OfflineCacheService.getPreferredPptxStyle();
-        PptxStudyStyle pptxStyle;
-        if (styleKey == 'handwrittenNotebook') {
-          pptxStyle = PptxStudyStyle.handwrittenNotebook;
-        } else if (styleKey == 'zenPaperInk') {
-          pptxStyle = PptxStudyStyle.zenPaperInk;
-        } else if (styleKey == 'modernHighYield') {
-          pptxStyle = PptxStudyStyle.modernHighYield;
-        } else {
-          pptxStyle = PptxStudyStyle.minimalCute;
-        }
-
-        final rawSlides = await aiRouter.executeHeavyReasoning(
-          prompt:
-              'Create a $slideCount-slide study presentation for "$title" from these notes. Return ONLY a valid JSON array where each element has {"title": "Slide title", "bullets": ["concise point 1", "concise point 2", "concise point 3"]}.\n\nNotes:\n$combinedText',
-        );
-        final slides = _parseSlidesFromAi(rawSlides, '$title Overview');
+        final pptxStyle = PptxExporter.fromStyleId(styleKey);
+        final slides = DocumentPipelineService.toSlideDeck(structuredDoc);
         final pptxBytes = PptxExporter.createPresentation(
-          presentationTitle: '$title Slides',
+          presentationTitle: structuredDoc.title,
           slides: slides,
           style: pptxStyle,
         );
-        final styleTag = pptxStyle == PptxStudyStyle.minimalCute
-            ? 'Cute_Minimal'
-            : (pptxStyle == PptxStudyStyle.handwrittenNotebook
-                ? 'Handwritten_Notebook'
-                : (pptxStyle == PptxStudyStyle.zenPaperInk ? 'Zen_Ink' : 'Modern'));
-        final fileName = '${safeBase}_${styleTag}_Slides.pptx';
+        final fileName = '${safeBase}_${styleKey}_Slides.pptx';
         final outFile = File('${dir.path}/$fileName');
         await outFile.writeAsBytes(pptxBytes, flush: true);
         await SyllabusService.saveArtifact(
           notebookId: widget.notebookId,
           artifactType: 'pptx',
-          title: '$title Slides',
-          topicLabel: title,
+          title: structuredDoc.title,
+          topicLabel: structuredDoc.topic,
           filePath: outFile.path,
+          contentJson: structuredDoc.toMap(),
         );
 
-        bool uploadedToVault = false;
         if (CloudVaultService.isAnyVaultConnected) {
           try {
-            final res = await CloudVaultService.uploadFile(
+            await CloudVaultService.uploadFile(
               outFile,
               customName: fileName,
               subject: title,
               section: 'Notes',
             );
-            uploadedToVault = res != null;
           } catch (_) {}
         }
 
-        final openRes = await OpenFilex.open(outFile.path);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                openRes.type == ResultType.done
-                    ? 'Saved & opened $fileName${uploadedToVault ? ' (backed up)' : ''}'
-                    : 'Saved $fileName${uploadedToVault ? ' & backed up' : ''} (${openRes.message})',
-              ),
-            ),
+          await DocumentViewerScreen.open(
+            context,
+            filePath: outFile.path,
+            title: structuredDoc.title,
           );
         }
       }

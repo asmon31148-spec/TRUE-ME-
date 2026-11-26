@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:printing/printing.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
@@ -13,6 +11,7 @@ import '../../../core/services/stt_service.dart';
 import '../../../shared/widgets/ai_thinking_indicator.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
+import '../../export/screens/document_viewer_screen.dart';
 import '../providers/chat_provider.dart';
 import 'formatted_message_body.dart';
 
@@ -113,23 +112,14 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
 
     switch (action.type) {
       case SageActionType.exportPdf:
-        if (action.filePath != null && File(action.filePath!).existsSync()) {
-          final bytes = await File(action.filePath!).readAsBytes();
-          final name = action.filePath!.split(RegExp(r'[/\\]')).last;
-          await Printing.sharePdf(bytes: bytes, filename: name);
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Study guide file is not available locally. Ask Sage to regenerate it.')),
-          );
-        }
-        break;
       case SageActionType.exportDocx:
       case SageActionType.exportPptx:
         if (action.filePath != null && File(action.filePath!).existsSync()) {
-          final res = await OpenFilex.open(action.filePath!);
-          if (mounted && res.type != ResultType.done) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Saved to ${action.filePath} (${res.message})')),
+          if (mounted) {
+            await DocumentViewerScreen.open(
+              context,
+              filePath: action.filePath!,
+              title: action.topic.isNotEmpty ? action.topic : action.label,
             );
           }
         } else if (mounted) {

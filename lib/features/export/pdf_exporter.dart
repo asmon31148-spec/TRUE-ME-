@@ -14,6 +14,24 @@ enum PdfStudyStyle {
 class PdfExporter {
   PdfExporter._();
 
+  static PdfStudyStyle fromStyleId(String? id) {
+    switch ((id ?? '').toLowerCase()) {
+      case 'vintage_academic':
+      case 'zenpaperink':
+        return PdfStudyStyle.zenPaperInk;
+      case 'cute_aesthetic':
+      case 'minimalcute':
+        return PdfStudyStyle.minimalCute;
+      case 'modern_academic':
+      case 'modernclean':
+        return PdfStudyStyle.modernClean;
+      case 'handwritten_notes':
+      case 'handwritten':
+      default:
+        return PdfStudyStyle.handwritten;
+    }
+  }
+
   static String _sanitize(String text) {
     return text
         .replaceAll('•', '-')

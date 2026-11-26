@@ -28,6 +28,24 @@ class PptxSlideData {
 class PptxExporter {
   PptxExporter._();
 
+  static PptxStudyStyle fromStyleId(String? id) {
+    switch ((id ?? '').toLowerCase()) {
+      case 'professional_scientific':
+      case 'zenpaperink':
+        return PptxStudyStyle.zenPaperInk;
+      case 'minimal_editorial':
+      case 'handwrittennotebook':
+        return PptxStudyStyle.handwrittenNotebook;
+      case 'infographic_presentation':
+      case 'modernhighyield':
+        return PptxStudyStyle.modernHighYield;
+      case 'creative_illustrated':
+      case 'minimalcute':
+      default:
+        return PptxStudyStyle.minimalCute;
+    }
+  }
+
   /// Assembles an OpenXML PowerPoint (.pptx) file with selectable study aesthetic styles.
   static Uint8List createPresentation({
     required String presentationTitle,

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trueme/core/ai/ai_gateway_client.dart';
 import 'package:trueme/core/ai/ai_router.dart';
@@ -6,6 +7,10 @@ import 'package:trueme/core/ai/rag_service.dart';
 import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/config/env_config.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
+import 'package:trueme/features/export/docx_exporter.dart';
+import 'package:trueme/features/export/pptx_exporter.dart';
+import 'package:trueme/features/export/services/document_parser_service.dart';
+import 'package:trueme/features/export/widgets/style_picker_sheet.dart';
 import 'package:trueme/features/quiz/providers/quiz_provider.dart';
 import 'package:trueme/features/upload/services/url_processor.dart';
 
@@ -132,6 +137,51 @@ void main() {
       final stats = SyllabusService.computeCoverageStats('nonexistent_nb');
       expect(stats['total'], 0);
       expect(stats['uncovered'], 0);
+    });
+  });
+
+  group('Document Styles & Native Viewer Parser', () {
+    test('All 12 approved styles are selectable per format', () {
+      expect(StylePickerSheet.optionsFor('pdf').length, 4);
+      expect(StylePickerSheet.optionsFor('docx').length, 4);
+      expect(StylePickerSheet.optionsFor('pptx').length, 4);
+    });
+
+    test('DocxExporter generates valid DOCX across all 4 styles and parses natively', () {
+      for (final style in DocxStudyStyle.values) {
+        final bytes = DocxExporter.createDocument(
+          title: 'Cell Biology',
+          subject: 'Biology',
+          content: '# Introduction\n- Prokaryotic cells\nNote: Key exam point',
+          style: style,
+        );
+        expect(DocumentParserService.detectFormat(bytes, 'out.docx'), ParsedDocFormat.docx);
+        final blocks = DocumentParserService.parseDocx(bytes);
+        expect(blocks, isNotEmpty);
+      }
+    });
+
+    test('PptxExporter generates valid PPTX and parses natively', () {
+      final bytes = PptxExporter.createPresentation(
+        presentationTitle: 'Cell Biology',
+        slides: const [
+          PptxSlideData(
+            title: 'Prokaryotic vs Eukaryotic',
+            bulletPoints: ['No membrane-bound nucleus', 'Membrane-bound organelles'],
+          ),
+        ],
+      );
+      expect(DocumentParserService.detectFormat(bytes, 'slides.pptx'), ParsedDocFormat.pptx);
+      final slides = DocumentParserService.parsePptx(bytes);
+      expect(slides.length, 1);
+      expect(slides.first.title, 'Prokaryotic vs Eukaryotic');
+    });
+
+    test('DocumentParserService rejects corrupt/empty files', () {
+      expect(
+        DocumentParserService.detectFormat(Uint8List.fromList([1, 2, 3]), 'bad.pdf'),
+        ParsedDocFormat.unknown,
+      );
     });
   });
 }
