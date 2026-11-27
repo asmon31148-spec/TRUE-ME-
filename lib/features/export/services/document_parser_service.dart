@@ -198,11 +198,24 @@ class DocumentParserService {
         }
       }
 
+      String? explicitTitle;
+      final titleMatch = RegExp(
+        r'<p:sp>\s*<p:nvSpPr><p:cNvPr[^>]*name="(?:Title|CoverTitle)"[\s\S]*?</p:sp>',
+      ).firstMatch(xml);
+      if (titleMatch != null) {
+        final tText = RegExp(r'<a:t\b[^>]*>([\s\S]*?)</a:t>')
+            .allMatches(titleMatch.group(0)!)
+            .map((m) => _unescapeXml(m.group(1) ?? ''))
+            .join('')
+            .trim();
+        if (tText.isNotEmpty) explicitTitle = tText;
+      }
+
       final xmlWithoutTakeaway = takeawayMatch != null
           ? xml.replaceFirst(takeawayMatch.group(0)!, '')
           : xml;
 
-      for (final pMatch in RegExp(r'<a:p\b[\s\S]*?</a:p>').allMatches(xmlWithoutTakeaway)) {
+      for (final pMatch in RegExp(r'<a:p(?:>|\s)[\s\S]*?</a:p>').allMatches(xmlWithoutTakeaway)) {
         final text = RegExp(r'<a:t\b[^>]*>([\s\S]*?)</a:t>')
             .allMatches(pMatch.group(0)!)
             .map((m) => _unescapeXml(m.group(1) ?? ''))
@@ -210,13 +223,16 @@ class DocumentParserService {
             .trim();
         if (text.isNotEmpty &&
             text != tag &&
+            text != explicitTitle &&
             !RegExp(r'^(?:[✦⚡].*)?SLIDE\s+\d+/\d+.*$').hasMatch(text)) {
           paragraphs.add(text);
         }
       }
 
-      final title = paragraphs.isNotEmpty ? paragraphs.first : 'Slide ${i + 1}';
-      final bullets = paragraphs.length > 1 ? paragraphs.sublist(1) : const <String>[];
+      final title = explicitTitle ?? (paragraphs.isNotEmpty ? paragraphs.first : 'Slide ${i + 1}');
+      final bullets = explicitTitle != null
+          ? paragraphs
+          : (paragraphs.length > 1 ? paragraphs.sublist(1) : const <String>[]);
 
       slides.add(
         ParsedPptxSlide(
