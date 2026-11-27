@@ -37,6 +37,8 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
   String _currentTopic = '';
   String? _selectedNodeId;
   bool _isGenerating = false;
+  int _genStageIndex = 0;
+  String _genStageLabel = 'Loading subject sources...';
   bool _isFullscreen = false;
   String? _errorText;
 
@@ -113,6 +115,8 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
 
     setState(() {
       _isGenerating = true;
+      _genStageIndex = 0;
+      _genStageLabel = 'Loading subject sources...';
       _errorText = null;
       _currentTopic = cleanTopic;
       _selectedNodeId = null;
@@ -131,8 +135,20 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
         }
       }
 
+      if (mounted) {
+        setState(() {
+          _genStageIndex = 1;
+          _genStageLabel = 'Generating concept hierarchy...';
+        });
+      }
       final aiRouter = ref.read(aiRouterProvider);
       final jsonStr = await aiRouter.generateMindmap(topic: cleanTopic, content: content);
+      if (mounted) {
+        setState(() {
+          _genStageIndex = 2;
+          _genStageLabel = 'Building interactive tree...';
+        });
+      }
       final data = AiRouter.parseJsonObject(jsonStr);
 
       final newGraph = Graph()..isTree = true;
@@ -297,14 +313,11 @@ class _MindmapScreenState extends ConsumerState<MindmapScreen> {
               // Interactive Graph Canvas
               Expanded(
                 child: _isGenerating
-                    ? const GenerationProgressView(
+                    ? GenerationProgressView(
                         title: 'Mapping concept hierarchy...',
-                        stages: [
-                          'Analyzing core topic...',
-                          'Building branches & relationships...',
-                          'Generating concept summaries...',
-                          'Rendering interactive tree...',
-                        ],
+                        realStageIndex: _genStageIndex,
+                        realTotalStages: 3,
+                        realStageLabel: _genStageLabel,
                       )
                     : _errorText != null
                         ? Center(

@@ -137,14 +137,17 @@ class DocumentGenerationService {
     String? idempotencyKey,
     bool requireSourceGrounding = false,
     void Function(int stageIndex, String stageLabel)? onStageChanged,
+    void Function(double progress, String stageLabel)? onProgressChanged,
   }) async {
     onStageChanged?.call(0, 'Understanding request & selected scope...');
+    onProgressChanged?.call(0.08, 'Understanding request & selected scope...');
     final targetNbId = await resolveTargetNotebookId(
       notebookId: notebookId,
       subject: subject,
     );
 
     onStageChanged?.call(1, 'Loading selected syllabus & source material...');
+    onProgressChanged?.call(0.18, 'Loading selected syllabus & source material...');
     final effectiveContext = (sourceContext != null && sourceContext.trim().isNotEmpty)
         ? sourceContext.trim()
         : OfflineCacheService.getNotebookCombinedText(targetNbId, maxChars: 120000);
@@ -157,6 +160,7 @@ class DocumentGenerationService {
     }
 
     onStageChanged?.call(2, 'Extracting, chunking & analyzing source content...');
+    onProgressChanged?.call(0.28, 'Extracting, chunking & analyzing source content...');
     final structuredDoc = await DocumentPipelineService.generateStructuredDocument(
       aiRouter: aiRouter,
       subject: subject,
@@ -165,9 +169,14 @@ class DocumentGenerationService {
       purpose: purpose,
       depthLevel: depthLevel,
       customInstructions: customInstructions,
+      onChunkProgress: (done, total) {
+        final pct = 0.28 + (0.28 * (done / total));
+        onProgressChanged?.call(pct, 'Analyzing segment $done/$total...');
+      },
     );
 
     onStageChanged?.call(3, 'Building & validating learning content...');
+    onProgressChanged?.call(0.62, 'Building & validating learning content...');
     final safeBase = subject.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
     final rawTopicSlug = topic
         .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_')
@@ -184,6 +193,7 @@ class DocumentGenerationService {
     int? slideCount;
 
     onStageChanged?.call(4, 'Applying selected document design ($styleId)...');
+    onProgressChanged?.call(0.75, 'Applying selected document design ($styleId)...');
     if (format == 'pdf') {
       await OfflineCacheService.savePreferredPdfStyle(styleId);
       final pdfStyle = PdfExporter.fromStyleId(styleId);
@@ -220,6 +230,7 @@ class DocumentGenerationService {
     }
 
     onStageChanged?.call(5, 'Rendering & checking final file...');
+    onProgressChanged?.call(0.88, 'Rendering & checking final file...');
     // Output QA Gate: verify magic bytes, non-empty payload, and structural parseability
     final expectedFmt = format == 'pdf'
         ? ParsedDocFormat.pdf
@@ -236,6 +247,7 @@ class DocumentGenerationService {
     }
 
     onStageChanged?.call(6, 'Saving artifact to Study Library...');
+    onProgressChanged?.call(0.95, 'Saving artifact to Study Library...');
     final outFile = File('${dir.path}/$fileName');
     await outFile.writeAsBytes(bytes, flush: true);
 

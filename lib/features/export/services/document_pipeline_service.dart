@@ -22,6 +22,7 @@ class DocumentPipelineService {
     String purpose = 'Exam & Course Study Guide',
     String depthLevel = 'Course Level',
     String customInstructions = '',
+    void Function(int done, int total)? onChunkProgress,
   }) async {
     final trimmedSource = sourceContext.trim();
     String synthesizedContext = trimmedSource;
@@ -37,6 +38,7 @@ class DocumentPipelineService {
       final processedChunks = chunks.take(_maxMapChunks).toList();
       final extractedParts = List<String>.filled(processedChunks.length, '');
       final fallbackSegments = <int>[];
+      int doneChunks = 0;
 
       for (int batchStart = 0; batchStart < processedChunks.length; batchStart += _mapConcurrency) {
         final batchEnd = (batchStart + _mapConcurrency).clamp(0, processedChunks.length);
@@ -61,6 +63,9 @@ ${processedChunks[idx].content}
               extractedParts[idx] =
                   rawSnippet.length > 6000 ? rawSnippet.substring(0, 6000) : rawSnippet;
               fallbackSegments.add(idx + 1);
+            } finally {
+              doneChunks++;
+              onChunkProgress?.call(doneChunks, processedChunks.length);
             }
           }),
         );

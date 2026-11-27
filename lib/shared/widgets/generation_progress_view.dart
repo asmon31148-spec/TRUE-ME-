@@ -16,6 +16,7 @@ class GenerationProgressView extends StatefulWidget {
   final int? realStageIndex;
   final int? realTotalStages;
   final String? realStageLabel;
+  final double? realProgress; // 0.0..1.0 true progress
 
   const GenerationProgressView({
     super.key,
@@ -31,6 +32,7 @@ class GenerationProgressView extends StatefulWidget {
     this.realStageIndex,
     this.realTotalStages,
     this.realStageLabel,
+    this.realProgress,
   });
 
   @override
@@ -61,9 +63,12 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
   Widget build(BuildContext context) {
     final hasRealStage = widget.realStageLabel != null && widget.realStageIndex != null;
     final total = widget.realTotalStages ?? 7;
-    final double? value = hasRealStage
-        ? ((widget.realStageIndex! + 1) / total).clamp(0.08, 1.0)
-        : null; // Honest indeterminate when real stage counts are absent
+    final double? value = widget.realProgress != null
+        ? widget.realProgress!.clamp(0.0, 1.0)
+        : (hasRealStage
+            ? ((widget.realStageIndex! + 1) / total).clamp(0.05, 1.0)
+            : null);
+    final int? percent = value != null ? (value * 100).round().clamp(1, 100) : null;
     final elapsedSec = (_elapsedMs / 1000).floor();
     final stage = hasRealStage
         ? 'Stage ${widget.realStageIndex! + 1}/$total · ${widget.realStageLabel!}'
@@ -72,45 +77,72 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
     if (widget.compact) {
       return TrueMeCard(
         borderRadius: 18,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         borderColor: context.accentColor.withValues(alpha: 0.35),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: context.textPrimary),
-                  ),
-                ),
-                TrueMeTonalPill(
-                  label: hasRealStage
-                      ? 'Step ${widget.realStageIndex! + 1}/$total'
-                      : 'In Progress',
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
             value != null
-                ? AppProgressBar(value: value)
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: const LinearProgressIndicator(minHeight: 6),
+                ? TrueMeCircularRing(
+                    progress: value,
+                    size: 50,
+                    strokeWidth: 5,
+                    gradientColors: const [
+                      AppColors.accent,
+                      AppColors.secondary,
+                      AppColors.accentCyan,
+                      AppColors.accent,
+                    ],
+                    center: Text(
+                      '$percent%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                  )
+                : const SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: CircularProgressIndicator(strokeWidth: 4),
                   ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(stage, style: AppTypography.smallLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-                Text('${elapsedSec}s', style: AppTypography.smallLabel),
-              ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 14.5, fontWeight: FontWeight.w700, color: context.textPrimary),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('${elapsedSec}s', style: AppTypography.smallLabel),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    stage,
+                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  value != null
+                      ? AppProgressBar(value: value)
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: const LinearProgressIndicator(minHeight: 5),
+                        ),
+                ],
+              ),
             ),
           ],
         ),
@@ -129,7 +161,7 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
               value != null
                   ? TrueMeCircularRing(
                       progress: value,
-                      size: 92,
+                      size: 96,
                       strokeWidth: 8,
                       gradientColors: const [
                         AppColors.accent,
@@ -138,11 +170,11 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
                         AppColors.accent,
                       ],
                       center: Text(
-                        '${widget.realStageIndex! + 1}/$total',
+                        '$percent%',
                         style: TextStyle(
                           fontFamily: 'Georgia',
                           fontFamilyFallback: AppTypography.serifFallbacks,
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
                           color: context.textPrimary,
                         ),

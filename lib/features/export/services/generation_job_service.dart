@@ -20,6 +20,7 @@ class GenerationJob {
   final String styleId;
   final GenerationJobStatus status;
   final int stageIndex; // 0..6
+  final double progress; // 0.0..1.0 true progress
   final String stageLabel;
   final String? filePath;
   final String? title;
@@ -38,6 +39,7 @@ class GenerationJob {
     required this.styleId,
     required this.status,
     required this.stageIndex,
+    this.progress = 0.08,
     required this.stageLabel,
     this.filePath,
     this.title,
@@ -59,6 +61,7 @@ class GenerationJob {
   GenerationJob copyWith({
     GenerationJobStatus? status,
     int? stageIndex,
+    double? progress,
     String? stageLabel,
     String? filePath,
     String? title,
@@ -75,6 +78,7 @@ class GenerationJob {
       styleId: styleId,
       status: status ?? this.status,
       stageIndex: stageIndex ?? this.stageIndex,
+      progress: progress ?? this.progress,
       stageLabel: stageLabel ?? this.stageLabel,
       filePath: filePath ?? this.filePath,
       title: title ?? this.title,
@@ -277,6 +281,15 @@ class GenerationJobService {
           current = current.copyWith(
             status: GenerationJobStatus.running,
             stageIndex: idx,
+            progress: ((idx + 1) / 7).clamp(0.08, 0.96),
+            stageLabel: label,
+          );
+          _upsertJob(current);
+        },
+        onProgressChanged: (pct, label) {
+          current = current.copyWith(
+            status: GenerationJobStatus.running,
+            progress: pct.clamp(0.05, 0.99),
             stageLabel: label,
           );
           _upsertJob(current);
@@ -286,6 +299,7 @@ class GenerationJobService {
       current = current.copyWith(
         status: GenerationJobStatus.ready,
         stageIndex: 6,
+        progress: 1.0,
         stageLabel: 'Ready in Study Library',
         filePath: res.filePath,
         title: res.title,

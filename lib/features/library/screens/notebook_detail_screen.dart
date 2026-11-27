@@ -664,6 +664,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                   realStageIndex: job?.stageIndex ?? 0,
                                   realTotalStages: 7,
                                   realStageLabel: job?.stageLabel ?? 'Starting durable background job...',
+                                  realProgress: job?.progress,
                                 ),
                               );
                             }

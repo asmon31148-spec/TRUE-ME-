@@ -707,12 +707,9 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
                         child: GenerationProgressView(
                           compact: true,
                           title: 'Generating flashcards with Sage',
-                          stages: [
-                            'Extracting key concepts...',
-                            'Creating active-recall Q&A cards...',
-                            'Scheduling SM-2 intervals...',
-                            'Almost ready...',
-                          ],
+                          realStageIndex: 1,
+                          realTotalStages: 3,
+                          realStageLabel: 'Creating active-recall Q&A cards...',
                         ),
                       ),
 

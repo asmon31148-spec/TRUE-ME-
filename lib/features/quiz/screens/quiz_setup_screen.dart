@@ -346,12 +346,9 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
                     subtitle: _selectedNotebookId != null
                         ? 'Using your $_effectiveSubject notes and syllabus'
                         : 'Topic: ${_topicCtrl.text.trim().isNotEmpty ? _topicCtrl.text.trim() : _effectiveSubject}',
-                    stages: const [
-                      'Reading your study material...',
-                      'Drafting quiz questions with Sage...',
-                      'Verifying options & explanations...',
-                      'Finalizing quiz...',
-                    ],
+                    realStageIndex: 1,
+                    realTotalStages: 3,
+                    realStageLabel: 'Drafting & verifying quiz questions with Sage...',
                   ),
                 ),
               ],

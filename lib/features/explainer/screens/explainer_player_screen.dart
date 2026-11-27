@@ -35,6 +35,8 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen>
 
   ExplainerScriptModel? _script;
   bool _isGenerating = false;
+  int _genStageIndex = 0;
+  String _genStageLabel = 'Reading your syllabus and notes...';
   bool _isPlaying = false;
   int _sceneIndex = 0;
   double _playbackSpeed = 1.0;
@@ -76,6 +78,8 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen>
     if (!mounted) return;
     setState(() {
       _isGenerating = true;
+      _genStageIndex = 0;
+      _genStageLabel = 'Reading your syllabus and notes...';
       _isPlaying = false;
       _errorText = null;
       _sceneIndex = 0;
@@ -90,6 +94,12 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen>
         notesContent = 'Core concepts, intuition, formulas, and practical examples for $cleanTopic.';
       }
 
+      if (mounted) {
+        setState(() {
+          _genStageIndex = 1;
+          _genStageLabel = 'Writing narrated scenes with Sage...';
+        });
+      }
       final generator = ExplainerGenerator(aiRouter: ref.read(aiRouterProvider));
       final script = await generator.generateScript(
         topic: cleanTopic,
@@ -98,6 +108,8 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen>
 
       if (mounted) {
         setState(() {
+          _genStageIndex = 2;
+          _genStageLabel = 'Preparing audio & visual scenes...';
           _script = script;
           _isGenerating = false;
         });
@@ -275,14 +287,11 @@ class _ExplainerPlayerScreenState extends ConsumerState<ExplainerPlayerScreen>
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
                   child: _isGenerating
-                      ? const GenerationProgressView(
+                      ? GenerationProgressView(
                           title: 'Preparing your narrated walkthrough...',
-                          stages: [
-                            'Reading your syllabus and notes...',
-                            'Structuring key learning scenes...',
-                            'Highlighting formulas & definitions...',
-                            'Setting up audio playback...',
-                          ],
+                          realStageIndex: _genStageIndex,
+                          realTotalStages: 3,
+                          realStageLabel: _genStageLabel,
                         )
                       : _errorText != null
                           ? Center(

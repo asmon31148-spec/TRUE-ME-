@@ -28,6 +28,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   DateTime _deadline = DateTime.now().add(const Duration(days: 30));
   String _userName = 'Student';
   bool _isGeneratingPlan = false;
+  int _planStageIndex = 0;
+  String _planStageLabel = 'Checking your syllabus & sources...';
   String _subjectFilter = 'All';
   late StudyAnalyticsSnapshot _analytics;
 
@@ -85,7 +87,11 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
       return;
     }
 
-    setState(() => _isGeneratingPlan = true);
+    setState(() {
+      _isGeneratingPlan = true;
+      _planStageIndex = 0;
+      _planStageLabel = 'Reading your syllabus & notes...';
+    });
 
     try {
       final buffer = StringBuffer();
@@ -97,12 +103,25 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
         }
       }
 
+      if (mounted) {
+        setState(() {
+          _planStageIndex = 1;
+          _planStageLabel = 'Building Today & Tomorrow plan with Sage...';
+        });
+      }
       final aiRouter = ref.read(aiRouterProvider);
       final jsonStr = await aiRouter.generateStudyPlan(
         subjects: subNames,
         daysLeft: _analytics.daysLeft,
         syllabusContext: buffer.toString(),
       );
+
+      if (mounted) {
+        setState(() {
+          _planStageIndex = 2;
+          _planStageLabel = 'Saving study sessions...';
+        });
+      }
 
       final data = AiRouter.parseJsonObject(jsonStr);
       final todayList = (data['today'] as List? ?? []).map((e) {
@@ -559,15 +578,12 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 const SizedBox(height: 24),
 
                 if (_isGeneratingPlan) ...[
-                  const GenerationProgressView(
+                  GenerationProgressView(
                     compact: true,
                     title: 'Crafting your study plan with Sage',
-                    stages: [
-                      'Checking your exam deadline...',
-                      'Balancing weak topics & decks...',
-                      'Organizing Today & Tomorrow...',
-                      'Saving study sessions...',
-                    ],
+                    realStageIndex: _planStageIndex,
+                    realTotalStages: 3,
+                    realStageLabel: _planStageLabel,
                   ),
                   const SizedBox(height: 18),
                 ],

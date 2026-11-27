@@ -68,6 +68,7 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
   bool _isBusy = false;
   bool _onlyTrueMeVault = false;
   String _statusText = '';
+  double _progress = 0.08;
   String? _errorText;
 
   final TextEditingController _urlCtrl = TextEditingController();
@@ -162,7 +163,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       }
 
       if (mounted) {
-        setState(() => _statusText = 'Chunking, indexing & verifying "$fileName"...');
+        setState(() {
+          _statusText = 'Chunking, indexing & verifying "$fileName"...';
+          _progress = 0.35;
+        });
       }
 
       ingestResult = await RagService().ingestDocumentWithVerification(
@@ -174,11 +178,23 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
         sectionLabel: _targetSection,
         onStage: (stage) {
           if (!mounted) return;
-          setState(() => _statusText = '${stage.displayLabel} "$fileName"...');
+          final stagePct = stage == IngestionStatus.chunking
+              ? 0.38
+              : (stage == IngestionStatus.embedding
+                  ? 0.45
+                  : (stage == IngestionStatus.verifying ? 0.94 : _progress));
+          setState(() {
+            _statusText = '${stage.displayLabel} "$fileName"...';
+            _progress = stagePct;
+          });
         },
         onProgress: (done, total) {
           if (!mounted) return;
-          setState(() => _statusText = 'Indexing "$fileName" ($done/$total chunks)...');
+          final pct = total > 0 ? (0.45 + 0.45 * (done / total)) : 0.6;
+          setState(() {
+            _statusText = 'Indexing "$fileName" ($done/$total chunks)...';
+            _progress = pct.clamp(0.45, 0.92);
+          });
         },
       );
 
@@ -658,7 +674,25 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 28),
                   child: Column(
                     children: [
-                      Center(child: CircularProgressIndicator(color: context.accentColor)),
+                      TrueMeCircularRing(
+                        progress: _progress.clamp(0.05, 1.0),
+                        size: 84,
+                        strokeWidth: 7,
+                        gradientColors: const [
+                          AppColors.accent,
+                          AppColors.secondary,
+                          AppColors.accentCyan,
+                          AppColors.accent,
+                        ],
+                        center: Text(
+                          '${(_progress * 100).round().clamp(1, 100)}%',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       Text(_statusText, style: AppTypography.secondary, textAlign: TextAlign.center),
                     ],
