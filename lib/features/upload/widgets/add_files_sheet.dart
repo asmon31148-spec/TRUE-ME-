@@ -10,6 +10,8 @@ import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/ai/smai/memory_event_service.dart';
+import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/models/ingestion_models.dart';
 import '../../../core/services/cloud_vault_service.dart';
@@ -221,6 +223,30 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     }
 
     widget.onFileAdded?.call();
+
+    unawaited(
+      MemoryEventService.capture(
+        eventType: SmaiEventType.sourceProcessed,
+        idempotencyKey: 'src_$docId',
+        subjectId: widget.notebookId,
+        provenanceRefs: [fileName],
+        payload: {
+          'docId': docId,
+          'fileName': fileName,
+          'section': _targetSection,
+          'fileType': fileType,
+          'ingestionStatus': ingestResult?.status.name ?? effectiveStatus.name,
+          'chunksVerified': ingestResult?.chunksVerified ?? 0,
+        },
+        searchText: '$fileName $_targetSection ${widget.subjectName}',
+      ).catchError((_) => LearningEvent(
+            id: '',
+            userId: '',
+            eventType: SmaiEventType.sourceProcessed,
+            idempotencyKey: 'err',
+            occurredAt: DateTime.now(),
+          )),
+    );
 
     if (mounted) {
       Navigator.pop(context);

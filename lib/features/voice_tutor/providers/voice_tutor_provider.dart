@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/smai/memory_event_service.dart';
+import '../../../core/ai/smai/memory_retrieval_service.dart';
+import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
 import '../../../core/services/tts_service.dart';
@@ -96,6 +100,7 @@ class VoiceTutorNotifier extends StateNotifier<VoiceTutorState> {
       error: null,
     );
 
+    String? targetNbId;
     try {
       String contextSnippet = '';
       if (subject != null && subject.isNotEmpty) {
@@ -103,18 +108,52 @@ class VoiceTutorNotifier extends StateNotifier<VoiceTutorState> {
           (n) => (n['title'] as String? ?? '').toLowerCase() == subject.toLowerCase(),
         );
         if (match.isNotEmpty) {
-          contextSnippet = OfflineCacheService.getNotebookCombinedText(match.first['id'] as String, maxChars: 2500);
+          targetNbId = match.first['id'] as String?;
+          if (targetNbId != null) {
+            contextSnippet = OfflineCacheService.getNotebookCombinedText(targetNbId, maxChars: 2500);
+          }
         }
       }
+
+      final smaiPkg = await MemoryRetrievalService.assembleContext(
+        query: clean,
+        aiMode: (targetNbId != null && targetNbId.isNotEmpty)
+            ? SmaiAiMode.subject
+            : SmaiAiMode.main,
+        subjectId: targetNbId,
+        requestIntent: 'voice_tutor',
+      );
+      final smaiBlock = smaiPkg.toPromptBlock();
 
       final prompt = '''
 Student spoken question during voice tutor session (${subject ?? 'General Study'}):
 "$clean"
+${smaiBlock.isNotEmpty ? '\nStudent memory context:\n$smaiBlock\n' : ''}
 ${contextSnippet.isNotEmpty ? '\nRelevant student notes:\n$contextSnippet\n' : ''}
 Respond as Sage. Keep your spoken response concise, conversational, and direct (2-4 clear sentences max).
 ''';
 
       final responseText = await _aiRouter.executeRealtimeChat(prompt: prompt);
+
+      unawaited(
+        MemoryEventService.capture(
+          eventType: SmaiEventType.conversationVoiceTranscribed,
+          idempotencyKey: 'voice_${DateTime.now().millisecondsSinceEpoch}_${clean.hashCode.abs()}',
+          subjectId: targetNbId,
+          payload: {
+            'transcript': clean,
+            'response': responseText,
+            'transcriptionStatus': 'success',
+          },
+          searchText: '$clean\n$responseText',
+        ).catchError((_) => LearningEvent(
+              id: '',
+              userId: '',
+              eventType: SmaiEventType.conversationVoiceTranscribed,
+              idempotencyKey: 'err',
+              occurredAt: DateTime.now(),
+            )),
+      );
 
       state = state.copyWith(
         status: isMuted ? VoiceTutorStatus.idle : VoiceTutorStatus.speaking,

@@ -7,6 +7,9 @@ import '../../../core/ai/rag_service.dart';
 import '../../../core/ai/retrieval_engine.dart';
 import '../../../core/ai/sage_context_builder.dart';
 import '../../../core/ai/sage_orchestrator.dart';
+import '../../../core/ai/smai/memory_event_service.dart';
+import '../../../core/ai/smai/memory_retrieval_service.dart';
+import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../export/services/document_generation_service.dart';
 import '../../export/services/generation_job_service.dart';
@@ -628,6 +631,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
               })
               .toList();
 
+          final smaiPkg = await MemoryRetrievalService.assembleContext(
+            query: cleanQuestion,
+            aiMode: (targetNbId != null && targetNbId.isNotEmpty)
+                ? SmaiAiMode.subject
+                : SmaiAiMode.main,
+            subjectId: targetNbId,
+            requestIntent: intentPlan.intent.name,
+            overrideUserId: userId,
+          );
+
           final builtCtx = SageContextBuilder.build(
             studentName: name,
             subject: effectiveSubject.isNotEmpty ? effectiveSubject : null,
@@ -636,6 +649,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             citationSource: citationSource,
             mentorMemory: mentorMemory,
             recentTurns: recentTurns,
+            smaiContext: smaiPkg,
           );
           final isDeepResearch = intentPlan.intent == SageIntentType.explain ||
               intentPlan.intent == SageIntentType.compare ||
@@ -736,6 +750,41 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isThinking: false,
       );
       await _persist();
+
+      // Emit SMAI immutable conversation events (user + Sage)
+      unawaited(
+        MemoryEventService.capture(
+          eventType: SmaiEventType.conversationMessageCreated,
+          idempotencyKey: 'msg_${userMsg.id}',
+          subjectId: targetNbId,
+          overrideUserId: userId,
+          payload: {'role': 'student', 'sessionId': state.activeSessionId, 'text': cleanQuestion},
+          searchText: cleanQuestion,
+        ).catchError((_) => LearningEvent(
+              id: '',
+              userId: userId,
+              eventType: SmaiEventType.conversationMessageCreated,
+              idempotencyKey: 'err',
+              occurredAt: DateTime.now(),
+            )),
+      );
+      unawaited(
+        MemoryEventService.capture(
+          eventType: SmaiEventType.conversationMessageCreated,
+          idempotencyKey: 'msg_${aiMsg.id}',
+          subjectId: targetNbId,
+          overrideUserId: userId,
+          provenanceRefs: citationSource != null ? [citationSource] : const [],
+          payload: {'role': 'sage', 'sessionId': state.activeSessionId, 'text': rawAnswer},
+          searchText: rawAnswer,
+        ).catchError((_) => LearningEvent(
+              id: '',
+              userId: userId,
+              eventType: SmaiEventType.conversationMessageCreated,
+              idempotencyKey: 'err',
+              occurredAt: DateTime.now(),
+            )),
+      );
 
       // Update long-term subject mentor memory in the background every 2 exchanges
       if (updatedMsgs.length >= 2 && updatedMsgs.length % 4 == 0) {

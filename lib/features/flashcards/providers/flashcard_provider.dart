@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/smai/memory_event_service.dart';
+import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/error_boundary.dart';
 import '../../../core/algorithms/sm2_algorithm.dart';
 import '../../../core/models/flashcard_model.dart';
@@ -228,6 +231,27 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
       if (uid != null) {
         SupabaseService.instance.upsertFlashcardDeck(uid, updatedMap);
       }
+      unawaited(
+        MemoryEventService.capture(
+          eventType: SmaiEventType.flashcardReviewed,
+          idempotencyKey: 'fc_${deck.id}_${cardId}_${DateTime.now().millisecondsSinceEpoch}',
+          subjectId: deck.notebookId ?? deck.subject,
+          payload: {
+            'deckId': deck.id,
+            'cardId': cardId,
+            'topic': deck.topic,
+            'rating': rating,
+            'remembered': rating >= 3,
+          },
+          searchText: '${deck.subject} ${deck.topic} flashcard rating=$rating',
+        ).catchError((_) => LearningEvent(
+              id: '',
+              userId: '',
+              eventType: SmaiEventType.flashcardReviewed,
+              idempotencyKey: 'err',
+              occurredAt: DateTime.now(),
+            )),
+      );
       return updated;
     }).toList();
 

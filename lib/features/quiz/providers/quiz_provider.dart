@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/smai/memory_event_service.dart';
+import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/error_boundary.dart';
 import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -187,10 +190,36 @@ class QuizNotifier extends StateNotifier<QuizState> {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
 
+    final newCorrectCount = isCorrect ? state.correctCount + 1 : state.correctCount;
     state = state.copyWith(
       hasSubmitted: true,
-      correctCount: isCorrect ? state.correctCount + 1 : state.correctCount,
+      correctCount: newCorrectCount,
     );
+
+    if (state.currentQuestionIndex == quiz.questions.length - 1) {
+      unawaited(
+        MemoryEventService.capture(
+          eventType: SmaiEventType.quizAttemptCompleted,
+          idempotencyKey: 'quiz_done_${quiz.id}_${DateTime.now().millisecondsSinceEpoch}',
+          subjectId: (quiz.notebookId != null && quiz.notebookId!.isNotEmpty)
+              ? quiz.notebookId
+              : quiz.subject,
+          payload: {
+            'quizId': quiz.id,
+            'topic': quiz.topic,
+            'correctCount': newCorrectCount,
+            'totalQuestions': quiz.questions.length,
+          },
+          searchText: '${quiz.subject} ${quiz.topic} quiz $newCorrectCount/${quiz.questions.length}',
+        ).catchError((_) => LearningEvent(
+              id: '',
+              userId: '',
+              eventType: SmaiEventType.quizAttemptCompleted,
+              idempotencyKey: 'err',
+              occurredAt: DateTime.now(),
+            )),
+      );
+    }
   }
 
   void nextQuestion() {

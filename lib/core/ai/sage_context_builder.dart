@@ -1,6 +1,7 @@
 import '../services/offline_cache_service.dart';
 import 'cognitive/app_capabilities_manifest.dart';
 import 'cognitive/student_cognitive_profile.dart';
+import 'smai/smai_models.dart';
 import 'syllabus_service.dart';
 
 class BuiltSageContext {
@@ -31,6 +32,7 @@ class SageContextBuilder {
     String? citationSource,
     String? mentorMemory,
     List<String> recentTurns = const [],
+    SmaiContextPackage? smaiContext,
   }) {
     final effectiveSubject = subject?.trim() ?? '';
     StudentCognitiveProfile? cognitiveProfile;
@@ -90,11 +92,14 @@ class SageContextBuilder {
     final historyBlock = recentTurns.isNotEmpty
         ? '\n### CURRENT CONVERSATION TURNS:\n${recentTurns.join('\n')}\n'
         : '';
+    final smaiBlock = (smaiContext != null && smaiContext.toPromptBlock().isNotEmpty)
+        ? '\n### SMAI EVIDENCE-LINKED MEMORY (Trace: ${smaiContext.retrievalTraceId}):\n${smaiContext.toPromptBlock()}\n'
+        : '';
     final systemPrompt = '''
 You are Sage, the autonomous cognitive study companion, diagnostic mentor, and academic co-pilot for $studentName in the True Me app.
 $scopeInstruction
 $cognitiveContext
-$memoryBlock$historyBlock$evidenceBlock
+$smaiBlock$memoryBlock$historyBlock$evidenceBlock
 
 $manifest
 

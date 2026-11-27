@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/smai/memory_event_service.dart';
+import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -282,6 +285,32 @@ class DocumentGenerationService {
       sourceChatId: sourceChatId,
       sourceRefs: structuredDoc.sourceReferences,
       contentJson: structuredDoc.toMap(),
+    );
+
+    unawaited(
+      MemoryEventService.capture(
+        eventType: SmaiEventType.studyArtifactCreated,
+        idempotencyKey: 'art_$docId',
+        subjectId: targetNbId,
+        nodeId: nodeId,
+        provenanceRefs: structuredDoc.sourceReferences,
+        payload: {
+          'documentId': docId,
+          'format': format,
+          'styleId': styleId,
+          'title': structuredDoc.title,
+          'topic': structuredDoc.topic,
+          if (sourceChatId != null) 'sourceChatId': sourceChatId,
+          if (uploadedVaultId != null) 'vaultId': uploadedVaultId,
+        },
+        searchText: '$subject ${structuredDoc.topic} ${structuredDoc.title} $format',
+      ).catchError((_) => LearningEvent(
+            id: '',
+            userId: '',
+            eventType: SmaiEventType.studyArtifactCreated,
+            idempotencyKey: 'err',
+            occurredAt: DateTime.now(),
+          )),
     );
 
     return GeneratedDocumentResult(
