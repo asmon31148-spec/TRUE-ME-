@@ -150,6 +150,13 @@ final appRouter = GoRouter(
       path: '/upload',
       redirect: (context, state) => '/library',
     ),
+    GoRoute(
+      path: '/notebook/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id'] ?? '1';
+        return NotebookDetailScreen(notebookId: id);
+      },
+    ),
 
     // Main App Navigation Shell (Stationary 4-Tab Bottom Bar)
     ShellRoute(
@@ -170,13 +177,6 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/progress',
           builder: (context, state) => const ProgressScreen(),
-        ),
-        GoRoute(
-          path: '/notebook/:id',
-          builder: (context, state) {
-            final id = state.pathParameters['id'] ?? '1';
-            return NotebookDetailScreen(notebookId: id);
-          },
         ),
         // Backward-compat aliases
         GoRoute(
