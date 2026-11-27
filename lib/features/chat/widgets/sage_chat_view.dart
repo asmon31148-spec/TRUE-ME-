@@ -12,6 +12,7 @@ import '../../../shared/widgets/ai_thinking_indicator.dart';
 import '../../../shared/widgets/true_me_illustrations.dart';
 import '../../../shared/widgets/true_me_ui.dart';
 import '../../export/screens/document_viewer_screen.dart';
+import '../../export/widgets/scope_and_style_sheet.dart';
 import '../../export/widgets/style_picker_sheet.dart';
 import '../providers/chat_provider.dart';
 import 'formatted_message_body.dart';
@@ -528,12 +529,24 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 children: [
-                  _quickCommandChip(context, Icons.picture_as_pdf_outlined, 'Make PDF',
-                      'Provide a study guide of $subjectTitle as a PDF'),
-                  _quickCommandChip(context, Icons.description_outlined, 'Word',
-                      'Provide a study guide of $subjectTitle as a Word document'),
-                  _quickCommandChip(
-                      context, Icons.slideshow_outlined, 'Slides', 'Create PowerPoint slides for $subjectTitle'),
+                  _quickActionTrigger(
+                    context,
+                    Icons.picture_as_pdf_outlined,
+                    'Make PDF',
+                    () => _openScopeAndStyleExport('pdf', subjectTitle),
+                  ),
+                  _quickActionTrigger(
+                    context,
+                    Icons.description_outlined,
+                    'Word',
+                    () => _openScopeAndStyleExport('docx', subjectTitle),
+                  ),
+                  _quickActionTrigger(
+                    context,
+                    Icons.slideshow_outlined,
+                    'Slides',
+                    () => _openScopeAndStyleExport('pptx', subjectTitle),
+                  ),
                   _quickCommandChip(context, Icons.quiz_outlined, 'Quiz', 'Quiz me on $subjectTitle'),
                   _quickCommandChip(context, Icons.style_outlined, 'Flashcards', 'Create flashcards for $subjectTitle'),
                   _quickCommandChip(
@@ -545,7 +558,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
 
         // Borderless Pill Composer Bar matching Reference Img 3 Center
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
@@ -641,6 +654,87 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openScopeAndStyleExport(String format, String subjectTitle) async {
+    final chatState = ref.read(chatProvider(_scopeKey));
+    final aiMsgs = chatState.messages.where((m) => !m.isUser && m.text.trim().isNotEmpty).toList();
+    final lastAnswer = aiMsgs.isNotEmpty ? aiMsgs.last.text : null;
+
+    final selection = await ScopeAndStyleSheet.show(
+      context,
+      format: format,
+      subject: subjectTitle,
+      defaultTopic: subjectTitle,
+      hasLastAnswer: lastAnswer != null && lastAnswer.length > 80,
+    );
+    if (selection == null || !mounted) return;
+
+    final sourceContext = selection.scopeType == 'last_answer' ? lastAnswer : null;
+    final generated = await ref.read(chatProvider(_scopeKey).notifier).generateDocumentWithStyle(
+          format: format,
+          styleId: selection.styleId,
+          topic: selection.topic,
+          subject: subjectTitle,
+          scopeLabel: selection.scopeLabel,
+          notebookId: widget.notebookId,
+          sourceContext: sourceContext,
+        );
+    if (generated != null && mounted) {
+      await DocumentViewerScreen.open(
+        context,
+        filePath: generated.filePath,
+        title: generated.title,
+      );
+    }
+  }
+
+  Widget _quickActionTrigger(
+    BuildContext context,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
+    final isDark = context.isDarkMode;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorder : context.borderColor,
+                width: 0.9,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: context.accentColor),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

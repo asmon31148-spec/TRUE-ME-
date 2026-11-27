@@ -292,10 +292,10 @@ class PptxExporter {
       <p:sp>
         <p:nvSpPr><p:cNvPr id="2" name="Card"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
-          <a:xfrm><a:off x="550000" y="420000"/><a:ext cx="11092000" cy="5960000"/></a:xfrm>
-          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 2000"/></a:avLst></a:prstGeom>
+          <a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
           <a:solidFill><a:srgbClr val="$cardHex"/></a:solidFill>
-          <a:ln w="19050"><a:solidFill><a:srgbClr val="$cardBorderHex"/></a:solidFill></a:ln>
+          <a:ln w="12700"><a:solidFill><a:srgbClr val="$cardBorderHex"/></a:solidFill></a:ln>
         </p:spPr>
       </p:sp>
 

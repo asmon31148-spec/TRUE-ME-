@@ -13,6 +13,9 @@ class GenerationProgressView extends StatefulWidget {
   final String? subtitle;
   final List<String> stages;
   final bool compact;
+  final int? realStageIndex;
+  final int? realTotalStages;
+  final String? realStageLabel;
 
   const GenerationProgressView({
     super.key,
@@ -25,6 +28,9 @@ class GenerationProgressView extends StatefulWidget {
       'Finalizing...',
     ],
     this.compact = false,
+    this.realStageIndex,
+    this.realTotalStages,
+    this.realStageLabel,
   });
 
   @override
@@ -69,10 +75,16 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
 
   @override
   Widget build(BuildContext context) {
-    final value = _progress;
+    final hasRealStage = widget.realStageLabel != null && widget.realStageIndex != null;
+    final total = widget.realTotalStages ?? 7;
+    final value = hasRealStage
+        ? ((widget.realStageIndex! + 1) / total).clamp(0.08, 1.0)
+        : _progress;
     final pct = (value * 100).round();
     final elapsedSec = (_elapsedMs / 1000).floor();
-    final stage = _currentStage(pct);
+    final stage = hasRealStage
+        ? 'Stage ${widget.realStageIndex! + 1}/$total · ${widget.realStageLabel!}'
+        : _currentStage(pct);
 
     if (widget.compact) {
       return TrueMeCard(

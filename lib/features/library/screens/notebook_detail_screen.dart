@@ -9,6 +9,7 @@ import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/screens/document_viewer_screen.dart';
 import '../../../features/export/services/document_generation_service.dart';
+import '../../../features/export/services/generation_job_service.dart';
 import '../../../features/export/widgets/style_picker_sheet.dart';
 import '../../../shared/widgets/app_components.dart';
 import '../../../shared/widgets/generation_progress_view.dart';
@@ -326,17 +327,18 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                   ? 'elegant_academic_notes'
                   : OfflineCacheService.getPreferredPdfStyle()));
 
-      final result = await DocumentGenerationService.generateAndSave(
+      final result = await GenerationJobService.runDurableJob(
         aiRouter: aiRouter,
         format: format,
         styleId: styleKey,
         subject: title,
         topic: customDocTitle ?? title,
+        scopeLabel: customDocTitle ?? 'Full Subject Sources',
         notebookId: widget.notebookId,
         sourceContext: combinedText,
       );
 
-      if (mounted) {
+      if (mounted && result != null) {
         await DocumentViewerScreen.open(
           context,
           filePath: result.filePath,
@@ -400,10 +402,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
 
               // Borderless Milky Pill Segmented Tab Bar: Sources | Chat | Study
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
                 child: Container(
-                  height: 46,
-                  padding: const EdgeInsets.all(4),
+                  height: 42,
+                  padding: const EdgeInsets.all(3.5),
                   decoration: BoxDecoration(
                     color: context.milkyFill,
                     borderRadius: BorderRadius.circular(24),
@@ -509,21 +511,30 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       children: [
-                        if (_exportingFormat != null) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: GenerationProgressView(
-                              compact: true,
-                              title: 'Generating ${_exportingFormat!.toUpperCase()} for $title',
-                              stages: const [
-                                'Reading subject sources...',
-                                'Synthesizing structured guide with Sage...',
-                                'Building document file...',
-                                'Opening & syncing to Drive...',
-                              ],
-                            ),
-                          ),
-                        ],
+                        ValueListenableBuilder<List<GenerationJob>>(
+                          valueListenable: GenerationJobService.jobsNotifier,
+                          builder: (ctx, jobs, _) {
+                            final active = jobs.where((j) =>
+                                j.notebookId == widget.notebookId &&
+                                j.status == GenerationJobStatus.running).toList();
+                            if (active.isEmpty && _exportingFormat == null) {
+                              return const SizedBox.shrink();
+                            }
+                            final job = active.isNotEmpty ? active.first : null;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: GenerationProgressView(
+                                compact: true,
+                                title: job != null
+                                    ? 'Generating ${job.format.toUpperCase()} · ${job.topic}'
+                                    : 'Generating ${(_exportingFormat ?? 'doc').toUpperCase()} for $title',
+                                realStageIndex: job?.stageIndex ?? 0,
+                                realTotalStages: 7,
+                                realStageLabel: job?.stageLabel ?? 'Starting durable background job...',
+                              ),
+                            );
+                          },
+                        ),
                         TrueMeSectionHeader(title: 'Active Learning'),
                         const SizedBox(height: 12),
                         GridView.count(

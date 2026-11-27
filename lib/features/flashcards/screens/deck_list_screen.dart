@@ -924,26 +924,46 @@ class _DeckListScreenState extends ConsumerState<DeckListScreen> with SingleTick
               ),
             ],
           ),
-          const Spacer(),
-          SingleChildScrollView(
-            child: Text(
-              StemFormulaFormatter.format(text),
-              textAlign: TextAlign.center,
-              style: isAnswer
-                  ? AppTypography.body.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: context.textPrimary,
-                      height: 1.5,
-                    )
-                  : AppTypography.sectionHeading.copyWith(
-                      fontSize: 22,
-                      color: context.textPrimary,
-                      height: 1.32,
+          const SizedBox(height: 10),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final formatted = StemFormulaFormatter.format(text);
+                final len = formatted.length;
+                final double adaptiveFontSize = isAnswer
+                    ? (len <= 90 ? 19.0 : (len <= 200 ? 16.5 : (len <= 380 ? 15.0 : 13.5)))
+                    : (len <= 90 ? 22.0 : (len <= 180 ? 19.0 : 16.5));
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          formatted,
+                          textAlign: TextAlign.center,
+                          style: isAnswer
+                              ? AppTypography.body.copyWith(
+                                  fontSize: adaptiveFontSize,
+                                  fontWeight: FontWeight.w500,
+                                  color: context.textPrimary,
+                                  height: 1.45,
+                                )
+                              : AppTypography.sectionHeading.copyWith(
+                                  fontSize: adaptiveFontSize,
+                                  color: context.textPrimary,
+                                  height: 1.32,
+                                ),
+                        ),
+                      ),
                     ),
+                  ),
+                );
+              },
             ),
           ),
-          const Spacer(),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

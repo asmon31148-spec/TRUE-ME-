@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -33,24 +34,56 @@ class PdfExporter {
     }
   }
 
+  static pw.Font? _patrickHand;
+  static pw.Font? _ptSerifReg;
+  static pw.Font? _ptSerifBold;
+  static pw.Font? _latoReg;
+  static pw.Font? _latoBold;
+  static bool _fontsAttempted = false;
+
+  static Future<void> _ensureFontsLoaded() async {
+    if (_fontsAttempted) return;
+    _fontsAttempted = true;
+    Future<pw.Font?> tryLoad(String path) async {
+      try {
+        final data = await rootBundle.load(path);
+        return pw.Font.ttf(data);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    _patrickHand = await tryLoad('assets/fonts/PatrickHand-Regular.ttf');
+    _ptSerifReg = await tryLoad('assets/fonts/PTSerif-Regular.ttf');
+    _ptSerifBold = await tryLoad('assets/fonts/PTSerif-Bold.ttf');
+    _latoReg = await tryLoad('assets/fonts/Lato-Regular.ttf');
+    _latoBold = await tryLoad('assets/fonts/Lato-Bold.ttf');
+  }
+
+  static bool get _hasUnicodeFonts => _latoReg != null || _ptSerifReg != null;
+
   static String _sanitize(String text) {
-    return text
+    final cleaned = text
+        .replaceAll('’', "'")
+        .replaceAll('‘', "'")
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('…', '...')
+        .replaceAll('**', '');
+    if (_hasUnicodeFonts) {
+      return cleaned.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '');
+    }
+    return cleaned
         .replaceAll('•', '-')
         .replaceAll('→', '->')
         .replaceAll('←', '<-')
         .replaceAll('—', '--')
         .replaceAll('–', '-')
-        .replaceAll('’', "'")
-        .replaceAll('‘', "'")
-        .replaceAll('“', '"')
-        .replaceAll('”', '"')
         .replaceAll('≤', '<=')
         .replaceAll('≥', '>=')
         .replaceAll('≠', '!=')
         .replaceAll('×', 'x')
         .replaceAll('÷', '/')
-        .replaceAll('…', '...')
-        .replaceAll('**', '')
         .replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]'), '');
   }
 
@@ -58,19 +91,25 @@ class PdfExporter {
     switch (style) {
       case PdfStudyStyle.zenPaperInk:
         return pw.ThemeData.withFont(
-          base: pw.Font.times(),
-          bold: pw.Font.timesBold(),
-          italic: pw.Font.timesItalic(),
-          boldItalic: pw.Font.timesBoldItalic(),
+          base: _ptSerifReg ?? pw.Font.times(),
+          bold: _ptSerifBold ?? pw.Font.timesBold(),
+          italic: _ptSerifReg ?? pw.Font.timesItalic(),
+          boldItalic: _ptSerifBold ?? pw.Font.timesBoldItalic(),
         );
       case PdfStudyStyle.handwritten:
+        return pw.ThemeData.withFont(
+          base: _latoReg ?? pw.Font.helvetica(),
+          bold: _patrickHand ?? _latoBold ?? pw.Font.helveticaBold(),
+          italic: _latoReg ?? pw.Font.helveticaOblique(),
+          boldItalic: _patrickHand ?? _latoBold ?? pw.Font.helveticaBoldOblique(),
+        );
       case PdfStudyStyle.minimalCute:
       case PdfStudyStyle.modernClean:
         return pw.ThemeData.withFont(
-          base: pw.Font.helvetica(),
-          bold: pw.Font.helveticaBold(),
-          italic: pw.Font.helveticaOblique(),
-          boldItalic: pw.Font.helveticaBoldOblique(),
+          base: _latoReg ?? pw.Font.helvetica(),
+          bold: _latoBold ?? pw.Font.helveticaBold(),
+          italic: _latoReg ?? pw.Font.helveticaOblique(),
+          boldItalic: _latoBold ?? pw.Font.helveticaBoldOblique(),
         );
     }
   }
@@ -83,6 +122,7 @@ class PdfExporter {
     StructuredStudyDocument? structuredDoc,
     PdfStudyStyle style = PdfStudyStyle.handwritten,
   }) async {
+    await _ensureFontsLoaded();
     final pdf = pw.Document(theme: _themeFor(style));
     final safeTitle = _sanitize(title);
     final safeSubject = _sanitize(subject);

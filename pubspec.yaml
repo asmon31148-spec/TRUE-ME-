@@ -88,6 +88,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    - assets/fonts/
 
 dependency_overrides:
   record_platform_interface: 1.1.0

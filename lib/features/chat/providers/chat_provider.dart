@@ -7,6 +7,7 @@ import '../../../core/ai/rag_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/utils/text_chunker.dart';
 import '../../export/services/document_generation_service.dart';
+import '../../export/services/generation_job_service.dart';
 
 enum SageActionType {
   exportPdf,
@@ -251,21 +252,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required String styleId,
     required String topic,
     required String subject,
+    String scopeLabel = 'Chat Context',
     String? notebookId,
     String? sourceContext,
   }) async {
     state = state.copyWith(isThinking: true, error: null);
     try {
-      final res = await DocumentGenerationService.generateAndSave(
+      final res = await GenerationJobService.runDurableJob(
         aiRouter: _aiRouter,
         format: format,
         styleId: styleId,
         subject: subject,
         topic: topic,
+        scopeLabel: scopeLabel,
         notebookId: notebookId,
         sourceContext: sourceContext,
         sourceChatId: scopeKey,
       );
+      if (res == null) {
+        state = state.copyWith(isThinking: false);
+        return null;
+      }
 
       final doneMsg = ChatMessage(
         id: 'msg_${DateTime.now().millisecondsSinceEpoch}',

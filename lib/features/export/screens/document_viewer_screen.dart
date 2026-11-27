@@ -601,10 +601,18 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
     final isDarkSlide = bgColor.computeLuminance() < 0.35;
     final fg = isDarkSlide ? Colors.white : const Color(0xFF1E1B3A);
 
-    return TrueMeCard(
-      borderRadius: 20,
-      color: bgColor,
-      padding: const EdgeInsets.all(22),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.zero,
+        border: Border.all(
+          color: isDarkSlide ? const Color(0xFF334155) : context.borderColor,
+          width: 1,
+        ),
+        boxShadow: context.cardShadow,
+      ),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -20,6 +20,7 @@ import 'package:trueme/features/export/pptx_exporter.dart';
 import 'package:trueme/features/export/services/document_generation_service.dart';
 import 'package:trueme/features/export/services/document_parser_service.dart';
 import 'package:trueme/features/export/services/document_pipeline_service.dart';
+import 'package:trueme/features/export/services/generation_job_service.dart';
 import 'package:trueme/features/export/widgets/style_picker_sheet.dart';
 import 'package:trueme/features/quiz/providers/quiz_provider.dart';
 import 'package:trueme/features/upload/services/pdf_processor.dart';
@@ -433,6 +434,27 @@ void main() {
         DocumentGenerationService.detectExplicitStyleId('Build an Infographic Presentation', 'pptx'),
         'infographic_presentation',
       );
+    });
+
+    test('GenerationJob persists 7 honest pipeline stages and recovers interrupted state', () {
+      expect(GenerationJob.pipelineStages.length, 7);
+      final interrupted = GenerationJob.fromMap({
+        'jobId': 'job_1',
+        'userId': 'u1',
+        'subject': 'Microbiology',
+        'notebookId': 'nb_1',
+        'topic': 'Bacterial Cell Wall',
+        'scopeLabel': 'Topic',
+        'format': 'pdf',
+        'styleId': 'handwritten_notes',
+        'status': 'running',
+        'stageIndex': 3,
+        'stageLabel': 'Building & validating learning content...',
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+      expect(interrupted.status, GenerationJobStatus.failed);
+      expect(interrupted.errorMessage, contains('Retry'));
     });
   });
 }
