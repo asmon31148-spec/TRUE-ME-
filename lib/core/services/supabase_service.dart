@@ -16,6 +16,8 @@ class SupabaseService {
   SupabaseClient? _overrideClient;
   SupabaseService._internal();
   SupabaseService._withClient(this._overrideClient);
+  @visibleForTesting
+  SupabaseService.forTesting() : _overrideClient = null;
 
   static bool _initialized = false;
 

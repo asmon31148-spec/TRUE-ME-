@@ -769,10 +769,20 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                 ),
                               ],
                               const SizedBox(height: 5),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  if (!msg.isUser && msg.citation != null) ...[
+                                  if (!msg.isUser && msg.verification != null)
+                                    TrueMeTonalPill(
+                                      label: msg.verification!.trustLevel.badgeLabel,
+                                      icon: msg.verification!.citedSources.isNotEmpty
+                                          ? Icons.verified_outlined
+                                          : Icons.info_outline_rounded,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    ),
+                                  if (!msg.isUser && msg.citation != null)
                                     GestureDetector(
                                       onTap: () {
                                         HapticFeedback.lightImpact();
@@ -784,8 +794,6 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                  ],
                                   Text(
                                     _formatTime(msg.timestamp),
                                     style: AppTypography.smallLabel.copyWith(color: context.textSecondary),

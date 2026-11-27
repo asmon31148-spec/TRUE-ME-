@@ -26,7 +26,7 @@ class _FakeSupabaseService extends SupabaseService {
   _FakeSupabaseService({
     this.cloudReady = true,
     this.simulateVerificationZero = false,
-  });
+  }) : super.forTesting();
 
   @override
   bool get isCloudReady => cloudReady;

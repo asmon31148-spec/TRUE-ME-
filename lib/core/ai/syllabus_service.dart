@@ -332,4 +332,161 @@ ${segments[i]}
       'uncovered': uncovered,
     };
   }
+
+  /// Deterministically maps uploaded documents (Notes, Books, PYQs, Syllabus)
+  /// to syllabus topics/subtopics with source authority & confidence (SAGE-003).
+  static Future<List<Map<String, dynamic>>> mapSourcesToTopics(
+    String notebookId, {
+    List<Map<String, dynamic>>? overrideDocs,
+  }) async {
+    final nodes = getSyllabusNodes(notebookId)
+        .where((n) => n['nodeType'] == 'topic' || n['nodeType'] == 'subtopic')
+        .toList();
+    if (nodes.isEmpty) return const [];
+
+    final docs = overrideDocs ?? OfflineCacheService.getNotebookDocuments(notebookId);
+    final List<Map<String, dynamic>> mappings = [];
+
+    for (final doc in docs) {
+      final content = (doc['content'] as String? ?? '').toLowerCase();
+      if (content.trim().length < 20) continue;
+      final fileName = doc['fileName'] as String? ?? 'Document';
+      final section = (doc['section'] as String? ?? 'Notes').toLowerCase();
+      final authority = section.contains('syllabus')
+          ? 'official_syllabus'
+          : (section.contains('paper') || section.contains('pyq')
+              ? 'pyq'
+              : (section.contains('book') ? 'textbook' : 'teacher_notes'));
+
+      for (final node in nodes) {
+        final nodeId = node['id']?.toString() ?? '';
+        final title = (node['title'] as String? ?? '').trim();
+        if (nodeId.isEmpty || title.isEmpty) continue;
+        final terms = title
+            .toLowerCase()
+            .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+            .where((w) => w.length >= 3)
+            .toList();
+        if (terms.isEmpty) continue;
+
+        final hits = terms.where((t) => content.contains(t)).length;
+        if (hits == 0) continue;
+        final ratio = hits / terms.length;
+        if (ratio < 0.4) continue;
+
+        mappings.add({
+          'id': 'map_${nodeId}_${fileName.hashCode}',
+          'notebookId': notebookId,
+          'nodeId': nodeId,
+          'sourceName': fileName,
+          'section': doc['section'] ?? 'Notes',
+          'sourceAuthority': authority,
+          'coverageStatus': ratio >= 0.75 ? 'covered' : 'partial',
+          'confidence': double.parse(ratio.clamp(0.4, 0.99).toStringAsFixed(2)),
+        });
+      }
+    }
+
+    await saveSourceMappings(notebookId, mappings);
+    return mappings;
+  }
+
+  /// Returns a unified knowledge map for a syllabus topic: mapped sources,
+  /// PYQs, generated artifacts, coverage status, and unresolved gaps (SAGE-003).
+  static Map<String, dynamic> getTopicKnowledgeMap(
+    String notebookId,
+    String nodeId,
+  ) {
+    final nodes = getSyllabusNodes(notebookId);
+    final node = nodes.firstWhere(
+      (n) => n['id'] == nodeId,
+      orElse: () => <String, dynamic>{},
+    );
+    final title = (node['title'] as String? ?? '').trim();
+    final mappings =
+        getSourceMappings(notebookId).where((m) => m['nodeId'] == nodeId).toList();
+    final pyqs = mappings.where((m) => m['sourceAuthority'] == 'pyq').toList();
+    final artifacts = getArtifacts(notebookId).where((a) {
+      if (a['nodeId'] == nodeId) return true;
+      final label = (a['topicLabel'] as String? ?? '').toLowerCase();
+      return title.isNotEmpty && label.contains(title.toLowerCase());
+    }).toList();
+
+    final hasCovered = mappings.any((m) => m['coverageStatus'] == 'covered');
+    final coverage = hasCovered
+        ? 'covered'
+        : (mappings.isNotEmpty ? 'partial' : 'uncovered_gap');
+
+    return {
+      'node': node,
+      'coverageStatus': coverage,
+      'mappedSources': mappings,
+      'pyqs': pyqs,
+      'artifacts': artifacts,
+      'hasUnresolvedGap': mappings.isEmpty,
+    };
+  }
+
+  /// Distinguishes "not found in uploaded material" from "not part of the syllabus" (SAGE-003).
+  static String classifyTopicStatus(
+    String notebookId,
+    String query, {
+    bool hasEvidenceInUploadedDocs = false,
+  }) {
+    final nodes = getSyllabusNodes(notebookId)
+        .where((n) => n['nodeType'] == 'topic' || n['nodeType'] == 'subtopic')
+        .toList();
+    if (nodes.isEmpty) {
+      return hasEvidenceInUploadedDocs
+          ? 'covered_in_sources'
+          : 'not_found_in_uploaded_material';
+    }
+
+    final qTerms = query
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .where((w) => w.length >= 3)
+        .toSet();
+    final inSyllabus = nodes.any((n) {
+      final title = (n['title'] as String? ?? '').toLowerCase();
+      return qTerms.any((t) => title.contains(t));
+    });
+
+    if (!inSyllabus) {
+      return hasEvidenceInUploadedDocs
+          ? 'outside_syllabus_but_in_sources'
+          : 'not_part_of_the_syllabus';
+    }
+    return hasEvidenceInUploadedDocs
+        ? 'in_syllabus_and_covered'
+        : 'in_syllabus_not_found_in_uploaded_material';
+  }
+
+  /// Detects duplicate syllabus topic names and uncovered syllabus topics (SAGE-003).
+  static Map<String, List<String>> detectDuplicateAndMissingTopics(String notebookId) {
+    final nodes = getSyllabusNodes(notebookId)
+        .where((n) => n['nodeType'] == 'topic' || n['nodeType'] == 'subtopic')
+        .toList();
+    final mappings = getSourceMappings(notebookId);
+    final mappedIds = mappings.map((m) => m['nodeId']?.toString()).toSet();
+
+    final seen = <String>{};
+    final duplicates = <String>[];
+    final missing = <String>[];
+
+    for (final n in nodes) {
+      final title = (n['title'] as String? ?? '').trim();
+      final lower = title.toLowerCase();
+      if (lower.isNotEmpty && !seen.add(lower)) {
+        duplicates.add(title);
+      }
+      if (!mappedIds.contains(n['id']?.toString())) {
+        missing.add(title);
+      }
+    }
+    return {
+      'duplicates': duplicates,
+      'missingCoverage': missing,
+    };
+  }
 }

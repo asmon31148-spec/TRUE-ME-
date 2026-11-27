@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/answer_verifier.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/ai/retrieval_engine.dart';
 import '../../../core/ai/sage_context_builder.dart';
+import '../../../core/ai/sage_orchestrator.dart';
 import '../../../core/services/offline_cache_service.dart';
-import '../../../core/utils/text_chunker.dart';
 import '../../export/services/document_generation_service.dart';
 import '../../export/services/generation_job_service.dart';
 
@@ -76,6 +78,7 @@ class ChatMessage {
   final String text;
   final String? citation;
   final SageAction? action;
+  final AnswerVerificationReport? verification;
   final DateTime timestamp;
 
   const ChatMessage({
@@ -84,6 +87,7 @@ class ChatMessage {
     required this.text,
     this.citation,
     this.action,
+    this.verification,
     required this.timestamp,
   });
 
@@ -93,6 +97,7 @@ class ChatMessage {
         'text': text,
         'citation': citation,
         'action': action?.toMap(),
+        if (verification != null) 'verification': verification!.toMap(),
         'timestamp': timestamp.toIso8601String(),
       };
 
@@ -104,6 +109,11 @@ class ChatMessage {
       citation: map['citation'] as String?,
       action: map['action'] is Map
           ? SageAction.fromMap(Map<String, dynamic>.from(map['action'] as Map))
+          : null,
+      verification: map['verification'] is Map
+          ? AnswerVerificationReport.fromMap(
+              Map<String, dynamic>.from(map['verification'] as Map),
+            )
           : null,
       timestamp: DateTime.tryParse(map['timestamp'] as String? ?? '') ?? DateTime.now(),
     );
@@ -502,74 +512,55 @@ class ChatNotifier extends StateNotifier<ChatState> {
         effectiveSubject = (nb?['title'] as String? ?? '').trim();
       }
 
-      if (targetNbId != null && targetNbId.isNotEmpty) {
-        // 1a. Try Supabase pgvector semantic search first
-        try {
-          final chunks = await _ragService
-              .retrieveContext(
-                query: cleanQuestion,
-                userId: userId,
-                notebookId: targetNbId,
-                topK: 4,
-              )
-              .timeout(
-                const Duration(milliseconds: 2500),
-                onTimeout: () => [],
-              );
+      // 1b. SAGE-004 Intent & Scope Orchestration
+      final intentPlan = SageOrchestrator.classify(
+        query: cleanQuestion,
+        notebookId: targetNbId,
+        subject: effectiveSubject,
+      );
+      if (intentPlan.needsClarification && intentPlan.clarificationQuestion != null) {
+        final clarifyMsg = ChatMessage(
+          id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
+          isUser: false,
+          text: intentPlan.clarificationQuestion!,
+          timestamp: DateTime.now(),
+        );
+        state = state.copyWith(
+          messages: [...state.messages, clarifyMsg],
+          isThinking: false,
+        );
+        await _persist();
+        return clarifyMsg;
+      }
 
-          if (chunks.isNotEmpty) {
-            retrievedExcerpts = chunks.map((c) => c.content).toList();
-            final top = chunks.first;
-            citationSource = '${top.fileName ?? 'Notebook'} (Chunk #${top.chunkIndex + 1})';
-          }
-        } catch (_) {}
+      // 1c. SAGE-002 Hybrid Retrieval & Evidence Engine (strictly scoped to targetNbId)
+      final retrievalEngine = RetrievalEngine(ragService: _ragService);
+      EvidenceBundle evidenceBundle = await retrievalEngine.retrieveEvidence(
+        query: cleanQuestion,
+        userId: userId,
+        notebookId: targetNbId,
+        sectionFilter: intentPlan.sourcePriority == SourcePriority.syllabusFirst
+            ? 'Syllabus'
+            : (intentPlan.sourcePriority == SourcePriority.pyqFirst
+                ? 'Previous papers'
+                : null),
+        topK: 5,
+      );
+      if (!evidenceBundle.hasSufficientEvidence &&
+          intentPlan.sourcePriority != SourcePriority.balanced &&
+          targetNbId != null &&
+          targetNbId.isNotEmpty) {
+        evidenceBundle = await retrievalEngine.retrieveEvidence(
+          query: cleanQuestion,
+          userId: userId,
+          notebookId: targetNbId,
+          topK: 5,
+        );
+      }
 
-        // 1b. Keyword-ranked local chunk retrieval across entire subject documents
-        if (retrievedExcerpts.isEmpty) {
-          final localDocs = OfflineCacheService.getNotebookDocuments(targetNbId);
-          if (localDocs.isNotEmpty) {
-            final queryTerms = cleanQuestion
-                .toLowerCase()
-                .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
-                .where((w) => w.length >= 2)
-                .toSet();
-
-            final List<Map<String, dynamic>> scoredChunks = [];
-            for (final doc in localDocs) {
-              final content = (doc['content'] as String? ?? '').trim();
-              if (content.isEmpty) continue;
-              final fName = doc['fileName'] as String? ?? 'Document';
-              final section = doc['section'] as String? ?? 'Notes';
-
-              final chunks = TextChunker.splitIntoChunks(
-                content,
-                targetChunkChars: 2500,
-                overlapChars: 250,
-              );
-              for (final ch in chunks) {
-                final lower = ch.content.toLowerCase();
-                int score = 0;
-                for (final term in queryTerms) {
-                  if (lower.contains(term)) score++;
-                }
-                if (score > 0) {
-                  scoredChunks.add({
-                    'score': score,
-                    'text': '[Source: $fName ($section)]\n${ch.content}',
-                    'citation': '$fName ($section)',
-                  });
-                }
-              }
-            }
-
-            scoredChunks.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
-            final topChunks = scoredChunks.take(4).toList();
-            if (topChunks.isNotEmpty) {
-              retrievedExcerpts = topChunks.map((e) => e['text'] as String).toList();
-              citationSource = topChunks.first['citation'] as String;
-            }
-          }
-        }
+      if (evidenceBundle.hasSufficientEvidence) {
+        retrievedExcerpts = evidenceBundle.formattedExcerpts;
+        citationSource = evidenceBundle.primaryCitation;
       }
 
       // 2. Check if user directly asked for an export/study action
@@ -681,12 +672,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
       }
 
+      // SAGE-005 Answer Verification & Uncertainty Disclosure
+      final verification = isExportOfPrevious
+          ? null
+          : AnswerVerifier.verify(
+              query: cleanQuestion,
+              answer: rawAnswer,
+              evidence: evidenceBundle,
+              notebookId: targetNbId,
+            );
+
       final aiMsg = ChatMessage(
         id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
         isUser: false,
         text: rawAnswer,
         citation: citationSource,
         action: finalAction,
+        verification: verification,
         timestamp: DateTime.now(),
       );
 
