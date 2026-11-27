@@ -5,7 +5,9 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
+import '../../../core/ai/rag_service.dart';
 import '../../../core/ai/syllabus_service.dart';
+import '../../../core/models/ingestion_models.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/screens/document_viewer_screen.dart';
 import '../../../features/export/services/generation_job_service.dart';
@@ -186,6 +188,11 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                         );
                         if (confirm == true) {
                           await OfflineCacheService.removeDocumentFromNotebook(widget.notebookId, docId);
+                          await RagService().deleteDocumentChunks(
+                            userId: OfflineCacheService.getUserId(),
+                            notebookId: widget.notebookId,
+                            fileName: fileName,
+                          ).catchError((_) {});
                           _loadNotebook();
                           if (ctx.mounted) Navigator.pop(ctx);
                         }
@@ -227,6 +234,75 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                   ),
                 ),
                 Divider(color: ctx.borderColor, height: 24),
+                if (doc['ingestionStatus'] != null || doc['qualityReport'] != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: ctx.bgColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ctx.borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Index Status: ${IngestionStatus.fromString(doc['ingestionStatus'] as String?).displayLabel}'
+                                '${doc['chunksVerified'] != null ? ' · ${doc['chunksVerified']} chunks verified' : ''}',
+                                style: AppTypography.smallLabel.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: ctx.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (content.trim().length >= 20)
+                              TextButton.icon(
+                                onPressed: () async {
+                                  final res = await RagService().ingestDocumentWithVerification(
+                                    userId: OfflineCacheService.getUserId(),
+                                    notebookId: widget.notebookId,
+                                    fileName: fileName,
+                                    fullText: content,
+                                    sectionLabel: section,
+                                  );
+                                  await OfflineCacheService.updateDocumentIngestionState(
+                                    widget.notebookId,
+                                    docId,
+                                    ingestionStatus: res.status.name,
+                                    chunksCount: res.chunksCreated,
+                                    chunksVerified: res.chunksVerified,
+                                    ingestionError: res.errorMessage,
+                                  );
+                                  _loadNotebook();
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 15),
+                                label: const Text('Re-index'),
+                              ),
+                          ],
+                        ),
+                        if (doc['qualityReport'] is Map &&
+                            ((doc['qualityReport']['summaryMessage'] as String? ?? '').isNotEmpty))
+                          Text(
+                            doc['qualityReport']['summaryMessage'] as String,
+                            style: AppTypography.smallLabel.copyWith(color: ctx.textSecondary),
+                          ),
+                        if ((doc['ingestionError'] as String? ?? '').isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              doc['ingestionError'] as String,
+                              style: AppTypography.smallLabel.copyWith(color: AppColors.error),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 Expanded(
                   child: SingleChildScrollView(
                     controller: scrollCtrl,
@@ -891,6 +967,17 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
             ...files.map((doc) {
               final fName = doc['fileName'] as String? ?? 'Document';
               final hasDrive = doc['driveFileId'] != null;
+              final rawStatus = doc['ingestionStatus'] as String?;
+              final ingStatus = rawStatus != null
+                  ? IngestionStatus.fromString(rawStatus)
+                  : ((doc['content'] as String? ?? '').trim().length >= 20
+                      ? IngestionStatus.partial
+                      : IngestionStatus.needsOcr);
+              final statusColor = ingStatus == IngestionStatus.searchable
+                  ? AppColors.success
+                  : (ingStatus == IngestionStatus.failed || ingStatus == IngestionStatus.needsOcr
+                      ? AppColors.error
+                      : context.accentColor);
               return InkWell(
                 onTap: () => _showDocumentViewer(doc),
                 borderRadius: BorderRadius.circular(10),
@@ -909,11 +996,24 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          fName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: context.textPrimary),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              fName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: context.textPrimary),
+                            ),
+                            Text(
+                              ingStatus.displayLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: statusColor,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 8),

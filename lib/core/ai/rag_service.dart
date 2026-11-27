@@ -1,4 +1,5 @@
 import '../models/document_chunk_model.dart';
+import '../models/ingestion_models.dart';
 import '../services/supabase_service.dart';
 import '../utils/text_chunker.dart';
 import 'gemini_service.dart';
@@ -13,35 +14,164 @@ class RagService {
   })  : _geminiService = geminiService ?? GeminiService(),
         _supabaseService = supabaseService ?? SupabaseService();
 
-  /// Full ingestion pipeline: Text -> 1000-token Chunks -> Gemini Embeddings -> Supabase pgvector.
+  /// Truthful, idempotent SAGE-001 ingestion pipeline:
+  /// Pages/Text -> Provenance Chunks -> Delete Stale -> Gemini Embeddings -> Supabase -> Verification Query.
+  Future<IngestionResult> ingestDocumentWithVerification({
+    required String userId,
+    required String notebookId,
+    required String fileName,
+    String? fullText,
+    List<ExtractedPage>? pages,
+    String? sectionLabel,
+    void Function(IngestionStatus status)? onStage,
+  }) async {
+    try {
+      onStage?.call(IngestionStatus.chunking);
+      final List<TextChunk> chunks;
+      if (pages != null && pages.isNotEmpty) {
+        chunks = TextChunker.splitPagesIntoChunks(
+          pages,
+          sectionLabel: sectionLabel,
+        );
+      } else {
+        final rawChunks = TextChunker.splitIntoChunks(fullText ?? '');
+        chunks = rawChunks
+            .map((c) => TextChunk(
+                  index: c.index,
+                  content: c.content,
+                  charCount: c.charCount,
+                  sectionLabel: sectionLabel,
+                ))
+            .toList();
+      }
+
+      if (chunks.isEmpty) {
+        return IngestionResult(
+          status: IngestionStatus.needsOcr,
+          chunksCreated: 0,
+          chunksVerified: 0,
+          errorMessage: 'No readable text chunks could be created from this source.',
+          completedAt: DateTime.now(),
+        );
+      }
+
+      if (!_supabaseService.isCloudReady) {
+        return IngestionResult(
+          status: IngestionStatus.partial,
+          chunksCreated: chunks.length,
+          chunksVerified: 0,
+          errorMessage:
+              'Saved locally (${chunks.length} chunks ready). Cloud vector indexing requires sign-in and network.',
+          completedAt: DateTime.now(),
+        );
+      }
+
+      onStage?.call(IngestionStatus.embedding);
+      // Idempotency: remove stale chunks for this file before inserting fresh ones.
+      await _supabaseService.deleteChunksForFile(
+        userId: userId,
+        notebookId: notebookId,
+        fileName: fileName,
+      );
+
+      for (final chunk in chunks) {
+        final embedding = await _geminiService.generateEmbedding(chunk.content);
+        if (embedding.length != 768) {
+          throw IngestionException(
+            stage: 'embedding',
+            message: 'Embedding dimension mismatch: expected 768, got ${embedding.length}',
+          );
+        }
+
+        await _supabaseService.insertChunk(
+          userId: userId,
+          notebookId: notebookId,
+          fileName: fileName,
+          chunkIndex: chunk.index,
+          content: chunk.content,
+          embedding: embedding,
+          pageNumber: chunk.pageNumber,
+          sectionLabel: chunk.sectionLabel,
+        );
+      }
+
+      onStage?.call(IngestionStatus.verifying);
+      final verifiedCount = await _supabaseService.verifyChunksPersisted(
+        userId: userId,
+        notebookId: notebookId,
+        fileName: fileName,
+      );
+
+      if (verifiedCount <= 0) {
+        return IngestionResult(
+          status: IngestionStatus.failed,
+          chunksCreated: chunks.length,
+          chunksVerified: 0,
+          errorMessage: 'Verification query returned 0 persisted chunks in cloud index.',
+          completedAt: DateTime.now(),
+        );
+      }
+
+      if (verifiedCount < chunks.length) {
+        return IngestionResult(
+          status: IngestionStatus.partial,
+          chunksCreated: chunks.length,
+          chunksVerified: verifiedCount,
+          errorMessage:
+              'Partial index: $verifiedCount of ${chunks.length} chunks verified in cloud index.',
+          completedAt: DateTime.now(),
+        );
+      }
+
+      return IngestionResult(
+        status: IngestionStatus.searchable,
+        chunksCreated: chunks.length,
+        chunksVerified: verifiedCount,
+        completedAt: DateTime.now(),
+      );
+    } catch (e) {
+      return IngestionResult(
+        status: IngestionStatus.failed,
+        chunksCreated: 0,
+        chunksVerified: 0,
+        errorMessage: e.toString(),
+        completedAt: DateTime.now(),
+      );
+    }
+  }
+
+  /// Legacy convenience wrapper returning verified chunk count.
   Future<int> ingestDocument({
     required String userId,
     required String notebookId,
     required String fileName,
     required String fullText,
   }) async {
-    // 1. Split into overlapping chunks
-    final chunks = TextChunker.splitIntoChunks(fullText);
-    if (chunks.isEmpty) return 0;
-
-    // 2. Generate embeddings and store in pgvector
-    for (final chunk in chunks) {
-      final embedding = await _geminiService.generateEmbedding(chunk.content);
-      if (embedding.length != 768) {
-        throw StateError('Embedding dimension mismatch: expected 768, got ${embedding.length}');
-      }
-
-      await _supabaseService.insertChunk(
-        userId: userId,
-        notebookId: notebookId,
-        fileName: fileName,
-        chunkIndex: chunk.index,
-        content: chunk.content,
-        embedding: embedding,
+    final res = await ingestDocumentWithVerification(
+      userId: userId,
+      notebookId: notebookId,
+      fileName: fileName,
+      fullText: fullText,
+    );
+    if (res.status == IngestionStatus.failed) {
+      throw IngestionException(
+        stage: 'ingestion',
+        message: res.errorMessage ?? 'Ingestion failed',
       );
     }
+    return res.chunksVerified > 0 ? res.chunksVerified : res.chunksCreated;
+  }
 
-    return chunks.length;
+  Future<void> deleteDocumentChunks({
+    required String userId,
+    required String notebookId,
+    required String fileName,
+  }) async {
+    await _supabaseService.deleteChunksForFile(
+      userId: userId,
+      notebookId: notebookId,
+      fileName: fileName,
+    );
   }
 
   /// Grounded retrieval: Query -> Gemini Embedding -> Cosine Similarity Search.

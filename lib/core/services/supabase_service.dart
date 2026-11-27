@@ -771,7 +771,25 @@ class SupabaseService {
   // ---------------------------------------------------------------------------
   // EXISTING RAG CHUNKS & USER FILES
   // ---------------------------------------------------------------------------
-  /// Inserts a document chunk with its 768-dimensional Gemini embedding.
+  bool get isCloudReady => _clientOrNull != null && authUserId != null;
+
+  /// Deletes all existing chunks for a specific file before re-indexing (SAGE-001 idempotency).
+  Future<void> deleteChunksForFile({
+    required String userId,
+    required String notebookId,
+    required String fileName,
+  }) async {
+    final client = _clientOrNull;
+    if (client == null) return;
+    await client
+        .from('document_chunks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('notebook_id', notebookId)
+        .eq('file_name', fileName);
+  }
+
+  /// Inserts a document chunk with its 768-dimensional Gemini embedding and provenance.
   Future<void> insertChunk({
     required String userId,
     required String notebookId,
@@ -779,6 +797,8 @@ class SupabaseService {
     required int chunkIndex,
     required String content,
     required List<double> embedding,
+    int? pageNumber,
+    String? sectionLabel,
   }) async {
     final client = _clientOrNull;
     if (client == null) return;
@@ -789,7 +809,26 @@ class SupabaseService {
       'chunk_index': chunkIndex,
       'content': content,
       'embedding': embedding,
+      if (pageNumber != null) 'page_number': pageNumber,
+      if (sectionLabel != null) 'section_label': sectionLabel,
     });
+  }
+
+  /// Verification query confirming chunks are persisted and readable in Supabase (SAGE-001).
+  Future<int> verifyChunksPersisted({
+    required String userId,
+    required String notebookId,
+    required String fileName,
+  }) async {
+    final client = _clientOrNull;
+    if (client == null) return 0;
+    final rows = await client
+        .from('document_chunks')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('notebook_id', notebookId)
+        .eq('file_name', fileName);
+    return (rows as List).length;
   }
 
   /// Performs vector similarity search via PostgreSQL RPC `match_document_chunks`.
