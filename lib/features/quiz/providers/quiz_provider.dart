@@ -201,7 +201,7 @@ class QuizNotifier extends StateNotifier<QuizState> {
         MemoryEventService.capture(
           eventType: SmaiEventType.quizAttemptCompleted,
           idempotencyKey: 'quiz_done_${quiz.id}_${DateTime.now().millisecondsSinceEpoch}',
-          subjectId: (quiz.notebookId != null && quiz.notebookId!.isNotEmpty)
+          subjectId: quiz.notebookId.isNotEmpty
               ? quiz.notebookId
               : quiz.subject,
           payload: {

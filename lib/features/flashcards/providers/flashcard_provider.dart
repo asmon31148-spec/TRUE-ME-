@@ -235,7 +235,7 @@ class FlashcardNotifier extends StateNotifier<FlashcardState> {
         MemoryEventService.capture(
           eventType: SmaiEventType.flashcardReviewed,
           idempotencyKey: 'fc_${deck.id}_${cardId}_${DateTime.now().millisecondsSinceEpoch}',
-          subjectId: deck.notebookId ?? deck.subject,
+          subjectId: deck.notebookId.isNotEmpty ? deck.notebookId : deck.subject,
           payload: {
             'deckId': deck.id,
             'cardId': cardId,
