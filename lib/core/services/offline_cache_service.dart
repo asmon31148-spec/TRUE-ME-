@@ -1239,33 +1239,292 @@ class OfflineCacheService {
   }
 
   // ---------------------------------------------------------------------------
-  // SCOPED SAGE CHAT & PER-SUBJECT PROGRESS
+  // SCOPED SAGE CHAT SESSIONS, MENTOR MEMORY & PER-SUBJECT PROGRESS
   // ---------------------------------------------------------------------------
-  static Future<void> saveChatHistory(
-    String scopeKey,
-    List<Map<String, dynamic>> messages,
-  ) async {
+  static String _sessionsKey(String scopeKey) => 'sessions::$scopeKey';
+  static String _activeSessionKey(String scopeKey) => 'active_session::$scopeKey';
+  static String _sessionMsgsKey(String scopeKey, String sessionId) =>
+      'session_msgs::$scopeKey::$sessionId';
+  static String _mentorMemoryKey(String scopeKey) => 'mentor_memory::$scopeKey';
+
+  /// Migrates legacy single-thread chat history for [scopeKey] into a
+  /// sessioned list so existing conversations are preserved.
+  static void _ensureSessionsInitialized(String scopeKey) {
     try {
       final box = Hive.box(chatBox);
-      await box.put(scopeKey, messages);
+      if (box.get(_sessionsKey(scopeKey)) is List) return;
+
+      final legacyRaw = box.get(scopeKey);
+      if (legacyRaw is List && legacyRaw.isNotEmpty) {
+        final msgs = legacyRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        final firstUser = msgs.firstWhere(
+          (m) => m['isUser'] == true && (m['text'] as String? ?? '').trim().isNotEmpty,
+          orElse: () => <String, dynamic>{},
+        );
+        final title = _deriveSessionTitle(firstUser['text'] as String?);
+        final now = DateTime.now().toIso8601String();
+        final defaultId = 'default';
+        box.put(_sessionMsgsKey(scopeKey, defaultId), msgs);
+        box.put(_sessionsKey(scopeKey), [
+          {
+            'id': defaultId,
+            'title': title,
+            'createdAt': (msgs.first['timestamp'] as String?) ?? now,
+            'updatedAt': (msgs.last['timestamp'] as String?) ?? now,
+            'messageCount': msgs.length,
+          }
+        ]);
+        box.put(_activeSessionKey(scopeKey), defaultId);
+      }
     } catch (_) {}
   }
 
-  static List<Map<String, dynamic>> getChatHistory(String scopeKey) {
+  static String _deriveSessionTitle(String? firstPrompt) {
+    final clean = (firstPrompt ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (clean.isEmpty) return 'New Chat';
+    if (clean.length <= 42) return clean;
+    return '${clean.substring(0, 39)}...';
+  }
+
+  static List<Map<String, dynamic>> getChatSessions(String scopeKey) {
     try {
+      _ensureSessionsInitialized(scopeKey);
       final box = Hive.box(chatBox);
-      final raw = box.get(scopeKey);
+      final raw = box.get(_sessionsKey(scopeKey));
       if (raw is List) {
-        return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        final list = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        list.sort((a, b) => (b['updatedAt'] as String? ?? '')
+            .compareTo(a['updatedAt'] as String? ?? ''));
+        return list;
       }
     } catch (_) {}
     return [];
   }
 
-  static Future<void> clearChatHistory(String scopeKey) async {
+  static String getActiveChatSessionId(String scopeKey) {
     try {
-      await Hive.box(chatBox).delete(scopeKey);
+      _ensureSessionsInitialized(scopeKey);
+      final box = Hive.box(chatBox);
+      final active = box.get(_activeSessionKey(scopeKey)) as String?;
+      final sessions = getChatSessions(scopeKey);
+      if (active != null &&
+          active.isNotEmpty &&
+          sessions.any((s) => s['id'] == active)) {
+        return active;
+      }
+      if (sessions.isNotEmpty) {
+        final firstId = sessions.first['id'] as String? ?? 'default';
+        box.put(_activeSessionKey(scopeKey), firstId);
+        return firstId;
+      }
     } catch (_) {}
+    return 'default';
+  }
+
+  static Future<void> setActiveChatSessionId(String scopeKey, String sessionId) async {
+    try {
+      await Hive.box(chatBox).put(_activeSessionKey(scopeKey), sessionId);
+    } catch (_) {}
+  }
+
+  static Future<String> createChatSession(String scopeKey, {String title = 'New Chat'}) async {
+    try {
+      _ensureSessionsInitialized(scopeKey);
+      final box = Hive.box(chatBox);
+      final sessions = getChatSessions(scopeKey);
+      final newId = 'sess_${DateTime.now().millisecondsSinceEpoch}';
+      final now = DateTime.now().toIso8601String();
+      sessions.insert(0, {
+        'id': newId,
+        'title': title,
+        'createdAt': now,
+        'updatedAt': now,
+        'messageCount': 0,
+      });
+      await box.put(_sessionsKey(scopeKey), sessions);
+      await box.put(_sessionMsgsKey(scopeKey, newId), <Map<String, dynamic>>[]);
+      await box.put(_activeSessionKey(scopeKey), newId);
+      return newId;
+    } catch (_) {
+      return 'default';
+    }
+  }
+
+  static Future<String> deleteChatSession(String scopeKey, String sessionId) async {
+    try {
+      final box = Hive.box(chatBox);
+      final sessions = getChatSessions(scopeKey)
+        ..removeWhere((s) => s['id'] == sessionId);
+      await box.delete(_sessionMsgsKey(scopeKey, sessionId));
+      await box.put(_sessionsKey(scopeKey), sessions);
+      if (sessions.isEmpty) {
+        return await createChatSession(scopeKey);
+      }
+      final nextId = sessions.first['id'] as String? ?? 'default';
+      await box.put(_activeSessionKey(scopeKey), nextId);
+      return nextId;
+    } catch (_) {
+      return 'default';
+    }
+  }
+
+  static Future<void> saveChatHistory(
+    String scopeKey,
+    List<Map<String, dynamic>> messages, {
+    String? sessionId,
+  }) async {
+    try {
+      _ensureSessionsInitialized(scopeKey);
+      final box = Hive.box(chatBox);
+      final targetId = sessionId ?? getActiveChatSessionId(scopeKey);
+      await box.put(_sessionMsgsKey(scopeKey, targetId), messages);
+
+      // Keep session metadata up-to-date
+      final sessions = getChatSessions(scopeKey);
+      final idx = sessions.indexWhere((s) => s['id'] == targetId);
+      final firstUser = messages.firstWhere(
+        (m) => m['isUser'] == true && (m['text'] as String? ?? '').trim().isNotEmpty,
+        orElse: () => <String, dynamic>{},
+      );
+      final derivedTitle = _deriveSessionTitle(firstUser['text'] as String?);
+      final now = DateTime.now().toIso8601String();
+      if (idx >= 0) {
+        final existingTitle = sessions[idx]['title'] as String? ?? 'New Chat';
+        sessions[idx] = {
+          ...sessions[idx],
+          'title': (existingTitle == 'New Chat' || existingTitle.isEmpty)
+              ? derivedTitle
+              : existingTitle,
+          'updatedAt': messages.isNotEmpty
+              ? ((messages.last['timestamp'] as String?) ?? now)
+              : now,
+          'messageCount': messages.length,
+        };
+      } else {
+        sessions.insert(0, {
+          'id': targetId,
+          'title': derivedTitle,
+          'createdAt': now,
+          'updatedAt': now,
+          'messageCount': messages.length,
+        });
+      }
+      await box.put(_sessionsKey(scopeKey), sessions);
+      await box.put(_activeSessionKey(scopeKey), targetId);
+    } catch (_) {}
+  }
+
+  static List<Map<String, dynamic>> getChatHistory(String scopeKey, {String? sessionId}) {
+    try {
+      _ensureSessionsInitialized(scopeKey);
+      final box = Hive.box(chatBox);
+      final targetId = sessionId ?? getActiveChatSessionId(scopeKey);
+      final raw = box.get(_sessionMsgsKey(scopeKey, targetId));
+      if (raw is List) {
+        return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      // Legacy fallback if sessions haven't been created yet
+      final legacy = box.get(scopeKey);
+      if (legacy is List) {
+        return legacy.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<void> clearChatHistory(String scopeKey, {String? sessionId}) async {
+    try {
+      final box = Hive.box(chatBox);
+      if (sessionId != null) {
+        await box.put(_sessionMsgsKey(scopeKey, sessionId), <Map<String, dynamic>>[]);
+        final sessions = getChatSessions(scopeKey);
+        final idx = sessions.indexWhere((s) => s['id'] == sessionId);
+        if (idx >= 0) {
+          sessions[idx] = {
+            ...sessions[idx],
+            'title': 'New Chat',
+            'messageCount': 0,
+            'updatedAt': DateTime.now().toIso8601String(),
+          };
+          await box.put(_sessionsKey(scopeKey), sessions);
+        }
+      } else {
+        final activeId = getActiveChatSessionId(scopeKey);
+        await box.put(_sessionMsgsKey(scopeKey, activeId), <Map<String, dynamic>>[]);
+        await box.delete(scopeKey);
+      }
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // SUBJECT MENTOR MEMORY (Cross-session persistence per subject)
+  // ---------------------------------------------------------------------------
+  static Map<String, dynamic> getMentorMemory(String scopeKey) {
+    try {
+      final raw = Hive.box(chatBox).get(_mentorMemoryKey(scopeKey));
+      if (raw is Map) {
+        return Map<String, dynamic>.from(raw);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  static Future<void> saveMentorMemory(
+    String scopeKey,
+    Map<String, dynamic> memory,
+  ) async {
+    try {
+      await Hive.box(chatBox).put(_mentorMemoryKey(scopeKey), memory);
+    } catch (_) {}
+  }
+
+  /// Builds a compact, high-signal mentor memory block combining the AI-distilled
+  /// subject memory and recent topics/questions from OTHER chat sessions under [scopeKey].
+  static String buildSubjectMentorMemoryBlock(
+    String scopeKey, {
+    String? excludeSessionId,
+  }) {
+    final buf = StringBuffer();
+    final mem = getMentorMemory(scopeKey);
+    final summary = (mem['summary'] as String? ?? '').trim();
+    if (summary.isNotEmpty) {
+      buf.writeln('Distilled Mentor Memory (across previous sessions):');
+      buf.writeln(summary);
+    }
+
+    // Also include recent topics/exchanges from other sessions so memory is
+    // immediately available even before background summarization completes.
+    final sessions = getChatSessions(scopeKey);
+    final recentOtherTopics = <String>[];
+    for (final s in sessions) {
+      final sId = s['id'] as String? ?? '';
+      if (sId.isEmpty || sId == excludeSessionId) continue;
+      final msgs = getChatHistory(scopeKey, sessionId: sId);
+      if (msgs.isEmpty) continue;
+      final userMsgs = msgs
+          .where((m) => m['isUser'] == true)
+          .map((m) => (m['text'] as String? ?? '').trim().replaceAll(RegExp(r'\s+'), ' '))
+          .where((t) => t.isNotEmpty)
+          .toList();
+      if (userMsgs.isNotEmpty) {
+        final snippet = userMsgs.reversed.take(3).toList().reversed.map((t) {
+          return t.length > 90 ? '${t.substring(0, 87)}...' : t;
+        }).join(' | ');
+        final sTitle = (s['title'] as String? ?? 'Past Chat').trim();
+        recentOtherTopics.add('- [$sTitle]: $snippet');
+      }
+      if (recentOtherTopics.length >= 4) break;
+    }
+
+    if (recentOtherTopics.isNotEmpty) {
+      if (buf.isNotEmpty) buf.writeln();
+      buf.writeln('Recent Prior Chat Threads in This Subject:');
+      for (final line in recentOtherTopics) {
+        buf.writeln(line);
+      }
+    }
+
+    return buf.toString().trim();
   }
 
   /// Returns an accurate, real-data summary of student progress strictly for [subject].

@@ -527,6 +527,8 @@ Return ONLY valid JSON matching this schema:
     String studentName = 'Student',
     String? subjectScope,
     String? subjectProgressSummary,
+    String? mentorMemory,
+    List<String> recentTurns = const [],
   }) async {
     if (retrievedChunks.isEmpty) {
       return executeRealtimeChat(
@@ -563,9 +565,15 @@ Return ONLY valid JSON matching this schema:
     final progressLine = (subjectProgressSummary != null && subjectProgressSummary.isNotEmpty)
         ? '\nDetailed Progress in $subjectScope:\n$subjectProgressSummary'
         : '';
+    final memoryLine = (mentorMemory != null && mentorMemory.trim().isNotEmpty)
+        ? '\n\nLONG-TERM SUBJECT MENTOR MEMORY (Across All Sessions):\n${mentorMemory.trim()}\nUse this memory seamlessly like a dedicated mentor who remembers the student\'s prior questions, weak spots, and goals in this subject.'
+        : '';
+    final historyLine = recentTurns.isNotEmpty
+        ? '\n\nCURRENT CONVERSATION TURNS:\n${recentTurns.join('\n')}'
+        : '';
     final systemPrompt = '''
 You are Sage, the omniscient cognitive study companion and mentor for $studentName in the True Me app.
-$scopeLine$progressLine
+$scopeLine$progressLine$memoryLine$historyLine
 
 ${cognitive.toSageContextString()}
 

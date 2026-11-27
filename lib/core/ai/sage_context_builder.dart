@@ -29,6 +29,8 @@ class SageContextBuilder {
     String? notebookId,
     List<String> retrievedExcerpts = const [],
     String? citationSource,
+    String? mentorMemory,
+    List<String> recentTurns = const [],
   }) {
     final effectiveSubject = subject?.trim() ?? '';
     StudentCognitiveProfile? cognitiveProfile;
@@ -81,11 +83,18 @@ class SageContextBuilder {
             ?.name
             .toUpperCase() ??
         'INTERMEDIATE';
+    final memoryBlock = (mentorMemory != null && mentorMemory.trim().isNotEmpty)
+        ? '\n### LONG-TERM SUBJECT MENTOR MEMORY (Across All Sessions):\n${mentorMemory.trim()}\n'
+            'Use this memory naturally like a dedicated personal mentor who remembers the student\'s prior questions, weak spots, goals, and progress in this subject—adapt your guidance without making them repeat themselves.\n'
+        : '';
+    final historyBlock = recentTurns.isNotEmpty
+        ? '\n### CURRENT CONVERSATION TURNS:\n${recentTurns.join('\n')}\n'
+        : '';
     final systemPrompt = '''
 You are Sage, the autonomous cognitive study companion, diagnostic mentor, and academic co-pilot for $studentName in the True Me app.
 $scopeInstruction
 $cognitiveContext
-$evidenceBlock
+$memoryBlock$historyBlock$evidenceBlock
 
 $manifest
 

@@ -65,6 +65,17 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sendMessage(widget.initialPrompt!);
       });
+    } else {
+      _jumpToBottomImmediate();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SageChatView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.notebookId != widget.notebookId ||
+        oldWidget.subject != widget.subject) {
+      _jumpToBottomImmediate();
     }
   }
 
@@ -195,6 +206,20 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
     }
   }
 
+  void _jumpToBottomImmediate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollCtrl.hasClients) return;
+      _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollCtrl.hasClients) return;
+        final maxExtent = _scrollCtrl.position.maxScrollExtent;
+        if ((maxExtent - _scrollCtrl.offset).abs() > 8) {
+          _scrollCtrl.jumpTo(maxExtent);
+        }
+      });
+    });
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
@@ -205,6 +230,134 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
         );
       }
     });
+  }
+
+  Future<void> _showSessionsSheet(BuildContext context, ChatState chatState) async {
+    final sessions = chatState.sessions;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.forum_outlined, size: 20, color: ctx.accentColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.subject != null && widget.subject!.trim().isNotEmpty
+                          ? '${widget.subject!.trim()} Chats'
+                          : 'Chat Threads',
+                      style: AppTypography.cardTitle.copyWith(color: ctx.textPrimary),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      ref.read(chatProvider(_scopeKey).notifier).startNewChat(
+                            subjectLabel: widget.subject ?? 'this subject',
+                          );
+                    },
+                    icon: const Icon(Icons.add_comment_outlined, size: 18),
+                    label: const Text('New Chat'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Sage remembers your progress & topics across all chats in this subject.',
+                style: AppTypography.smallLabel.copyWith(color: ctx.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              if (sessions.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'No saved chat threads yet.',
+                    style: AppTypography.secondary.copyWith(color: ctx.textSecondary),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.45,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: sessions.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (_, idx) {
+                      final s = sessions[idx];
+                      final isActive = s.id == chatState.activeSessionId;
+                      return Material(
+                        color: isActive
+                            ? (ctx.isDarkMode
+                                ? AppColors.darkAccentWash
+                                : AppColors.accentWash)
+                            : ctx.bgColor,
+                        borderRadius: BorderRadius.circular(14),
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: isActive ? ctx.accentColor : ctx.borderColor,
+                            ),
+                          ),
+                          leading: Icon(
+                            isActive
+                                ? Icons.chat_bubble_rounded
+                                : Icons.chat_bubble_outline_rounded,
+                            size: 19,
+                            color: isActive ? ctx.accentColor : ctx.textSecondary,
+                          ),
+                          title: Text(
+                            s.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                              fontSize: 14,
+                              color: ctx.textPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${s.messageCount} messages',
+                            style: AppTypography.smallLabel.copyWith(color: ctx.textSecondary),
+                          ),
+                          trailing: sessions.length > 1
+                              ? IconButton(
+                                  icon: Icon(Icons.delete_outline_rounded,
+                                      size: 19, color: ctx.textSecondary),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    ref
+                                        .read(chatProvider(_scopeKey).notifier)
+                                        .deleteSession(s.id);
+                                  },
+                                )
+                              : null,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            ref.read(chatProvider(_scopeKey).notifier).switchSession(s.id);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _formatTime(DateTime dt) {
@@ -241,13 +394,142 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
     final chatState = ref.watch(chatProvider(_scopeKey));
+    ref.listen<ChatState>(chatProvider(_scopeKey), (prev, next) {
+      if (prev?.activeSessionId != next.activeSessionId) {
+        _jumpToBottomImmediate();
+      } else if ((prev?.messages.length ?? 0) < next.messages.length ||
+          (prev?.isThinking == false && next.isThinking)) {
+        _scrollToBottom();
+      }
+    });
+
     final hasSubject = widget.subject != null && widget.subject!.trim().isNotEmpty;
     final subjectTitle = hasSubject ? widget.subject!.trim() : 'your studies';
     final userName = OfflineCacheService.getUserName().trim().split(RegExp(r'\s+')).first;
     final disableAnim = MediaQuery.disableAnimationsOf(context);
+    final activeSession = chatState.sessions
+        .where((s) => s.id == chatState.activeSessionId)
+        .firstOrNull;
+    final activeTitle = (activeSession?.title ?? 'New Chat').trim();
+    final hasMentorMemory = chatState.sessions.length > 1 ||
+        OfflineCacheService.getMentorMemory(_scopeKey).isNotEmpty;
 
     return Column(
       children: [
+        // Compact Subject Session Switcher + New Chat Bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _showSessionsSheet(context, chatState);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor.withValues(alpha: 0.88),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: context.borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          hasMentorMemory
+                              ? Icons.psychology_outlined
+                              : Icons.forum_outlined,
+                          size: 16,
+                          color: context.accentColor,
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            activeTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (chatState.sessions.length > 1) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '${chatState.sessions.length}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: context.accentColor,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 16,
+                          color: context.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: chatState.isThinking || chatState.messages.isEmpty
+                    ? null
+                    : () {
+                        HapticFeedback.lightImpact();
+                        ref.read(chatProvider(_scopeKey).notifier).startNewChat(
+                              subjectLabel: subjectTitle,
+                            );
+                      },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: chatState.messages.isEmpty
+                        ? context.surfaceColor.withValues(alpha: 0.55)
+                        : (isDark ? AppColors.darkAccentWash : AppColors.accentWash),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: chatState.messages.isEmpty
+                          ? context.borderColor
+                          : context.accentColor.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add_comment_outlined,
+                        size: 15,
+                        color: chatState.messages.isEmpty
+                            ? context.textSecondary
+                            : context.accentColor,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'New Chat',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: chatState.messages.isEmpty
+                              ? context.textSecondary
+                              : context.accentColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: chatState.messages.isEmpty && !chatState.isThinking
               ? SingleChildScrollView(

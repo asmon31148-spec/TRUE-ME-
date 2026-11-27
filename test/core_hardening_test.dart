@@ -14,6 +14,7 @@ import 'package:trueme/core/ai/sage_context_builder.dart';
 import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/config/env_config.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
+import 'package:trueme/core/services/offline_cache_service.dart';
 import 'package:trueme/features/export/docx_exporter.dart';
 import 'package:trueme/features/export/models/structured_study_document.dart';
 import 'package:trueme/features/export/pdf_exporter.dart';
@@ -519,6 +520,49 @@ void main() {
       expect(slides.first.tag, 'DIAGNOSTICS');
       expect(slides.first.takeaway, contains('Gram-positive retains purple'));
       expect(slides.first.bullets.any((b) => b.contains('KEY TAKEAWAY')), isFalse);
+    });
+
+    test('Subject chat sessions preserve history and build cross-session mentor memory', () async {
+      const scope = 'nb_physics_mem_test';
+      final s1 = await OfflineCacheService.createChatSession(scope);
+      await OfflineCacheService.saveChatHistory(scope, [
+        {
+          'id': 'm1',
+          'isUser': true,
+          'text': 'Explain Newton second law and friction',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+        {
+          'id': 'm2',
+          'isUser': false,
+          'text': 'F = ma and kinetic friction opposes motion.',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      ], sessionId: s1);
+      await OfflineCacheService.saveMentorMemory(scope, {
+        'summary': '- Covered Newton laws\n- Needs practice on friction free-body diagrams',
+      });
+
+      final s2 = await OfflineCacheService.createChatSession(scope);
+      expect(s2, isNot(equals(s1)));
+      expect(OfflineCacheService.getChatHistory(scope, sessionId: s2), isEmpty);
+      expect(OfflineCacheService.getChatHistory(scope, sessionId: s1).length, 2);
+
+      final memoryBlock = OfflineCacheService.buildSubjectMentorMemoryBlock(
+        scope,
+        excludeSessionId: s2,
+      );
+      expect(memoryBlock, contains('Needs practice on friction'));
+      expect(memoryBlock, contains('Explain Newton second law and friction'));
+
+      final ctx = SageContextBuilder.build(
+        studentName: 'Aarav',
+        subject: 'Physics',
+        mentorMemory: memoryBlock,
+        recentTurns: const ['Student: Ready for a new topic'],
+      );
+      expect(ctx.systemPrompt, contains('LONG-TERM SUBJECT MENTOR MEMORY'));
+      expect(ctx.systemPrompt, contains('CURRENT CONVERSATION TURNS'));
     });
   });
 }

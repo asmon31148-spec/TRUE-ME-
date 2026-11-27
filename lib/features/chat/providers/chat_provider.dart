@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
@@ -109,17 +110,47 @@ class ChatMessage {
   }
 }
 
+class ChatSessionMeta {
+  final String id;
+  final String title;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int messageCount;
+
+  const ChatSessionMeta({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+    required this.updatedAt,
+    this.messageCount = 0,
+  });
+
+  factory ChatSessionMeta.fromMap(Map<String, dynamic> map) {
+    return ChatSessionMeta(
+      id: map['id'] as String? ?? 'default',
+      title: map['title'] as String? ?? 'New Chat',
+      createdAt: DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(map['updatedAt'] as String? ?? '') ?? DateTime.now(),
+      messageCount: (map['messageCount'] as num? ?? 0).toInt(),
+    );
+  }
+}
+
 class ChatState {
   final List<ChatMessage> messages;
   final bool isThinking;
   final String? activeCitation;
   final String? error;
+  final String activeSessionId;
+  final List<ChatSessionMeta> sessions;
 
   const ChatState({
     this.messages = const [],
     this.isThinking = false,
     this.activeCitation,
     this.error,
+    this.activeSessionId = 'default',
+    this.sessions = const [],
   });
 
   ChatState copyWith({
@@ -127,12 +158,16 @@ class ChatState {
     bool? isThinking,
     String? activeCitation,
     String? error,
+    String? activeSessionId,
+    List<ChatSessionMeta>? sessions,
   }) {
     return ChatState(
       messages: messages ?? this.messages,
       isThinking: isThinking ?? this.isThinking,
       activeCitation: activeCitation ?? this.activeCitation,
       error: error,
+      activeSessionId: activeSessionId ?? this.activeSessionId,
+      sessions: sessions ?? this.sessions,
     );
   }
 }
@@ -148,18 +183,33 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required this.scopeKey,
   })  : _aiRouter = aiRouter,
         _ragService = ragService,
-        super(ChatState(messages: _loadInitial(scopeKey)));
+        super(_loadInitial(scopeKey));
 
-  static List<ChatMessage> _loadInitial(String scopeKey) {
-    final saved = OfflineCacheService.getChatHistory(scopeKey);
-    return saved.map(ChatMessage.fromMap).toList();
+  static ChatState _loadInitial(String scopeKey) {
+    final activeId = OfflineCacheService.getActiveChatSessionId(scopeKey);
+    final saved = OfflineCacheService.getChatHistory(scopeKey, sessionId: activeId);
+    final sessions = OfflineCacheService.getChatSessions(scopeKey)
+        .map(ChatSessionMeta.fromMap)
+        .toList();
+    return ChatState(
+      messages: saved.map(ChatMessage.fromMap).toList(),
+      activeSessionId: activeId,
+      sessions: sessions,
+    );
   }
 
-  void _persist() {
-    OfflineCacheService.saveChatHistory(
+  Future<void> _persist() async {
+    await OfflineCacheService.saveChatHistory(
       scopeKey,
       state.messages.map((m) => m.toMap()).toList(),
+      sessionId: state.activeSessionId,
     );
+    final refreshed = OfflineCacheService.getChatSessions(scopeKey)
+        .map(ChatSessionMeta.fromMap)
+        .toList();
+    if (mounted) {
+      state = state.copyWith(sessions: refreshed);
+    }
   }
 
   SageActionType? _detectDirectIntent(String text) {
@@ -557,12 +607,33 @@ class ChatNotifier extends StateNotifier<ChatState> {
             : 'Done! I generated your ${directIntent.name.replaceFirst('export', '').toUpperCase()} file for **$subjectLabel**. Tap the button below to open it.';
       } else {
         try {
+          final mentorMemory = OfflineCacheService.buildSubjectMentorMemoryBlock(
+            scopeKey,
+            excludeSessionId: state.activeSessionId,
+          );
+          final priorMsgs = state.messages.length > 1
+              ? state.messages.sublist(0, state.messages.length - 1)
+              : <ChatMessage>[];
+          final recentTurns = priorMsgs.reversed
+              .take(6)
+              .toList()
+              .reversed
+              .map((m) {
+                final role = m.isUser ? 'Student' : 'Sage';
+                final txt = m.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+                final clipped = txt.length > 260 ? '${txt.substring(0, 257)}...' : txt;
+                return '$role: $clipped';
+              })
+              .toList();
+
           final builtCtx = SageContextBuilder.build(
             studentName: name,
             subject: effectiveSubject.isNotEmpty ? effectiveSubject : null,
             notebookId: targetNbId,
             retrievedExcerpts: retrievedExcerpts,
             citationSource: citationSource,
+            mentorMemory: mentorMemory,
+            recentTurns: recentTurns,
           );
           if (retrievedExcerpts.isEmpty) {
             rawAnswer = await _aiRouter.executeRealtimeChat(
@@ -581,6 +652,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
               studentName: name,
               subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
               subjectProgressSummary: enrichedSummary.isNotEmpty ? enrichedSummary : null,
+              mentorMemory: mentorMemory,
+              recentTurns: recentTurns,
             );
           }
         } catch (aiError) {
@@ -617,11 +690,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
         timestamp: DateTime.now(),
       );
 
+      final updatedMsgs = [...state.messages, aiMsg];
       state = state.copyWith(
-        messages: [...state.messages, aiMsg],
+        messages: updatedMsgs,
         isThinking: false,
       );
-      _persist();
+      await _persist();
+
+      // Update long-term subject mentor memory in the background every 2 exchanges
+      if (updatedMsgs.length >= 2 && updatedMsgs.length % 4 == 0) {
+        unawaited(_distillMentorMemory(updatedMsgs, subjectLabel: subjectLabel));
+      }
       return aiMsg;
     } catch (e) {
       state = state.copyWith(
@@ -632,9 +711,119 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  Future<void> _distillMentorMemory(
+    List<ChatMessage> msgs, {
+    String subjectLabel = 'this subject',
+  }) async {
+    if (msgs.isEmpty) return;
+    try {
+      final existing = OfflineCacheService.getMentorMemory(scopeKey);
+      final prevSummary = (existing['summary'] as String? ?? '').trim();
+      final recentSnippet = msgs.reversed
+          .take(6)
+          .toList()
+          .reversed
+          .map((m) {
+            final who = m.isUser ? 'Student' : 'Sage';
+            final t = m.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+            return '$who: ${t.length > 260 ? '${t.substring(0, 257)}...' : t}';
+          })
+          .join('\n');
+
+      final prompt = '''
+Update the concise personal mentor memory for this student studying $subjectLabel.
+Keep it under 180 words as 5-7 short bullet points covering:
+- Topics covered so far
+- Concepts the student mastered vs struggled with
+- Student's goals, exam focus, or preferred explanation style
+- Recommended next mentor step
+
+Previous Mentor Memory:
+${prevSummary.isNotEmpty ? prevSummary : 'None yet.'}
+
+Latest Conversation:
+$recentSnippet
+
+Return ONLY the updated bullet-point mentor memory.
+''';
+
+      final distilled = await _aiRouter.executeMicroTask(
+        prompt: prompt,
+        systemPrompt:
+            'You maintain accurate, concise long-term academic mentor memory.',
+      );
+      final clean = distilled.trim();
+      if (clean.isNotEmpty) {
+        await OfflineCacheService.saveMentorMemory(scopeKey, {
+          'summary': clean,
+          'lastUpdated': DateTime.now().toIso8601String(),
+          'interactionsCount':
+              ((existing['interactionsCount'] as num?)?.toInt() ?? 0) + 1,
+        });
+      }
+    } catch (_) {
+      // Non-fatal: deterministic cross-session digest still provides memory
+    }
+  }
+
+  /// Starts a fresh chat thread under the same subject while preserving
+  /// previous threads and distilling them into Subject Mentor Memory.
+  Future<void> startNewChat({String subjectLabel = 'this subject'}) async {
+    if (state.isThinking) return;
+    if (state.messages.isEmpty) return;
+
+    final prevMessages = List<ChatMessage>.from(state.messages);
+    unawaited(_distillMentorMemory(prevMessages, subjectLabel: subjectLabel));
+
+    final newId = await OfflineCacheService.createChatSession(scopeKey);
+    final sessions = OfflineCacheService.getChatSessions(scopeKey)
+        .map(ChatSessionMeta.fromMap)
+        .toList();
+    state = state.copyWith(
+      messages: const [],
+      activeSessionId: newId,
+      sessions: sessions,
+      error: null,
+    );
+  }
+
+  Future<void> switchSession(String sessionId) async {
+    if (state.isThinking || sessionId == state.activeSessionId) return;
+    await OfflineCacheService.setActiveChatSessionId(scopeKey, sessionId);
+    final msgs = OfflineCacheService.getChatHistory(scopeKey, sessionId: sessionId)
+        .map(ChatMessage.fromMap)
+        .toList();
+    final sessions = OfflineCacheService.getChatSessions(scopeKey)
+        .map(ChatSessionMeta.fromMap)
+        .toList();
+    state = state.copyWith(
+      messages: msgs,
+      activeSessionId: sessionId,
+      sessions: sessions,
+      error: null,
+    );
+  }
+
+  Future<void> deleteSession(String sessionId) async {
+    if (state.isThinking) return;
+    final nextId = await OfflineCacheService.deleteChatSession(scopeKey, sessionId);
+    final msgs = OfflineCacheService.getChatHistory(scopeKey, sessionId: nextId)
+        .map(ChatMessage.fromMap)
+        .toList();
+    final sessions = OfflineCacheService.getChatSessions(scopeKey)
+        .map(ChatSessionMeta.fromMap)
+        .toList();
+    state = state.copyWith(
+      messages: msgs,
+      activeSessionId: nextId,
+      sessions: sessions,
+      error: null,
+    );
+  }
+
   void clearHistory() {
-    state = const ChatState(messages: []);
-    OfflineCacheService.clearChatHistory(scopeKey);
+    state = state.copyWith(messages: const [], error: null);
+    OfflineCacheService.clearChatHistory(scopeKey, sessionId: state.activeSessionId);
   }
 }
 
