@@ -142,8 +142,8 @@ class DocumentLayoutValidator {
     for (int i = 0; i < rawSlides.length; i++) {
       final slide = rawSlides[i];
 
-      // 1. Cover slide (index 0)
-      if (i == 0) {
+      // 1. Cover slide (index 0) when deck has multiple slides
+      if (i == 0 && rawSlides.length > 1) {
         optimized.add(
           PptxSlideData(
             title: slide.title,

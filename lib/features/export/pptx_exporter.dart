@@ -479,7 +479,7 @@ class PptxExporter {
 
     return '''
       <p:sp>
-        <p:nvSpPr><p:cNvPr id="3" name="CoverBadge"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+        <p:nvSpPr><p:cNvPr id="3" name="Badge"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
           <a:xfrm><a:off x="$leftX" y="550000"/><a:ext cx="3100000" cy="360000"/></a:xfrm>
           <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom>
@@ -732,7 +732,7 @@ class PptxExporter {
         </p:txBody>
       </p:sp>
       <p:sp>
-        <p:nvSpPr><p:cNvPr id="7" name="TakeawayCard"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+        <p:nvSpPr><p:cNvPr id="7" name="Takeaway"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
         <p:spPr>
           <a:xfrm><a:off x="7800000" y="1550000"/><a:ext cx="3712000" cy="4500000"/></a:xfrm>
           <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 5000"/></a:avLst></a:prstGeom>
