@@ -204,6 +204,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   notebookId: widget.notebookId,
                   subject: _activeSubject,
                   initialPrompt: widget.initialPrompt,
+                  showQuickActions: widget.notebookId != null && widget.notebookId!.isNotEmpty,
                 ),
               ),
             ],

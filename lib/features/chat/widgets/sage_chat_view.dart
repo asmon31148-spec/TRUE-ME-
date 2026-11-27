@@ -25,12 +25,14 @@ class SageChatView extends ConsumerStatefulWidget {
   final String? notebookId;
   final String? subject;
   final String? initialPrompt;
+  final bool showQuickActions;
 
   const SageChatView({
     super.key,
     this.notebookId,
     this.subject,
     this.initialPrompt,
+    this.showQuickActions = true,
   });
 
   @override
@@ -987,8 +989,8 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                 ),
         ),
 
-        // Quick Action Strips when actively chatting
-        if (chatState.messages.isNotEmpty)
+        // Quick Action Strips when actively chatting (Subject AI only; hidden in main Sage AI)
+        if (chatState.messages.isNotEmpty && widget.showQuickActions && hasSubject)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 6, bottom: 4),
