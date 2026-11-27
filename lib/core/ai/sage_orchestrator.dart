@@ -134,7 +134,7 @@ class SageOrchestrator {
     final strippedTopic = q
         .replaceAll(
           RegExp(
-            r'\b(make|create|generate|build|export|give|me|a|an|the|pdf|docx|pptx|slides|presentation|quiz|flashcards|mind ?map|please)\b',
+            r'\b(make|create|generate|build|export|give|me|a|an|the|pdf|docx|pptx|ppt|slides|presentation|quiz|flashcards|mind ?map|please)\b',
             caseSensitive: false,
           ),
           '',
