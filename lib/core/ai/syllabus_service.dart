@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../services/cloud_vault_service.dart';
+import '../services/mega_vault_service.dart';
 import '../services/offline_cache_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/text_chunker.dart';
@@ -113,6 +116,85 @@ class SyllabusService {
       if (existing.length > 150) existing.removeRange(150, existing.length);
       await _notebooksBox.put('$_artifactBoxPrefix$notebookId', existing);
       unawaited(_syncArtifactToSupabase(entry));
+  }
+
+  /// Renames a generated study artifact locally, in Supabase, and in MEGA Vault if backed up.
+  static Future<void> renameArtifact(
+    String notebookId,
+    String artifactId,
+    String newTitle,
+  ) async {
+    final clean = newTitle.trim();
+    if (clean.isEmpty) return;
+    final list = getArtifacts(notebookId);
+    final idx = list.indexWhere((a) => a['id'] == artifactId || a['documentId'] == artifactId);
+    if (idx < 0) return;
+
+    final updated = Map<String, dynamic>.from(list[idx]);
+    updated['title'] = clean;
+    list[idx] = updated;
+    await _notebooksBox.put('$_artifactBoxPrefix$notebookId', list);
+    unawaited(_syncArtifactToSupabase(updated));
+
+    final vaultId = updated['vaultId']?.toString() ?? '';
+    if (vaultId.isNotEmpty) {
+      final path = updated['filePath']?.toString() ?? '';
+      final ext = path.contains('.') ? '.${path.split('.').last}' : '';
+      final megaName = ext.isNotEmpty && !clean.toLowerCase().endsWith(ext.toLowerCase())
+          ? '$clean$ext'
+          : clean;
+      unawaited(CloudVaultService.renameFile(vaultId, megaName));
+    }
+  }
+
+  /// Deletes a generated study artifact from local device storage, Hive, Supabase, and MEGA Vault.
+  static Future<void> deleteArtifact(
+    String notebookId,
+    String artifactId, {
+    String? subject,
+  }) async {
+    final list = getArtifacts(notebookId);
+    final idx = list.indexWhere((a) => a['id'] == artifactId || a['documentId'] == artifactId);
+    if (idx < 0) return;
+
+    final target = Map<String, dynamic>.from(list[idx]);
+    final localPath = target['filePath']?.toString() ?? '';
+    if (localPath.isNotEmpty) {
+      try {
+        final f = File(localPath);
+        if (f.existsSync()) await f.delete();
+      } catch (_) {}
+    }
+
+    String vaultId = target['vaultId']?.toString() ?? '';
+    if (vaultId.isEmpty && MegaVaultService.instance.isSignedIn && localPath.isNotEmpty) {
+      try {
+        final fileName = localPath.split(RegExp(r'[/\\]')).last;
+        final files = await MegaVaultService.instance.listFiles(subject: subject);
+        final match = files.where((f) => f.name == fileName).firstOrNull;
+        if (match != null) vaultId = match.id;
+      } catch (_) {}
+    }
+    if (vaultId.isNotEmpty) {
+      await CloudVaultService.deleteFile(vaultId);
+    }
+
+    list.removeAt(idx);
+    await _notebooksBox.put('$_artifactBoxPrefix$notebookId', list);
+
+    try {
+      final client = SupabaseService.instance.clientOrNull;
+      final uid = SupabaseService.instance.authUserId;
+      if (client != null && uid != null) {
+        await client
+            .from('study_artifacts')
+            .delete()
+            .eq('id', artifactId)
+            .eq('user_id', uid);
+      }
+    } catch (e) {
+      lastSyncError = 'Artifact delete sync failed: $e';
+    }
   }
 
   static Future<void> _syncArtifactToSupabase(Map<String, dynamic> entry) async {

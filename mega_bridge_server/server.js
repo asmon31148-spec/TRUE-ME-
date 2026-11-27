@@ -362,6 +362,23 @@ app.delete('/mega/file/:fileId', verifyToken, async (req, res) => {
   }
 });
 
+app.patch('/mega/file/:fileId', verifyToken, async (req, res) => {
+  const { email, password } = req.megaCreds;
+  const { fileId } = req.params;
+  const newName = (req.body?.name || '').toString().trim();
+  if (!newName) return res.status(400).json({ error: 'New file name is required.' });
+
+  try {
+    const storage = await getMegaStorage(email, password);
+    const file = storage.files[fileId];
+    if (!file) return res.status(404).json({ error: 'File not found.' });
+    await file.rename(newName);
+    res.json({ success: true, renamed: fileId, name: newName });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/mega/vault', verifyToken, async (req, res) => {
   const { email, password } = req.megaCreds;
   try {

@@ -335,6 +335,41 @@ class MegaVaultService {
     return res.data ?? [];
   }
 
+  /// Deletes a single file from the user's MEGA account by its [fileId].
+  Future<bool> deleteFile(String fileId) async {
+    if (fileId.trim().isEmpty) return false;
+    final token = await _getToken();
+    if (token == null || token.isEmpty || !hasBridgeConfigured) return false;
+    try {
+      await _client().delete(
+        '/mega/file/$fileId',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      return true;
+    } catch (e) {
+      lastError = _humanizeError(e);
+      return false;
+    }
+  }
+
+  /// Renames a single file inside the user's MEGA account by its [fileId].
+  Future<bool> renameFile(String fileId, String newName) async {
+    if (fileId.trim().isEmpty || newName.trim().isEmpty) return false;
+    final token = await _getToken();
+    if (token == null || token.isEmpty || !hasBridgeConfigured) return false;
+    try {
+      await _client().patch(
+        '/mega/file/$fileId',
+        data: {'name': newName.trim()},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      return true;
+    } catch (e) {
+      lastError = _humanizeError(e);
+      return false;
+    }
+  }
+
   /// Deletes the `True Me` folder inside user's MEGA account when deleting all data.
   Future<void> deleteVaultFolder() async {
     final token = await _getToken();

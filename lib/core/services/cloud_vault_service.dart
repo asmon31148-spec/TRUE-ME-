@@ -60,6 +60,22 @@ class CloudVaultService {
     return null;
   }
 
+  static Future<bool> deleteFile(String fileId) async {
+    if (fileId.trim().isEmpty) return false;
+    if (MegaVaultService.instance.isSignedIn) {
+      return await MegaVaultService.instance.deleteFile(fileId);
+    }
+    return false;
+  }
+
+  static Future<bool> renameFile(String fileId, String newName) async {
+    if (fileId.trim().isEmpty || newName.trim().isEmpty) return false;
+    if (MegaVaultService.instance.isSignedIn) {
+      return await MegaVaultService.instance.renameFile(fileId, newName);
+    }
+    return false;
+  }
+
   static Future<void> deleteAllCloudVaults() async {
     if (MegaVaultService.instance.isSignedIn) {
       await MegaVaultService.instance.deleteVaultFolder();

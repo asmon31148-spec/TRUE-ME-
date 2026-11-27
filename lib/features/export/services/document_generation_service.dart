@@ -239,6 +239,19 @@ class DocumentGenerationService {
     final outFile = File('${dir.path}/$fileName');
     await outFile.writeAsBytes(bytes, flush: true);
 
+    String? uploadedVaultId;
+    if (CloudVaultService.isAnyVaultConnected) {
+      try {
+        final cloudRes = await CloudVaultService.uploadFile(
+          outFile,
+          customName: fileName,
+          subject: subject,
+          section: 'Notes',
+        );
+        uploadedVaultId = cloudRes?.fileId;
+      } catch (_) {}
+    }
+
     await SyllabusService.saveArtifact(
       documentId: docId,
       notebookId: targetNbId,
@@ -253,21 +266,11 @@ class DocumentGenerationService {
       fileSize: bytes.length,
       slideCount: slideCount,
       generationState: 'ready',
+      vaultId: uploadedVaultId,
       sourceChatId: sourceChatId,
       sourceRefs: structuredDoc.sourceReferences,
       contentJson: structuredDoc.toMap(),
     );
-
-    if (CloudVaultService.isAnyVaultConnected) {
-      try {
-        await CloudVaultService.uploadFile(
-          outFile,
-          customName: fileName,
-          subject: subject,
-          section: 'Notes',
-        );
-      } catch (_) {}
-    }
 
     return GeneratedDocumentResult(
       documentId: docId,

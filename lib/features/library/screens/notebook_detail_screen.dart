@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -66,6 +67,58 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
       initialSection: initialSection,
       onFileAdded: _loadNotebook,
     );
+  }
+
+  Future<void> _promptRenameArtifact(String artId, String currentTitle) async {
+    final ctrl = TextEditingController(text: currentTitle);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Rename Study Material', style: AppTypography.sectionHeading),
+        content: AppInput(controller: ctrl, autofocus: true, hintText: 'New title'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(90, 42)),
+            onPressed: () => Navigator.pop(dCtx, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName != null && newName.isNotEmpty) {
+      await SyllabusService.renameArtifact(widget.notebookId, artId, newName);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _confirmDeleteArtifact(String artId, String title, String subject) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Study Material?'),
+        content: Text(
+          'Delete "$title"? This removes it from your Study Library, device storage, and MEGA Vault if backed up.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await SyllabusService.deleteArtifact(widget.notebookId, artId, subject: subject);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted "$title"')),
+        );
+      }
+    }
   }
 
   void _showRenameDialog() {
@@ -917,6 +970,119 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 22),
+                        Builder(
+                          builder: (ctx) {
+                            final allArtifacts = SyllabusService.getArtifacts(widget.notebookId);
+                            if (allArtifacts.isEmpty) return const SizedBox.shrink();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                TrueMeSectionHeader(
+                                  title: 'Saved Study Materials (${allArtifacts.length})',
+                                ),
+                                const SizedBox(height: 10),
+                                ...allArtifacts.map((art) {
+                                  final artId = art['id']?.toString() ??
+                                      art['documentId']?.toString() ??
+                                      '';
+                                  final artTitle = art['title']?.toString() ?? 'Study Material';
+                                  final artType = (art['artifactType']?.toString() ?? 'doc').toUpperCase();
+                                  final path = art['filePath']?.toString();
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: TrueMeCard(
+                                      borderRadius: 16,
+                                      padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                                      onTap: () async {
+                                        if (path != null && File(path).existsSync()) {
+                                          await DocumentViewerScreen.open(
+                                            context,
+                                            filePath: path,
+                                            title: artTitle,
+                                          );
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('$artTitle ($artType)')),
+                                          );
+                                        }
+                                      },
+                                      child: Row(
+                                        children: [
+                                          TrueMeTonalPill(
+                                            label: artType,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 3),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  artTitle,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: context.textPrimary,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  art['topicLabel']?.toString() ?? title,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: AppTypography.smallLabel
+                                                      .copyWith(color: context.textSecondary),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuButton<String>(
+                                            icon: Icon(Icons.more_vert_rounded,
+                                                size: 18, color: context.textSecondary),
+                                            onSelected: (val) async {
+                                              if (artId.isEmpty) return;
+                                              if (val == 'rename') {
+                                                await _promptRenameArtifact(artId, artTitle);
+                                              } else if (val == 'delete') {
+                                                await _confirmDeleteArtifact(artId, artTitle, title);
+                                              }
+                                            },
+                                            itemBuilder: (_) => const [
+                                              PopupMenuItem(
+                                                value: 'rename',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.edit_outlined, size: 17),
+                                                    SizedBox(width: 8),
+                                                    Text('Rename'),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.delete_outline_rounded,
+                                                        size: 17, color: AppColors.error),
+                                                    SizedBox(width: 8),
+                                                    Text('Delete',
+                                                        style: TextStyle(color: AppColors.error)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 24),
                       ],

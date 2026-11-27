@@ -95,6 +95,65 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
     super.dispose();
   }
 
+  Future<void> _promptRenameArtifact(String artId, String currentTitle) async {
+    final ctrl = TextEditingController(text: currentTitle);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Rename Study Material'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Enter new title'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dCtx, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName != null && newName.isNotEmpty) {
+      await SyllabusService.renameArtifact(widget.notebookId, artId, newName);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _confirmDeleteArtifact(String artId, String title) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Study Material?'),
+        content: Text(
+          'Delete "$title"? This removes it from your Study Library, device storage, and MEGA Vault if backed up.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await SyllabusService.deleteArtifact(
+        widget.notebookId,
+        artId,
+        subject: widget.subject,
+      );
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted "$title"')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final artifacts = SyllabusService.getArtifacts(
@@ -180,7 +239,47 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.open_in_new_rounded, size: 17, color: context.textSecondary),
+                                PopupMenuButton<String>(
+                                  icon: Icon(Icons.more_vert_rounded,
+                                      size: 18, color: context.textSecondary),
+                                  onSelected: (val) async {
+                                    final artId = art['id']?.toString() ??
+                                        art['documentId']?.toString() ??
+                                        '';
+                                    if (artId.isEmpty) return;
+                                    if (val == 'rename') {
+                                      await _promptRenameArtifact(artId,
+                                          art['title']?.toString() ?? widget.toolTitle);
+                                    } else if (val == 'delete') {
+                                      await _confirmDeleteArtifact(artId,
+                                          art['title']?.toString() ?? widget.toolTitle);
+                                    }
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'rename',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 17),
+                                          SizedBox(width: 8),
+                                          Text('Rename'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline_rounded,
+                                              size: 17, color: AppColors.error),
+                                          SizedBox(width: 8),
+                                          Text('Delete',
+                                              style: TextStyle(color: AppColors.error)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
