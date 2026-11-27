@@ -250,7 +250,15 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: TextField(
                     controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+                    onChanged: (v) {
+                      setState(() {
+                        _searchQuery = v.trim().toLowerCase();
+                        _currentSlideIdx = 0;
+                      });
+                      if (_format == ParsedDocFormat.pptx && _slidePageCtrl.hasClients) {
+                        _slidePageCtrl.jumpToPage(0);
+                      }
+                    },
                     decoration: InputDecoration(
                       hintText: 'Search inside document...',
                       prefixIcon: const Icon(Icons.search, size: 18),
@@ -294,7 +302,14 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
       return '$badge · Page $_currentPdfPage / ${_pdfPages.length}';
     }
     if (_format == ParsedDocFormat.pptx && _pptxSlides.isNotEmpty) {
-      return '$badge · Slide ${_currentSlideIdx + 1} / ${_pptxSlides.length}';
+      if (_searchQuery.isNotEmpty) {
+        return '$badge · Filtered Search (${_pptxSlides.length} total slides)';
+      }
+      final safeIdx = _currentSlideIdx.clamp(0, _pptxSlides.length - 1);
+      return '$badge · Slide ${_pptxSlides[safeIdx].index} / ${_pptxSlides.length}';
+    }
+    if (_format == ParsedDocFormat.docx) {
+      return '$badge · Semantic Reader';
     }
     return '$badge · In-App Reader';
   }
@@ -468,7 +483,9 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
                           : null,
                     ),
                     Text(
-                      '${_currentSlideIdx + 1} / ${slides.length}',
+                      _searchQuery.isNotEmpty
+                          ? 'Match ${_currentSlideIdx.clamp(0, slides.length - 1) + 1}/${slides.length} · Deck ${slides[_currentSlideIdx.clamp(0, slides.length - 1)].index}/${_pptxSlides.length}'
+                          : 'Slide ${slides[_currentSlideIdx.clamp(0, slides.length - 1)].index} / ${_pptxSlides.length}',
                       style: TextStyle(fontWeight: FontWeight.w700, color: context.textPrimary),
                     ),
                     OutlinedButton.icon(
@@ -492,16 +509,31 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
     }
   }
 
+  Color? _parseHexColor(String? hex) {
+    if (hex == null || hex.length != 6) return null;
+    final parsed = int.tryParse('FF$hex', radix: 16);
+    return parsed != null ? Color(parsed) : null;
+  }
+
   Widget _buildDocxBlock(ParsedDocxBlock b) {
+    final accent = _parseHexColor(b.accentHex) ?? context.accentColor;
+    final fill = _parseHexColor(b.fillHex);
+
     switch (b.kind) {
       case 'title':
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+        final titleColor = _parseHexColor(b.accentHex) ?? context.textPrimary;
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: fill != null ? const EdgeInsets.all(14) : EdgeInsets.zero,
+          decoration: fill != null
+              ? BoxDecoration(color: fill, borderRadius: BorderRadius.circular(12))
+              : null,
           child: SelectableText(
             b.text,
             style: AppTypography.editorialHero.copyWith(
-              fontSize: 24 * _docxScale,
-              color: context.textPrimary,
+              fontSize: 23 * _docxScale,
+              color: titleColor,
             ),
           ),
         );
@@ -512,7 +544,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
             b.text,
             style: AppTypography.sectionHeading.copyWith(
               fontSize: 18.5 * _docxScale,
-              color: context.accentColor,
+              color: accent,
             ),
           ),
         );
@@ -524,6 +556,26 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
             style: TextStyle(
               fontSize: 16 * _docxScale,
               fontWeight: FontWeight.w700,
+              color: _parseHexColor(b.accentHex) ?? context.textPrimary,
+            ),
+          ),
+        );
+      case 'callout':
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: fill ?? context.surfaceColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border(left: BorderSide(color: accent, width: 4)),
+          ),
+          child: SelectableText(
+            b.text,
+            style: TextStyle(
+              fontSize: 14 * _docxScale,
+              fontWeight: FontWeight.w600,
+              height: 1.45,
               color: context.textPrimary,
             ),
           ),

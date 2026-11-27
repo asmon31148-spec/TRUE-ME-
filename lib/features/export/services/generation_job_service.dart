@@ -227,6 +227,7 @@ class GenerationJobService {
         sourceChatId: sourceChatId,
         depthLevel: depthLevel,
         idempotencyKey: jobId,
+        requireSourceGrounding: scopeLabel.startsWith('Full Subject') || scopeLabel.startsWith('Topic:'),
         onStageChanged: (idx, label) {
           current = current.copyWith(
             status: GenerationJobStatus.running,

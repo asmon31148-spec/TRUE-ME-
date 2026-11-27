@@ -114,6 +114,13 @@ class DocumentGenerationService {
     return created['id'].toString();
   }
 
+  static bool isUnreadableSourcePlaceholder(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return true;
+    return t.contains('No selectable text could be extracted automatically') ||
+        t.contains('No selectable text found; consider using Photo OCR');
+  }
+
   static Future<GeneratedDocumentResult> generateAndSave({
     required AiRouter aiRouter,
     required String format, // 'pdf' | 'docx' | 'pptx'
@@ -128,6 +135,7 @@ class DocumentGenerationService {
     String depthLevel = 'Course Level',
     String customInstructions = '',
     String? idempotencyKey,
+    bool requireSourceGrounding = false,
     void Function(int stageIndex, String stageLabel)? onStageChanged,
   }) async {
     onStageChanged?.call(0, 'Understanding request & selected scope...');
@@ -140,6 +148,13 @@ class DocumentGenerationService {
     final effectiveContext = (sourceContext != null && sourceContext.trim().isNotEmpty)
         ? sourceContext.trim()
         : OfflineCacheService.getNotebookCombinedText(targetNbId, maxChars: 120000);
+
+    if (requireSourceGrounding && isUnreadableSourcePlaceholder(effectiveContext)) {
+      throw StateError(
+        'Selected source has no readable text (likely a scanned PDF). '
+        'Use Photo OCR or add readable notes before generating a source-grounded document.',
+      );
+    }
 
     onStageChanged?.call(2, 'Extracting, chunking & analyzing source content...');
     final structuredDoc = await DocumentPipelineService.generateStructuredDocument(

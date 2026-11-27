@@ -474,5 +474,32 @@ void main() {
       expect(ctxWithSrc.systemPrompt, contains('VERIFIED SOURCE EXCERPTS'));
       expect(ctxWithSrc.systemPrompt, contains('peptidoglycan'));
     });
+
+    test('DocumentGenerationService detects unreadable scanned PDF placeholders', () {
+      expect(
+        DocumentGenerationService.isUnreadableSourcePlaceholder(
+          'Uploaded file: Book.pdf (112.0 MB). No selectable text could be extracted automatically.',
+        ),
+        isTrue,
+      );
+      expect(
+        DocumentGenerationService.isUnreadableSourcePlaceholder(
+          'Gram-positive bacteria possess a thick peptidoglycan cell wall.',
+        ),
+        isFalse,
+      );
+    });
+
+    test('DocumentParserService preserves DOCX callout shading and accent colors', () {
+      final bytes = DocxExporter.createDocument(
+        title: 'Microbiology',
+        subject: 'Biology',
+        content: '# Cell Wall\nNote: Gram-positive stains purple.',
+        style: DocxStudyStyle.professionalResearchReport,
+      );
+      final blocks = DocumentParserService.parseDocx(bytes);
+      expect(blocks.any((b) => b.kind == 'title' && b.fillHex == '1E3A8A'), isTrue);
+      expect(blocks.any((b) => b.kind == 'callout' && b.fillHex == 'EFF6FF'), isTrue);
+    });
   });
 }

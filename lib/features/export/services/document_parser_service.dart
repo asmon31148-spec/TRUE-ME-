@@ -5,14 +5,18 @@ import 'package:archive/archive.dart';
 enum ParsedDocFormat { pdf, docx, pptx, unknown }
 
 class ParsedDocxBlock {
-  final String kind; // 'title' | 'heading1' | 'heading2' | 'bullet' | 'paragraph' | 'table'
+  final String kind; // 'title' | 'heading1' | 'heading2' | 'bullet' | 'paragraph' | 'table' | 'callout'
   final String text;
   final List<List<String>> rows;
+  final String? fillHex;
+  final String? accentHex;
 
   const ParsedDocxBlock({
     required this.kind,
     this.text = '',
     this.rows = const [],
+    this.fillHex,
+    this.accentHex,
   });
 }
 
@@ -112,24 +116,32 @@ class DocumentParserService {
 
       final sizeMatch = RegExp(r'<w:sz\s+w:val="(\d+)"').firstMatch(chunk);
       final sz = sizeMatch != null ? int.tryParse(sizeMatch.group(1)!) ?? 22 : 22;
+      final fillMatch = RegExp(r'<w:shd[^>]*w:fill="([0-9A-Fa-f]{6})"').firstMatch(chunk);
+      final fillHex = fillMatch?.group(1);
+      final colorMatch = RegExp(r'<w:color\s+w:val="([0-9A-Fa-f]{6})"').firstMatch(chunk);
+      final accentHex = colorMatch?.group(1);
+      final hasLeftBorder = RegExp(r'<w:pBdr>[\s\S]*?<w:left\b').hasMatch(chunk);
       final isHeadingStyle = RegExp(r'Heading1|Title', caseSensitive: false).hasMatch(chunk);
       final isSubHeadingStyle = RegExp(r'Heading2|Heading3', caseSensitive: false).hasMatch(chunk);
 
       if (sz >= 40 || (isHeadingStyle && blocks.isEmpty)) {
-        blocks.add(ParsedDocxBlock(kind: 'title', text: text));
+        blocks.add(ParsedDocxBlock(kind: 'title', text: text, fillHex: fillHex, accentHex: accentHex));
       } else if (sz >= 30 || isHeadingStyle) {
-        blocks.add(ParsedDocxBlock(kind: 'heading1', text: text));
+        blocks.add(ParsedDocxBlock(kind: 'heading1', text: text, accentHex: accentHex));
       } else if (sz >= 25 || isSubHeadingStyle) {
-        blocks.add(ParsedDocxBlock(kind: 'heading2', text: text));
+        blocks.add(ParsedDocxBlock(kind: 'heading2', text: text, accentHex: accentHex));
+      } else if (hasLeftBorder || (fillHex != null && fillHex.toUpperCase() != 'FFFFFF')) {
+        blocks.add(ParsedDocxBlock(kind: 'callout', text: text, fillHex: fillHex, accentHex: accentHex));
       } else if (text.startsWith('•') || text.startsWith('- ') || chunk.contains('<w:numPr>')) {
         blocks.add(
           ParsedDocxBlock(
             kind: 'bullet',
             text: text.replaceFirst(RegExp(r'^[•\-]\s*'), ''),
+            accentHex: accentHex,
           ),
         );
       } else {
-        blocks.add(ParsedDocxBlock(kind: 'paragraph', text: text));
+        blocks.add(ParsedDocxBlock(kind: 'paragraph', text: text, accentHex: accentHex));
       }
     }
 

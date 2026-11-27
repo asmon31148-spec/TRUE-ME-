@@ -57,34 +57,17 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
     super.dispose();
   }
 
-  double get _progress {
-    final secs = _elapsedMs / 1000.0;
-    if (secs < 1.5) return 0.12 + (secs / 1.5) * 0.22;
-    if (secs < 5.0) return 0.34 + ((secs - 1.5) / 3.5) * 0.38;
-    if (secs < 15.0) return 0.72 + ((secs - 5.0) / 10.0) * 0.18;
-    return (0.90 + ((secs - 15.0) / 35.0) * 0.06).clamp(0.90, 0.96);
-  }
-
-  String _currentStage(int pct) {
-    if (widget.stages.isEmpty) return 'Generating...';
-    if (pct < 28) return widget.stages[0];
-    if (pct < 65 && widget.stages.length > 1) return widget.stages[1];
-    if (pct < 88 && widget.stages.length > 2) return widget.stages[2];
-    return widget.stages.last;
-  }
-
   @override
   Widget build(BuildContext context) {
     final hasRealStage = widget.realStageLabel != null && widget.realStageIndex != null;
     final total = widget.realTotalStages ?? 7;
-    final value = hasRealStage
+    final double? value = hasRealStage
         ? ((widget.realStageIndex! + 1) / total).clamp(0.08, 1.0)
-        : _progress;
-    final pct = (value * 100).round();
+        : null; // Honest indeterminate when real stage counts are absent
     final elapsedSec = (_elapsedMs / 1000).floor();
     final stage = hasRealStage
         ? 'Stage ${widget.realStageIndex! + 1}/$total · ${widget.realStageLabel!}'
-        : _currentStage(pct);
+        : (widget.stages.isNotEmpty ? widget.stages.first : 'Working...');
 
     if (widget.compact) {
       return TrueMeCard(
@@ -105,13 +88,20 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
                   ),
                 ),
                 TrueMeTonalPill(
-                  label: '$pct%',
+                  label: hasRealStage
+                      ? 'Step ${widget.realStageIndex! + 1}/$total'
+                      : 'In Progress',
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            AppProgressBar(value: value),
+            value != null
+                ? AppProgressBar(value: value)
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: const LinearProgressIndicator(minHeight: 6),
+                  ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -136,27 +126,33 @@ class _GenerationProgressViewState extends State<GenerationProgressView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TrueMeCircularRing(
-                progress: value,
-                size: 92,
-                strokeWidth: 8,
-                gradientColors: const [
-                  AppColors.accent,
-                  AppColors.secondary,
-                  AppColors.accentCyan,
-                  AppColors.accent,
-                ],
-                center: Text(
-                  '$pct%',
-                  style: TextStyle(
-                    fontFamily: 'Georgia',
-                    fontFamilyFallback: AppTypography.serifFallbacks,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: context.textPrimary,
-                  ),
-                ),
-              ),
+              value != null
+                  ? TrueMeCircularRing(
+                      progress: value,
+                      size: 92,
+                      strokeWidth: 8,
+                      gradientColors: const [
+                        AppColors.accent,
+                        AppColors.secondary,
+                        AppColors.accentCyan,
+                        AppColors.accent,
+                      ],
+                      center: Text(
+                        '${widget.realStageIndex! + 1}/$total',
+                        style: TextStyle(
+                          fontFamily: 'Georgia',
+                          fontFamilyFallback: AppTypography.serifFallbacks,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: context.textPrimary,
+                        ),
+                      ),
+                    )
+                  : const SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: CircularProgressIndicator(strokeWidth: 5),
+                    ),
               const SizedBox(height: 20),
               Text(
                 widget.title,
