@@ -207,6 +207,20 @@ class DocumentLayoutValidator {
             takeaway: null,
           );
         }
+        // If tableRows were also present on the same slide, emit a dedicated table slide
+        if (slide.tableRows != null && slide.tableRows!.length >= 2) {
+          autoSplits++;
+          optimized.add(
+            PptxSlideData(
+              title: '${slide.title} — Comparison',
+              subtitle: slide.subtitle,
+              tag: 'COMPARISON',
+              bulletPoints: const [],
+              tableRows: slide.tableRows,
+              layoutKind: SlideLayoutKind.table,
+            ),
+          );
+        }
         continue;
       }
 

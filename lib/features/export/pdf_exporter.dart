@@ -411,90 +411,80 @@ class PdfExporter {
       for (int c = 0; c < chunk.length; c++) {
         final stepNum = i + c + 1;
         final box = pw.Expanded(
-          child: pw.Stack(
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                decoration: pw.BoxDecoration(
-                  color: cardBg,
-                  borderRadius: pw.BorderRadius.circular(isSketchy ? 10 : 5),
-                  border: pw.Border.all(
-                    color: accent,
-                    width: isSketchy ? 1.2 : 1.0,
-                  ),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: pw.BoxDecoration(
-                        color: accent,
-                        borderRadius: pw.BorderRadius.circular(4),
-                      ),
-                      child: pw.Text(
-                        'STEP $stepNum',
-                        style: pw.TextStyle(
-                          fontSize: 7,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white,
-                        ),
-                      ),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      _sanitize(chunk[c]),
-                      style: pw.TextStyle(
-                        fontSize: 8.5,
-                        color: PdfColor.fromHex('#1E293B'),
-                        lineSpacing: 1.5,
-                      ),
-                    ),
-                  ],
+          child: pw.Container(
+            padding: isSketchy ? const pw.EdgeInsets.all(2) : pw.EdgeInsets.zero,
+            decoration: isSketchy
+                ? pw.BoxDecoration(
+                    borderRadius: pw.BorderRadius.circular(11),
+                    border: pw.Border.all(color: accent, width: 0.6),
+                  )
+                : null,
+            child: pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: pw.BoxDecoration(
+                color: cardBg,
+                borderRadius: pw.BorderRadius.circular(isSketchy ? 9 : 5),
+                border: pw.Border.all(
+                  color: accent,
+                  width: isSketchy ? 1.2 : 1.0,
                 ),
               ),
-              if (isSketchy)
-                pw.Positioned.fill(
-                  child: pw.CustomPaint(
-                    painter: (canvas, size) {
-                      canvas
-                        ..setStrokeColor(accent)
-                        ..setLineWidth(0.55)
-                        ..drawRect(2, 2, size.x - 4, size.y - 4)
-                        ..strokePath();
-                    },
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: pw.BoxDecoration(
+                      color: accent,
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Text(
+                      'STEP $stepNum',
+                      style: pw.TextStyle(
+                        fontSize: 7,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
                   ),
-                ),
-            ],
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    _sanitize(chunk[c]),
+                    style: pw.TextStyle(
+                      fontSize: 8.5,
+                      color: PdfColor.fromHex('#1E293B'),
+                      lineSpacing: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
         rowChildren.add(box);
         if (c < chunk.length - 1) {
           rowChildren.add(
-            pw.SizedBox(
-              width: 20,
-              height: 24,
-              child: pw.CustomPaint(
-                painter: (canvas, size) {
-                  final midY = size.y / 2;
+            pw.CustomPaint(
+              size: const PdfPoint(20, 24),
+              painter: (canvas, size) {
+                final midY = size.y / 2;
+                canvas
+                  ..setStrokeColor(accent)
+                  ..setLineWidth(isSketchy ? 1.4 : 1.1)
+                  ..moveTo(2, midY)
+                  ..lineTo(size.x - 4, midY)
+                  ..moveTo(size.x - 8, midY + 4)
+                  ..lineTo(size.x - 3, midY)
+                  ..lineTo(size.x - 8, midY - 4)
+                  ..strokePath();
+                if (isSketchy) {
                   canvas
-                    ..setStrokeColor(accent)
-                    ..setLineWidth(isSketchy ? 1.4 : 1.1)
-                    ..moveTo(2, midY)
-                    ..lineTo(size.x - 4, midY)
-                    ..moveTo(size.x - 8, midY + 4)
-                    ..lineTo(size.x - 3, midY)
-                    ..lineTo(size.x - 8, midY - 4)
+                    ..setLineWidth(0.6)
+                    ..moveTo(3, midY + 1.2)
+                    ..lineTo(size.x - 5, midY + 0.8)
                     ..strokePath();
-                  if (isSketchy) {
-                    canvas
-                      ..setLineWidth(0.6)
-                      ..moveTo(3, midY + 1.2)
-                      ..lineTo(size.x - 5, midY + 0.8)
-                      ..strokePath();
-                  }
-                },
-              ),
+                }
+              },
             ),
           );
         }
@@ -510,23 +500,20 @@ class PdfExporter {
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 3),
             child: pw.Center(
-              child: pw.SizedBox(
-                width: 18,
-                height: 14,
-                child: pw.CustomPaint(
-                  painter: (canvas, size) {
-                    final midX = size.x / 2;
-                    canvas
-                      ..setStrokeColor(accent)
-                      ..setLineWidth(1.1)
-                      ..moveTo(midX, size.y - 1)
-                      ..lineTo(midX, 2)
-                      ..moveTo(midX - 4, 6)
-                      ..lineTo(midX, 1)
-                      ..lineTo(midX + 4, 6)
-                      ..strokePath();
-                  },
-                ),
+              child: pw.CustomPaint(
+                size: const PdfPoint(18, 14),
+                painter: (canvas, size) {
+                  final midX = size.x / 2;
+                  canvas
+                    ..setStrokeColor(accent)
+                    ..setLineWidth(1.1)
+                    ..moveTo(midX, size.y - 1)
+                    ..lineTo(midX, 2)
+                    ..moveTo(midX - 4, 6)
+                    ..lineTo(midX, 1)
+                    ..lineTo(midX + 4, 6)
+                    ..strokePath();
+                },
               ),
             ),
           ),
