@@ -587,13 +587,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
           notebookId: targetNbId,
           sourceChatId: scopeKey,
         );
+        final actionType = outFmt == 'pdf'
+            ? SageActionType.exportPdf
+            : (outFmt == 'docx'
+                ? SageActionType.exportDocx
+                : SageActionType.exportPptx);
         final compoundMsg = ChatMessage(
           id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
           isUser: false,
           text:
               'Done! I built the **${primaryTool == 'mindmap' ? 'Visual Mind Map' : 'Practice Quiz'}** for **$subLabel — ${intentPlan.topic}** and exported it as a **${outFmt.toUpperCase()}** in your Study Library.',
           action: SageAction(
-            type: sec,
+            type: actionType,
             label: 'Open ${primaryTool == 'mindmap' ? 'Mind Map' : 'Quiz'} ${outFmt.toUpperCase()}',
             topic: res.title,
             filePath: res.filePath,

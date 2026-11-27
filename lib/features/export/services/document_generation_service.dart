@@ -483,11 +483,10 @@ class DocumentGenerationService {
 
     // Quiz -> PDF/DOCX/PPTX
     final rawQuiz = await aiRouter.generateQuiz(
-      topic: '$subject: $topic',
-      notesContent: sourceText.isNotEmpty
-          ? sourceText
+      content: sourceText.isNotEmpty
+          ? 'Topic: $subject ($topic)\n\n$sourceText'
           : 'Core exam concepts for $subject ($topic).',
-      questionCount: 8,
+      count: 8,
     );
     final quizData = AiRouter.parseJsonObject(rawQuiz);
     final questions = (quizData['questions'] as List? ?? [])
