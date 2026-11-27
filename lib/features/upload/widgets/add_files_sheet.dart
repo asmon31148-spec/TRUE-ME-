@@ -154,6 +154,11 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
             syllabusText: content,
           ).catchError((_) => <Map<String, dynamic>>[]),
         );
+      } else {
+        unawaited(
+          SyllabusService.mapSourcesToTopics(widget.notebookId)
+              .catchError((_) => <Map<String, dynamic>>[]),
+        );
       }
 
       if (mounted) {
@@ -170,6 +175,10 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
         onStage: (stage) {
           if (!mounted) return;
           setState(() => _statusText = '${stage.displayLabel} "$fileName"...');
+        },
+        onProgress: (done, total) {
+          if (!mounted) return;
+          setState(() => _statusText = 'Indexing "$fileName" ($done/$total chunks)...');
         },
       );
 

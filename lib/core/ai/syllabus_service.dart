@@ -294,6 +294,7 @@ ${segments[i]}
     }
 
     await saveSyllabusNodes(notebookId, [...newNodes, ...previous]);
+    await mapSourcesToTopics(notebookId);
     return newNodes;
   }
 

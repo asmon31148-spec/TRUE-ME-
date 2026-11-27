@@ -800,6 +800,19 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                   ),
                                 ],
                               ),
+                              if (!msg.isUser &&
+                                  msg.verification?.gapDisclosure != null &&
+                                  msg.verification!.gapDisclosure!.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  msg.verification!.gapDisclosure!,
+                                  style: AppTypography.smallLabel.copyWith(
+                                    color: context.textSecondary,
+                                    fontStyle: FontStyle.italic,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),

@@ -24,6 +24,7 @@ class RagService {
     List<ExtractedPage>? pages,
     String? sectionLabel,
     void Function(IngestionStatus status)? onStage,
+    void Function(int done, int total)? onProgress,
   }) async {
     try {
       onStage?.call(IngestionStatus.chunking);
@@ -74,7 +75,9 @@ class RagService {
         fileName: fileName,
       );
 
-      for (final chunk in chunks) {
+      for (int i = 0; i < chunks.length; i++) {
+        final chunk = chunks[i];
+        onProgress?.call(i + 1, chunks.length);
         final embedding = await _geminiService.generateEmbedding(chunk.content);
         if (embedding.length != 768) {
           throw IngestionException(
