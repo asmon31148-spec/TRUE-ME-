@@ -31,10 +31,14 @@ class SageContextBuilder {
     String? citationSource,
   }) {
     final effectiveSubject = subject?.trim() ?? '';
-    final cognitiveProfile = StudentCognitiveProfile.buildLive(
-      subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
-    );
-    final cognitiveContext = cognitiveProfile.toSageContextString();
+    StudentCognitiveProfile? cognitiveProfile;
+    try {
+      cognitiveProfile = StudentCognitiveProfile.buildLive(
+        subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
+      );
+    } catch (_) {}
+    final cognitiveContext = cognitiveProfile?.toSageContextString() ??
+        'Student Profile: Initialized (no local quiz/flashcard history yet).';
     final manifest = AppCapabilitiesManifest.manifestPrompt;
 
     String? syllabusSummary;
@@ -52,9 +56,13 @@ class SageContextBuilder {
       }
     }
 
-    final progressSummary = effectiveSubject.isNotEmpty
-        ? OfflineCacheService.getSubjectProgressSummary(effectiveSubject, notebookId: notebookId)
-        : '';
+    String progressSummary = '';
+    if (effectiveSubject.isNotEmpty) {
+      try {
+        progressSummary =
+            OfflineCacheService.getSubjectProgressSummary(effectiveSubject, notebookId: notebookId);
+      } catch (_) {}
+    }
 
     final scopeInstruction = effectiveSubject.isNotEmpty
         ? 'You are scoped to the subject "$effectiveSubject". Stay grounded in "$effectiveSubject" and never leak another subject\'s data.\n'
@@ -68,7 +76,10 @@ class SageContextBuilder {
         : '\n### SOURCE STATUS:\nNo matching uploaded source excerpt was retrieved for this query. '
             'Be honest if a detail is general knowledge rather than from the student\'s uploaded notes.';
 
-    final tierName = (cognitiveProfile.activeSubjectTier ?? cognitiveProfile.overallTier).name.toUpperCase();
+    final tierName =
+        (cognitiveProfile?.activeSubjectTier ?? cognitiveProfile?.overallTier ?? LearningTier.intermediate)
+            .name
+            .toUpperCase();
     final systemPrompt = '''
 You are Sage, the autonomous cognitive study companion, diagnostic mentor, and academic co-pilot for $studentName in the True Me app.
 $scopeInstruction
