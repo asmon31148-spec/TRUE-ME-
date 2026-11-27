@@ -50,46 +50,46 @@ class StylePickerSheet extends StatelessWidget {
   static const List<StyleOption> docxStyles = [
     StyleOption(
       id: 'elegant_academic_notes',
-      name: 'Elegant Academic Notes',
-      description: 'Refined typography, strong headings & structured definitions',
-    ),
-    StyleOption(
-      id: 'professional_research_report',
-      name: 'Professional Research Report',
-      description: 'Formal title block, numbered sections, tables & references',
-    ),
-    StyleOption(
-      id: 'cute_creative_notes',
-      name: 'Cute Creative Notes',
-      description: 'Pastel panels, highlighted vocabulary & comparison cards',
+      name: 'Classic Elegant',
+      description: 'Refined serif typography, centered emblem & structured definitions',
     ),
     StyleOption(
       id: 'modern_minimal',
       name: 'Modern Minimal',
-      description: 'Disciplined grid, restrained type & generous whitespace',
+      description: 'Disciplined grid, geometric accent & generous whitespace',
+    ),
+    StyleOption(
+      id: 'creative_academic',
+      name: 'Creative Academic',
+      description: 'Soft lavender header, highlighted vocabulary & comparison cards',
+    ),
+    StyleOption(
+      id: 'corporate_professional',
+      name: 'Corporate Professional',
+      description: 'Deep navy title block, numbered sections, tables & references',
     ),
   ];
 
   static const List<StyleOption> pptxStyles = [
     StyleOption(
-      id: 'creative_illustrated',
-      name: 'Creative Illustrated',
-      description: 'Story-led slides, visual metaphors & concise points',
+      id: 'pastel_floral',
+      name: 'Pastel Floral',
+      description: 'Soft blush canvas, botanical accents & friendly rounded cards',
     ),
     StyleOption(
-      id: 'professional_scientific',
-      name: 'Professional Scientific',
-      description: 'Restrained palette, precise labels & evidence-led flow',
+      id: 'dark_neon',
+      name: 'Dark Neon',
+      description: 'Deep space slate, glowing cyan & magenta neon accents',
     ),
     StyleOption(
-      id: 'minimal_editorial',
-      name: 'Minimal Editorial',
-      description: 'One main idea per slide, bold type & negative space',
+      id: 'modern_business',
+      name: 'Modern Business',
+      description: 'Executive white & corporate blue geometric split layout',
     ),
     StyleOption(
-      id: 'infographic_presentation',
-      name: 'Infographic Presentation',
-      description: 'Process flows, comparison matrices & visual takeaways',
+      id: 'creative_infographic',
+      name: 'Creative Infographic',
+      description: 'Vibrant sky & gold visual flowcharts, bento grids & stat cards',
     ),
   ];
 

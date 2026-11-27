@@ -15,12 +15,16 @@ class DocxExporter {
 
   static DocxStudyStyle fromStyleId(String? id) {
     switch ((id ?? '').toLowerCase()) {
+      case 'corporate_professional':
       case 'professional_research_report':
         return DocxStudyStyle.professionalResearchReport;
+      case 'creative_academic':
       case 'cute_creative_notes':
         return DocxStudyStyle.cuteCreativeNotes;
       case 'modern_minimal':
         return DocxStudyStyle.modernMinimal;
+      case 'classic_elegant':
+      case 'elegant_academic_notes':
       default:
         return DocxStudyStyle.elegantAcademicNotes;
     }
@@ -155,10 +159,14 @@ class DocxExporter {
         buf.write(_callout('Example: $ex', p));
       }
       if (s.processSteps.isNotEmpty) {
-        buf.write(_h2('Process Flow', p));
-        for (int k = 0; k < s.processSteps.length; k++) {
-          buf.write(_bullet('Step ${k + 1}: ${s.processSteps[k]}', p));
-        }
+        buf.write(_h2('Process Flowchart', p));
+        final flowRows = <List<String>>[
+          ['Stage', 'Action / Mechanism'],
+          ...s.processSteps.asMap().entries.map(
+                (e) => ['Step ${e.key + 1}', e.value],
+              ),
+        ];
+        buf.write(_table(flowRows, p));
       }
       if (s.tableRows.isNotEmpty) {
         buf.write(_table(s.tableRows, p));

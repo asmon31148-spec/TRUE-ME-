@@ -63,20 +63,26 @@ class DocumentGenerationService {
         if (q.contains('modern academic')) return 'modern_academic';
         return null;
       case 'docx':
-        if (q.contains('elegant')) return 'elegant_academic_notes';
-        if (q.contains('research report') || q.contains('professional')) {
-          return 'professional_research_report';
+        if (q.contains('elegant') || q.contains('classic')) return 'elegant_academic_notes';
+        if (q.contains('corporate') || q.contains('research report') || q.contains('professional')) {
+          return 'corporate_professional';
         }
-        if (q.contains('cute') || q.contains('creative')) return 'cute_creative_notes';
+        if (q.contains('creative') || q.contains('cute')) return 'creative_academic';
         if (q.contains('modern minimal')) return 'modern_minimal';
         return null;
       case 'pptx':
-        if (q.contains('creative') || q.contains('illustrated')) return 'creative_illustrated';
-        if (q.contains('scientific') || q.contains('professional')) {
-          return 'professional_scientific';
+        if (q.contains('pastel') || q.contains('floral') || q.contains('creative illustrated')) {
+          return 'pastel_floral';
         }
-        if (q.contains('minimal') || q.contains('editorial')) return 'minimal_editorial';
-        if (q.contains('infographic') || q.contains('dark')) return 'infographic_presentation';
+        if (q.contains('neon') || q.contains('dark') || q.contains('infographic presentation')) {
+          return 'dark_neon';
+        }
+        if (q.contains('business') || q.contains('scientific') || q.contains('professional')) {
+          return 'modern_business';
+        }
+        if (q.contains('infographic') || q.contains('minimal') || q.contains('editorial')) {
+          return 'creative_infographic';
+        }
         return null;
       default:
         return null;

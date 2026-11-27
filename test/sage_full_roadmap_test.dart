@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trueme/core/ai/answer_verifier.dart';
@@ -10,8 +12,11 @@ import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
 import 'package:trueme/core/services/offline_cache_service.dart';
 import 'package:trueme/core/services/supabase_service.dart';
+import 'package:trueme/features/export/models/structured_study_document.dart';
 import 'package:trueme/features/export/pdf_exporter.dart';
+import 'package:trueme/features/export/pptx_exporter.dart';
 import 'package:trueme/features/export/services/document_generation_service.dart';
+import 'package:trueme/features/export/services/document_layout_validator.dart';
 
 class _StubRagService extends RagService {
   _StubRagService() : super(supabaseService: SupabaseService.forTesting());
@@ -336,6 +341,81 @@ void main() {
         },
       );
       expect(pdfBytes.length, greaterThan(500));
+      expect(String.fromCharCodes(pdfBytes.take(5)), '%PDF-');
+    });
+
+    test('Layout Brain optimizes 16:9 PPTX flowcharts, tables, and PDF sketchy diagrams', () async {
+      final rawSlides = [
+        const PptxSlideData(
+          title: 'Cell Biology',
+          subtitle: 'Biology · Course Level',
+          bulletPoints: ['Understand organelles', 'Compare prokaryotes and eukaryotes'],
+        ),
+        const PptxSlideData(
+          title: 'Mitosis Phases',
+          bulletPoints: [],
+          processSteps: ['Prophase', 'Metaphase', 'Anaphase', 'Telophase'],
+        ),
+        const PptxSlideData(
+          title: 'Prokaryote vs Eukaryote',
+          bulletPoints: [],
+          tableRows: [
+            ['Feature', 'Prokaryote', 'Eukaryote'],
+            ['Nucleus', 'Absent', 'Present'],
+            ['Ribosomes', '70S', '80S'],
+          ],
+        ),
+      ];
+
+      final validated = DocumentLayoutValidator.validateAndOptimizeSlides(rawSlides);
+      expect(validated.slides[0].layoutKind, SlideLayoutKind.cover);
+      expect(validated.slides[1].layoutKind, SlideLayoutKind.flowchart);
+      expect(validated.slides[2].layoutKind, SlideLayoutKind.table);
+      expect(validated.report.score, greaterThanOrEqualTo(85));
+
+      final pptxBytes = PptxExporter.createPresentation(
+        presentationTitle: 'Cell Biology',
+        slides: rawSlides,
+        style: PptxExporter.fromStyleId('dark_neon'),
+      );
+      final archive = ZipDecoder().decodeBytes(pptxBytes);
+      final presXml = utf8.decode(
+        archive.firstWhere((f) => f.name == 'ppt/presentation.xml').content as List<int>,
+      );
+      expect(presXml, contains('cx="12192000" cy="6858000"'));
+
+      final flowXml = utf8.decode(
+        archive.firstWhere((f) => f.name == 'ppt/slides/slide2.xml').content as List<int>,
+      );
+      expect(flowXml, contains('prst="rightArrow"'));
+
+      final tableXml = utf8.decode(
+        archive.firstWhere((f) => f.name == 'ppt/slides/slide3.xml').content as List<int>,
+      );
+      expect(tableXml, contains('<a:tbl>'));
+
+      final doc = const StructuredStudyDocument(
+        title: 'Cell Biology',
+        subject: 'Biology',
+        topic: 'Cell Division',
+        purpose: 'Study Guide',
+        academicLevel: 'Course Level',
+        executiveSummary: 'Overview of cell division.',
+        sections: [
+          StudySectionBlock(
+            heading: 'Mitosis',
+            body: 'Cell division produces two identical daughter cells.',
+            processSteps: ['Prophase', 'Metaphase', 'Anaphase', 'Telophase'],
+          ),
+        ],
+      );
+      final pdfBytes = await PdfExporter.generateStudyGuidePdf(
+        title: doc.title,
+        subject: doc.subject,
+        content: doc.toStructuredMarkdown(),
+        structuredDoc: doc,
+        style: PdfStudyStyle.handwritten,
+      );
       expect(String.fromCharCodes(pdfBytes.take(5)), '%PDF-');
     });
   });

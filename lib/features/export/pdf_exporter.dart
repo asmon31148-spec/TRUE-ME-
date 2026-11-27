@@ -273,9 +273,7 @@ class PdfExporter {
           if (s.body.isNotEmpty) _buildParagraph(_sanitize(s.body), style),
           ...s.keyPoints.map((k) => _buildBullet(_sanitize(k), style)),
           ...s.examples.map((e) => _buildStickyCallout('Example: ${_sanitize(e)}', style)),
-          ...s.processSteps.asMap().entries.map(
-                (e) => _buildBullet('Step ${e.key + 1}: ${_sanitize(e.value)}', style),
-              ),
+          if (s.processSteps.isNotEmpty) _buildProcessFlowchart(s.processSteps, style),
           if (s.tableRows.isNotEmpty) _buildPdfTable(s.tableRows, style),
         ];
 
@@ -361,10 +359,8 @@ class PdfExporter {
         widgets.add(_buildStickyCallout('Example: ${_sanitize(ex)}', style));
       }
       if (s.processSteps.isNotEmpty) {
-        widgets.add(_buildHeading3('Process Flow', style));
-        for (int p = 0; p < s.processSteps.length; p++) {
-          widgets.add(_buildBullet('Step ${p + 1}: ${_sanitize(s.processSteps[p])}', style));
-        }
+        widgets.add(_buildHeading3('Process Flowchart', style));
+        widgets.add(_buildProcessFlowchart(s.processSteps, style));
       }
       if (s.tableRows.isNotEmpty) {
         widgets.add(_buildPdfTable(s.tableRows, style));
@@ -385,6 +381,166 @@ class PdfExporter {
     }
 
     return widgets;
+  }
+
+  /// Renders a smart vector flowchart with connected step boxes and directional arrows.
+  /// In Handwritten Notes & Cute Aesthetic styles, uses sketchy double-stroke hand-drawn
+  /// vector borders and organic arrows.
+  static pw.Widget _buildProcessFlowchart(List<String> steps, PdfStudyStyle style) {
+    if (steps.isEmpty) return pw.SizedBox();
+    final isSketchy =
+        style == PdfStudyStyle.handwritten || style == PdfStudyStyle.minimalCute;
+    final accent = switch (style) {
+      PdfStudyStyle.handwritten => PdfColor.fromHex('#6D28D9'),
+      PdfStudyStyle.minimalCute => PdfColor.fromHex('#DB2777'),
+      PdfStudyStyle.zenPaperInk => PdfColor.fromHex('#7C2D12'),
+      PdfStudyStyle.modernClean => PdfColor.fromHex('#1D4ED8'),
+    };
+    final cardBg = switch (style) {
+      PdfStudyStyle.handwritten => PdfColor.fromHex('#FAF5FF'),
+      PdfStudyStyle.minimalCute => PdfColor.fromHex('#FDF2F8'),
+      PdfStudyStyle.zenPaperInk => PdfColor.fromHex('#FEF3C7'),
+      PdfStudyStyle.modernClean => PdfColor.fromHex('#EFF6FF'),
+    };
+
+    final rows = <pw.Widget>[];
+    const perRow = 3;
+    for (int i = 0; i < steps.length; i += perRow) {
+      final chunk = steps.sublist(i, (i + perRow).clamp(0, steps.length));
+      final rowChildren = <pw.Widget>[];
+      for (int c = 0; c < chunk.length; c++) {
+        final stepNum = i + c + 1;
+        final box = pw.Expanded(
+          child: pw.Stack(
+            children: [
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                decoration: pw.BoxDecoration(
+                  color: cardBg,
+                  borderRadius: pw.BorderRadius.circular(isSketchy ? 10 : 5),
+                  border: pw.Border.all(
+                    color: accent,
+                    width: isSketchy ? 1.2 : 1.0,
+                  ),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: pw.BoxDecoration(
+                        color: accent,
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Text(
+                        'STEP $stepNum',
+                        style: pw.TextStyle(
+                          fontSize: 7,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      _sanitize(chunk[c]),
+                      style: pw.TextStyle(
+                        fontSize: 8.5,
+                        color: PdfColor.fromHex('#1E293B'),
+                        lineSpacing: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSketchy)
+                pw.Positioned.fill(
+                  child: pw.CustomPaint(
+                    painter: (canvas, size) {
+                      canvas
+                        ..setStrokeColor(accent)
+                        ..setLineWidth(0.55)
+                        ..drawRect(2, 2, size.x - 4, size.y - 4)
+                        ..strokePath();
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+        rowChildren.add(box);
+        if (c < chunk.length - 1) {
+          rowChildren.add(
+            pw.SizedBox(
+              width: 20,
+              height: 24,
+              child: pw.CustomPaint(
+                painter: (canvas, size) {
+                  final midY = size.y / 2;
+                  canvas
+                    ..setStrokeColor(accent)
+                    ..setLineWidth(isSketchy ? 1.4 : 1.1)
+                    ..moveTo(2, midY)
+                    ..lineTo(size.x - 4, midY)
+                    ..moveTo(size.x - 8, midY + 4)
+                    ..lineTo(size.x - 3, midY)
+                    ..lineTo(size.x - 8, midY - 4)
+                    ..strokePath();
+                  if (isSketchy) {
+                    canvas
+                      ..setLineWidth(0.6)
+                      ..moveTo(3, midY + 1.2)
+                      ..lineTo(size.x - 5, midY + 0.8)
+                      ..strokePath();
+                  }
+                },
+              ),
+            ),
+          );
+        }
+      }
+      rows.add(
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: rowChildren,
+        ),
+      );
+      if (i + perRow < steps.length) {
+        rows.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+            child: pw.Center(
+              child: pw.SizedBox(
+                width: 18,
+                height: 14,
+                child: pw.CustomPaint(
+                  painter: (canvas, size) {
+                    final midX = size.x / 2;
+                    canvas
+                      ..setStrokeColor(accent)
+                      ..setLineWidth(1.1)
+                      ..moveTo(midX, size.y - 1)
+                      ..lineTo(midX, 2)
+                      ..moveTo(midX - 4, 6)
+                      ..lineTo(midX, 1)
+                      ..lineTo(midX + 4, 6)
+                      ..strokePath();
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 4, bottom: 8),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: rows,
+      ),
+    );
   }
 
   static List<pw.Widget> _buildFormattedContent(String rawContent, PdfStudyStyle style) {

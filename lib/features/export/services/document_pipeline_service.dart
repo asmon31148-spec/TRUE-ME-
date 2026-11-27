@@ -2,6 +2,7 @@ import '../../../core/ai/ai_router.dart';
 import '../../../core/utils/text_chunker.dart';
 import '../models/structured_study_document.dart';
 import '../pptx_exporter.dart';
+import 'document_layout_validator.dart';
 
 /// Multi-stage document intelligence pipeline:
 /// Intent & Scope -> Map-Reduce Long-Source Extraction -> Structured Content Model
@@ -175,7 +176,9 @@ $compactSource
       topic: topic,
     );
 
-    final validated = _validateAndClean(rawDoc, extraNote: coverageNote);
+    final validated = DocumentLayoutValidator.auditAndNormalizeDocument(
+      _validateAndClean(rawDoc, extraNote: coverageNote),
+    );
     if (validated.sections.isEmpty && validated.executiveSummary.isEmpty) {
       throw StateError('AI returned an empty structured document. Please try again.');
     }
