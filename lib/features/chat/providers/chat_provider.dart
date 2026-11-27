@@ -645,6 +645,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
               subjectProgressSummary: enrichedSummary.isNotEmpty ? enrichedSummary : null,
               mentorMemory: mentorMemory,
               recentTurns: recentTurns,
+              systemPromptOverride: builtCtx.systemPrompt,
             );
           }
         } catch (aiError) {

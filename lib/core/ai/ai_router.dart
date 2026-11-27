@@ -230,7 +230,7 @@ class AiRouter {
         final out = await _groq.complete8B(
           prompt: prompt,
           systemPrompt: systemPrompt,
-          maxTokens: 250,
+          maxTokens: 1400,
           temperature: 0.4,
         );
         await RateLimitGuardian.recordRequestOnce(
@@ -269,7 +269,7 @@ class AiRouter {
         final out = await _gemini.generateContent(
           prompt,
           systemInstruction: systemPrompt,
-          maxOutputTokens: 250,
+          maxOutputTokens: 1400,
           temperature: 0.4,
         );
         await RateLimitGuardian.recordRequestOnce(
@@ -529,6 +529,7 @@ Return ONLY valid JSON matching this schema:
     String? subjectProgressSummary,
     String? mentorMemory,
     List<String> recentTurns = const [],
+    String? systemPromptOverride,
   }) async {
     if (retrievedChunks.isEmpty) {
       return executeRealtimeChat(
@@ -571,7 +572,7 @@ Return ONLY valid JSON matching this schema:
     final historyLine = recentTurns.isNotEmpty
         ? '\n\nCURRENT CONVERSATION TURNS:\n${recentTurns.join('\n')}'
         : '';
-    final systemPrompt = '''
+    final systemPrompt = systemPromptOverride ?? '''
 You are Sage, the omniscient cognitive study companion and mentor for $studentName in the True Me app.
 $scopeLine$progressLine$memoryLine$historyLine
 

@@ -11,7 +11,8 @@ class DocumentPipelineService {
 
   static const int _singlePassCharLimit = 14000;
   static const int _chunkSizeChars = 12000;
-  static const int _maxMapChunks = 24; // Up to ~288K chars (~50,000 words)
+  static const int _maxMapChunks = 36; // Up to ~432K chars (~75,000 words)
+  static const int _mapConcurrency = 3;
 
   static Future<StructuredStudyDocument> generateStructuredDocument({
     required AiRouter aiRouter,
@@ -26,7 +27,7 @@ class DocumentPipelineService {
     String synthesizedContext = trimmedSource;
     String? coverageNote;
 
-    // Map-Reduce synthesis for long chapters (>14K chars) so concepts are never silently dropped
+    // Map-Reduce synthesis for long chapters (>14K chars) with bounded concurrency
     if (trimmedSource.length > _singlePassCharLimit) {
       final chunks = TextChunker.splitIntoChunks(
         trimmedSource,
@@ -34,38 +35,49 @@ class DocumentPipelineService {
         overlapChars: 500,
       );
       final processedChunks = chunks.take(_maxMapChunks).toList();
-      final extractedParts = <String>[];
+      final extractedParts = List<String>.filled(processedChunks.length, '');
+      final fallbackSegments = <int>[];
 
-      for (int i = 0; i < processedChunks.length; i++) {
-        try {
-          final part = await aiRouter.executeHeavyReasoning(
-            prompt: '''
-Extract ALL examinable concepts, definitions, formulas, classifications, processes, examples, and tables from this section (Part ${i + 1}/${processedChunks.length}) of "$subject" ($topic).
+      for (int batchStart = 0; batchStart < processedChunks.length; batchStart += _mapConcurrency) {
+        final batchEnd = (batchStart + _mapConcurrency).clamp(0, processedChunks.length);
+        await Future.wait(
+          List.generate(batchEnd - batchStart, (offset) async {
+            final idx = batchStart + offset;
+            try {
+              final part = await aiRouter.executeHeavyReasoning(
+                prompt: '''
+Extract ALL examinable concepts, definitions, formulas, classifications, processes, examples, and tables from this section (Part ${idx + 1}/${processedChunks.length}) of "$subject" ($topic).
 Do NOT summarize away technical terms or details. Return concise structured bullet notes.
 
-Source Part ${i + 1}:
-${processedChunks[i].content}
+Source Part ${idx + 1}:
+${processedChunks[idx].content}
 ''',
-          );
-          if (part.trim().isNotEmpty) {
-            extractedParts.add('### Part ${i + 1}\n${part.trim()}');
-          }
-        } catch (_) {
-          // Keep generous raw excerpt fallback (up to 6,000 chars) and flag partial extraction
-          final rawSnippet = processedChunks[i].content;
-          extractedParts.add(
-            rawSnippet.length > 6000 ? rawSnippet.substring(0, 6000) : rawSnippet,
-          );
-          coverageNote = '${coverageNote ?? ''} Segment ${i + 1} used raw source fallback due to AI timeout.'.trim();
-        }
+              );
+              if (part.trim().isNotEmpty) {
+                extractedParts[idx] = '### Part ${idx + 1}\n${part.trim()}';
+              }
+            } catch (_) {
+              final rawSnippet = processedChunks[idx].content;
+              extractedParts[idx] =
+                  rawSnippet.length > 6000 ? rawSnippet.substring(0, 6000) : rawSnippet;
+              fallbackSegments.add(idx + 1);
+            }
+          }),
+        );
       }
 
-      if (extractedParts.isNotEmpty) {
-        synthesizedContext = extractedParts.join('\n\n');
+      if (fallbackSegments.isNotEmpty) {
+        coverageNote =
+            'Segments ${fallbackSegments.join(', ')} used raw source fallback due to AI timeout.';
+      }
+      final nonEmptyParts = extractedParts.where((p) => p.isNotEmpty).toList();
+      if (nonEmptyParts.isNotEmpty) {
+        synthesizedContext = nonEmptyParts.join('\n\n');
       }
       if (chunks.length > _maxMapChunks) {
-        coverageNote =
+        final extraNote =
             'Source exceeded $_maxMapChunks segments (${chunks.length} total); covered the first ${processedChunks.length} segments in full detail.';
+        coverageNote = coverageNote == null ? extraNote : '$coverageNote $extraNote';
       }
     }
 

@@ -68,34 +68,68 @@ class RagService {
       }
 
       onStage?.call(IngestionStatus.embedding);
-      // Idempotency: remove stale chunks for this file before inserting fresh ones.
+      // Generate all embeddings in bounded concurrent batches BEFORE deleting old chunks
+      // so a mid-flight embedding error never leaves the cloud index wiped.
+      const batchSize = 4;
+      final preparedRows = List<Map<String, dynamic>?>.filled(chunks.length, null);
+      int completedCount = 0;
+
+      for (int start = 0; start < chunks.length; start += batchSize) {
+        final end = (start + batchSize).clamp(0, chunks.length);
+        await Future.wait(
+          List.generate(end - start, (offset) async {
+            final idx = start + offset;
+            final chunk = chunks[idx];
+            final embedding = await _geminiService.generateEmbedding(chunk.content);
+            if (embedding.length != 768) {
+              throw IngestionException(
+                stage: 'embedding',
+                message: 'Embedding dimension mismatch: expected 768, got ${embedding.length}',
+              );
+            }
+            preparedRows[idx] = {
+              'user_id': userId,
+              'notebook_id': notebookId,
+              'file_name': fileName,
+              'chunk_index': chunk.index,
+              'content': chunk.content,
+              'embedding': embedding,
+              if (chunk.pageNumber != null) 'page_number': chunk.pageNumber,
+              if (chunk.sectionLabel != null) 'section_label': chunk.sectionLabel,
+            };
+            completedCount++;
+            onProgress?.call(completedCount, chunks.length);
+          }),
+        );
+      }
+
+      // Idempotent replace: delete stale chunks only after all embeddings succeeded,
+      // then insert via batch (or per-chunk if batch is overridden in tests/legacy).
       await _supabaseService.deleteChunksForFile(
         userId: userId,
         notebookId: notebookId,
         fileName: fileName,
       );
 
-      for (int i = 0; i < chunks.length; i++) {
-        final chunk = chunks[i];
-        onProgress?.call(i + 1, chunks.length);
-        final embedding = await _geminiService.generateEmbedding(chunk.content);
-        if (embedding.length != 768) {
-          throw IngestionException(
-            stage: 'embedding',
-            message: 'Embedding dimension mismatch: expected 768, got ${embedding.length}',
+      final rows = preparedRows.whereType<Map<String, dynamic>>().toList();
+      if (_supabaseService.isCloudReady &&
+          _supabaseService.clientOrNull != null) {
+        await _supabaseService.insertChunksBatch(rows);
+      } else {
+        for (int i = 0; i < chunks.length; i++) {
+          final chunk = chunks[i];
+          final emb = rows[i]['embedding'] as List<double>;
+          await _supabaseService.insertChunk(
+            userId: userId,
+            notebookId: notebookId,
+            fileName: fileName,
+            chunkIndex: chunk.index,
+            content: chunk.content,
+            embedding: emb,
+            pageNumber: chunk.pageNumber,
+            sectionLabel: chunk.sectionLabel,
           );
         }
-
-        await _supabaseService.insertChunk(
-          userId: userId,
-          notebookId: notebookId,
-          fileName: fileName,
-          chunkIndex: chunk.index,
-          content: chunk.content,
-          embedding: embedding,
-          pageNumber: chunk.pageNumber,
-          sectionLabel: chunk.sectionLabel,
-        );
       }
 
       onStage?.call(IngestionStatus.verifying);

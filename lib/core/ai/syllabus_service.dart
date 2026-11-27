@@ -14,6 +14,7 @@ class SyllabusService {
   static const String _syllabusBoxPrefix = 'syllabus_nodes_';
   static const String _mappingBoxPrefix = 'source_mappings_';
   static const String _artifactBoxPrefix = 'study_artifacts_';
+  static String? lastSyncError;
 
   static Box get _notebooksBox => Hive.box(OfflineCacheService.notebooksBox);
 
@@ -134,7 +135,10 @@ class SyllabusService {
         'content_json': entry['contentJson'],
         'archived': entry['archived'] == true,
       });
-    } catch (_) {}
+      lastSyncError = null;
+    } catch (e) {
+      lastSyncError = 'Artifact sync failed: $e';
+    }
   }
 
   static Future<void> _syncNodesToSupabase(
@@ -160,7 +164,10 @@ class SyllabusService {
         'sort_order': n['sortOrder'] ?? 0,
       }).toList();
       await client.from('syllabus_nodes').upsert(payload);
-    } catch (_) {}
+      lastSyncError = null;
+    } catch (e) {
+      lastSyncError = 'Syllabus sync failed: $e';
+    }
   }
 
   /// Extracts a `semester -> unit -> topic -> subtopic` hierarchy from an uploaded syllabus.

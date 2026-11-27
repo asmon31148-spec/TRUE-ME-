@@ -791,6 +791,13 @@ class SupabaseService {
         .eq('file_name', fileName);
   }
 
+  /// Batch-inserts document chunks in a single round-trip.
+  Future<void> insertChunksBatch(List<Map<String, dynamic>> rows) async {
+    final client = _clientOrNull;
+    if (client == null || rows.isEmpty) return;
+    await client.from('document_chunks').insert(rows);
+  }
+
   /// Inserts a document chunk with its 768-dimensional Gemini embedding and provenance.
   Future<void> insertChunk({
     required String userId,

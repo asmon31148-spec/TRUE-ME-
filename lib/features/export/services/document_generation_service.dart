@@ -169,7 +169,14 @@ class DocumentGenerationService {
 
     onStageChanged?.call(3, 'Building & validating learning content...');
     final safeBase = subject.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+    final rawTopicSlug = topic
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    final safeTopic = rawTopicSlug.isEmpty
+        ? 'Topic'
+        : (rawTopicSlug.length > 28 ? rawTopicSlug.substring(0, 28) : rawTopicSlug);
     final docId = idempotencyKey ?? 'doc_${format}_${DateTime.now().millisecondsSinceEpoch}';
+    final uniqueSuffix = docId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
     final dir = await getApplicationDocumentsDirectory();
 
     late final Uint8List bytes;
@@ -188,7 +195,7 @@ class DocumentGenerationService {
         structuredDoc: structuredDoc,
         style: pdfStyle,
       );
-      fileName = '${safeBase}_${styleId}_Guide.pdf';
+      fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Guide.pdf';
     } else if (format == 'docx') {
       final docxStyle = DocxExporter.fromStyleId(styleId);
       bytes = DocxExporter.createDocument(
@@ -198,7 +205,7 @@ class DocumentGenerationService {
         structuredDoc: structuredDoc,
         style: docxStyle,
       );
-      fileName = '${safeBase}_${styleId}_Notes.docx';
+      fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Notes.docx';
     } else {
       await OfflineCacheService.savePreferredPptxStyle(styleId);
       final pptxStyle = PptxExporter.fromStyleId(styleId);
@@ -209,7 +216,7 @@ class DocumentGenerationService {
         slides: slides,
         style: pptxStyle,
       );
-      fileName = '${safeBase}_${styleId}_Slides.pptx';
+      fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Slides.pptx';
     }
 
     onStageChanged?.call(5, 'Rendering & checking final file...');

@@ -11,8 +11,14 @@ import 'package:trueme/core/utils/text_chunker.dart';
 import 'package:trueme/features/upload/services/pdf_processor.dart';
 
 class _FakeGeminiService extends GeminiService {
+  final bool shouldFail;
+  _FakeGeminiService({this.shouldFail = false});
+
   @override
   Future<List<double>> generateEmbedding(String text) async {
+    if (shouldFail) {
+      throw StateError('Simulated embedding failure');
+    }
     return List<double>.filled(768, 0.01);
   }
 }
@@ -201,6 +207,21 @@ void main() {
       expect(res2.status, IngestionStatus.searchable);
       expect(fakeSupa.deleteCalls, 2);
       expect(fakeSupa.storedChunks.length, 2);
+
+      // Embedding failure mid-flight must NOT delete existing stored chunks
+      final failingRag = RagService(
+        geminiService: _FakeGeminiService(shouldFail: true),
+        supabaseService: fakeSupa,
+      );
+      final failRes = await failingRag.ingestDocumentWithVerification(
+        userId: 'user_1',
+        notebookId: 'nb_bio',
+        fileName: 'fungi_notes.pdf',
+        pages: pages,
+      );
+      expect(failRes.status, IngestionStatus.failed);
+      expect(fakeSupa.deleteCalls, 2); // delete was NOT called!
+      expect(fakeSupa.storedChunks.length, 2); // old chunks preserved!
     });
 
     test('RagService reports failed when verification finds 0 chunks and partial when offline', () async {
