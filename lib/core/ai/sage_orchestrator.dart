@@ -133,14 +133,20 @@ class SageOrchestrator {
       priority = SourcePriority.balanced;
     }
 
-    // 2. Detect primary & secondary (compound) output format
+    // 2. Detect primary study tool & secondary (compound) output format
+    final wantsMindmap = RegExp(r'\b(mind ?map|concept map)\b').hasMatch(lower);
+    final wantsQuiz = RegExp(r'\b(quiz|test me|mcq|practice questions)\b').hasMatch(lower);
+    final mentionsFlashcards = RegExp(r'\b(flashcard|flash card|cards)\b').hasMatch(lower);
+    final hasActionVerb = RegExp(
+      r'\b(make|create|export|give|provide|convert|generate|save|download|send|build|open|practice|review|as a|into)\b',
+    ).hasMatch(lower);
+    final hasStudyTool = wantsMindmap || wantsQuiz || RegExp(r'\b(flashcards?|flash cards?)\b').hasMatch(lower);
+
     final wantsPdf = RegExp(r'\b(pdf|study sheet)\b').hasMatch(lower) &&
-        RegExp(r'\b(make|create|export|give|provide|convert|generate|save|download|send|as a|into)\b')
-            .hasMatch(lower);
+        (hasActionVerb || hasStudyTool);
     final wantsDocx = RegExp(r'\b(docx|word doc|word file|word document)\b').hasMatch(lower);
     final wantsPptx = RegExp(r'\b(pptx|powerpoint|ppt|slides|presentation)\b').hasMatch(lower) &&
-        RegExp(r'\b(make|create|export|give|provide|convert|generate|build|send)\b')
-            .hasMatch(lower);
+        (hasActionVerb || hasStudyTool);
 
     final SageIntentType? exportFormatIntent = wantsPdf
         ? SageIntentType.exportPdf
@@ -148,11 +154,8 @@ class SageOrchestrator {
             ? SageIntentType.exportDocx
             : (wantsPptx ? SageIntentType.exportPptx : null));
 
-    final wantsMindmap = RegExp(r'\b(mind ?map|concept map)\b').hasMatch(lower);
-    final wantsQuiz = RegExp(r'\b(quiz|test me|mcq|practice questions)\b').hasMatch(lower);
-    final wantsFlashcards = RegExp(r'\b(flashcard|flash card|cards)\b').hasMatch(lower) &&
-        RegExp(r'\b(make|create|generate|build|give|open|practice|review)\b')
-            .hasMatch(lower);
+    final wantsFlashcards = mentionsFlashcards &&
+        (hasActionVerb || exportFormatIntent != null);
 
     SageIntentType intent = SageIntentType.answer;
     SageIntentType? secondaryOutputIntent;
