@@ -1332,7 +1332,10 @@ class OfflineCacheService {
       _ensureSessionsInitialized(scopeKey);
       final box = Hive.box(chatBox);
       final sessions = getChatSessions(scopeKey);
-      final newId = 'sess_${DateTime.now().millisecondsSinceEpoch}';
+      var newId = 'sess_${DateTime.now().millisecondsSinceEpoch}';
+      if (sessions.any((s) => s['id'] == newId)) {
+        newId = '${newId}_${sessions.length + 1}';
+      }
       final now = DateTime.now().toIso8601String();
       sessions.insert(0, {
         'id': newId,

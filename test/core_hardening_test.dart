@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trueme/core/ai/ai_gateway_client.dart';
 import 'package:trueme/core/ai/ai_router.dart';
 import 'package:trueme/core/ai/monitor/ai_model_registry.dart';
@@ -523,8 +524,14 @@ void main() {
     });
 
     test('Subject chat sessions preserve history and build cross-session mentor memory', () async {
-      const scope = 'nb_physics_mem_test';
-      final s1 = await OfflineCacheService.createChatSession(scope);
+      final tempDir = Directory.systemTemp.createTempSync('trueme_chat_test_');
+      Hive.init(tempDir.path);
+      if (!Hive.isBoxOpen(OfflineCacheService.chatBox)) {
+        await Hive.openBox(OfflineCacheService.chatBox);
+      }
+      try {
+        const scope = 'nb_physics_mem_test';
+        final s1 = await OfflineCacheService.createChatSession(scope);
       await OfflineCacheService.saveChatHistory(scope, [
         {
           'id': 'm1',
@@ -561,8 +568,14 @@ void main() {
         mentorMemory: memoryBlock,
         recentTurns: const ['Student: Ready for a new topic'],
       );
-      expect(ctx.systemPrompt, contains('LONG-TERM SUBJECT MENTOR MEMORY'));
-      expect(ctx.systemPrompt, contains('CURRENT CONVERSATION TURNS'));
+        expect(ctx.systemPrompt, contains('LONG-TERM SUBJECT MENTOR MEMORY'));
+        expect(ctx.systemPrompt, contains('CURRENT CONVERSATION TURNS'));
+      } finally {
+        await Hive.close();
+        if (tempDir.existsSync()) {
+          tempDir.deleteSync(recursive: true);
+        }
+      }
     });
   });
 }
