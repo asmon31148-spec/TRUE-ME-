@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
+import 'package:printing/printing.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../../core/models/ingestion_models.dart';
 
@@ -200,7 +202,13 @@ class PdfProcessor {
   }
 
   /// Extracts every page with 1-based page provenance and a SAGE-001 quality report.
-  static Future<PdfExtractionBundle> extractWithQualityReport(File pdfFile) async {
+  /// When [ocrPageProvider] is supplied and any pages are unreadable/scanned,
+  /// rasterizes up to [maxOcrPages] unreadable pages and merges OCR text with provenance.
+  static Future<PdfExtractionBundle> extractWithQualityReport(
+    File pdfFile, {
+    Future<String> Function(Uint8List pagePngBytes, int pageNumber)? ocrPageProvider,
+    int maxOcrPages = 10,
+  }) async {
     final path = pdfFile.path;
     final pages = await Isolate.run(() async {
       final bytes = await File(path).readAsBytes();
@@ -247,6 +255,34 @@ class PdfProcessor {
         ),
       ];
     });
+
+    if (ocrPageProvider != null) {
+      final unreadableIndices = <int>[];
+      for (int i = 0; i < pages.length && unreadableIndices.length < maxOcrPages; i++) {
+        if (!pages[i].isReadable) unreadableIndices.add(i);
+      }
+      if (unreadableIndices.isNotEmpty) {
+        try {
+          final bytes = await pdfFile.readAsBytes();
+          int idxPos = 0;
+          await for (final raster in Printing.raster(bytes, pages: unreadableIndices, dpi: 144)) {
+            if (idxPos >= unreadableIndices.length) break;
+            final pageIdx = unreadableIndices[idxPos++];
+            try {
+              final pngBytes = await raster.toPng();
+              final ocrText = (await ocrPageProvider(pngBytes, pageIdx + 1)).trim();
+              if (ExtractedPage.assessReadability(ocrText)) {
+                pages[pageIdx] = ExtractedPage(
+                  pageNumber: pageIdx + 1,
+                  text: ocrText,
+                  isReadable: true,
+                );
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+    }
 
     return buildQualityBundle(pages);
   }

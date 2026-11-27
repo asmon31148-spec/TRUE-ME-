@@ -187,18 +187,20 @@ class PptxExporter {
     required List<PptxSlideData> slides,
     PptxStudyStyle style = PptxStudyStyle.minimalCute,
     Uint8List? backgroundImageBytes,
+    Map<int, Uint8List>? slideDiagramImages,
   }) {
     final validated = DocumentLayoutValidator.validateAndOptimizeSlides(slides);
     final effectiveSlides = validated.slides.isNotEmpty ? validated.slides : slides;
     final spec = _themeSpecFor(style);
     final archive = Archive();
     final hasBgImage = backgroundImageBytes != null && backgroundImageBytes.isNotEmpty;
+    final hasDiagrams = slideDiagramImages != null && slideDiagramImages.values.any((b) => b.isNotEmpty);
 
     final contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-officedocument.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  ${hasBgImage ? '<Default Extension="png" ContentType="image/png"/>' : ''}
+  ${(hasBgImage || hasDiagrams) ? '<Default Extension="png" ContentType="image/png"/>' : ''}
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
   <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -270,6 +272,14 @@ class PptxExporter {
     }
 
     for (int i = 0; i < effectiveSlides.length; i++) {
+      final diagBytes = slideDiagramImages?[i];
+      final hasSlideDiag = diagBytes != null && diagBytes.isNotEmpty;
+      final diagRelId = hasBgImage ? 'rId3' : 'rId2';
+      if (hasSlideDiag) {
+        archive.addFile(
+          ArchiveFile('ppt/media/diagram_${i + 1}.png', diagBytes.length, diagBytes),
+        );
+      }
       final slideXml = _buildSlideXml(
         effectiveSlides[i],
         i,
@@ -278,12 +288,14 @@ class PptxExporter {
         style,
         spec,
         hasBgImage: hasBgImage,
+        diagramRelId: hasSlideDiag ? diagRelId : null,
       );
       archive.addFile(_createArchiveFile('ppt/slides/slide${i + 1}.xml', slideXml));
       final slideRelXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
   ${hasBgImage ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/theme_bg.png"/>' : ''}
+  ${hasSlideDiag ? '<Relationship Id="$diagRelId" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/diagram_${i + 1}.png"/>' : ''}
 </Relationships>''';
       archive.addFile(_createArchiveFile('ppt/slides/_rels/slide${i + 1}.xml.rels', slideRelXml));
     }
@@ -301,6 +313,7 @@ class PptxExporter {
     PptxStudyStyle style,
     _PptxThemeSpec spec, {
     bool hasBgImage = false,
+    String? diagramRelId,
   }) {
     final tagText = (s.tag != null && s.tag!.trim().isNotEmpty)
         ? s.tag!.trim()
@@ -319,25 +332,29 @@ class PptxExporter {
         : _buildThemeDecor(style, spec, isCover: s.layoutKind == SlideLayoutKind.cover);
     final String bodyXml;
 
-    switch (s.layoutKind) {
-      case SlideLayoutKind.cover:
-        bodyXml = _buildCoverBody(s, spec);
-        break;
-      case SlideLayoutKind.flowchart:
-        bodyXml = _buildFlowchartBody(s, spec, tagText, footerText);
-        break;
-      case SlideLayoutKind.table:
-        bodyXml = _buildTableBody(s, spec, tagText, footerText);
-        break;
-      case SlideLayoutKind.twoColumn:
-        bodyXml = _buildTwoColumnBody(s, spec, tagText, footerText);
-        break;
-      case SlideLayoutKind.bentoGrid:
-        bodyXml = _buildBentoGridBody(s, spec, tagText, footerText);
-        break;
-      case SlideLayoutKind.content:
-        bodyXml = _buildStandardContentBody(s, spec, tagText, footerText);
-        break;
+    if (diagramRelId != null && s.layoutKind != SlideLayoutKind.cover && s.layoutKind != SlideLayoutKind.table) {
+      bodyXml = _buildDiagramSplitBody(s, spec, tagText, footerText, diagramRelId);
+    } else {
+      switch (s.layoutKind) {
+        case SlideLayoutKind.cover:
+          bodyXml = _buildCoverBody(s, spec);
+          break;
+        case SlideLayoutKind.flowchart:
+          bodyXml = _buildFlowchartBody(s, spec, tagText, footerText);
+          break;
+        case SlideLayoutKind.table:
+          bodyXml = _buildTableBody(s, spec, tagText, footerText);
+          break;
+        case SlideLayoutKind.twoColumn:
+          bodyXml = _buildTwoColumnBody(s, spec, tagText, footerText);
+          break;
+        case SlideLayoutKind.bentoGrid:
+          bodyXml = _buildBentoGridBody(s, spec, tagText, footerText);
+          break;
+        case SlideLayoutKind.content:
+          bodyXml = _buildStandardContentBody(s, spec, tagText, footerText);
+          break;
+      }
     }
 
     return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -817,6 +834,54 @@ class PptxExporter {
     }
 
     return buf.toString();
+  }
+
+  static String _buildDiagramSplitBody(
+    PptxSlideData s,
+    _PptxThemeSpec spec,
+    String tagText,
+    String footerText,
+    String diagramRelId,
+  ) {
+    final bullets = s.bulletPoints.isNotEmpty
+        ? s.bulletPoints
+        : (s.processSteps != null && s.processSteps!.isNotEmpty
+            ? s.processSteps!.asMap().entries.map((e) => 'Step ${e.key + 1}: ${e.value}').toList()
+            : const ['Visual concept overview']);
+    final bulletLinesXml = bullets.map((b) {
+      return '''<a:p>
+        <a:pPr marL="288000" indent="-288000"/>
+        <a:r><a:rPr lang="en-US" sz="1450" b="1"><a:latin typeface="${spec.bodyFont}"/><a:solidFill><a:srgbClr val="${spec.accentHex}"/></a:solidFill></a:rPr><a:t>${spec.bulletGlyph}</a:t></a:r>
+        <a:r><a:rPr lang="en-US" sz="1450"><a:latin typeface="${spec.bodyFont}"/><a:solidFill><a:srgbClr val="${spec.bodyHex}"/></a:solidFill></a:rPr><a:t>${_escapeXml(b)}</a:t></a:r>
+      </a:p>
+      <a:p><a:endParaRPr sz="450"/></a:p>''';
+    }).join('');
+
+    return '''
+      ${_buildHeaderAndFooter(s, spec, tagText, footerText)}
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="5" name="MainCard"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+        <p:spPr>
+          <a:xfrm><a:off x="680000" y="1550000"/><a:ext cx="6400000" cy="4500000"/></a:xfrm>
+          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 4000"/></a:avLst></a:prstGeom>
+          <a:solidFill><a:srgbClr val="${spec.cardHex}"/></a:solidFill>
+          <a:ln w="12700"><a:solidFill><a:srgbClr val="${spec.cardBorderHex}"/></a:solidFill></a:ln>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr wrap="square" lIns="200000" rIns="200000" tIns="180000" bIns="180000" normAutofit="1"/>
+          <a:lstStyle/>
+          $bulletLinesXml
+        </p:txBody>
+      </p:sp>
+      <p:pic>
+        <p:nvPicPr><p:cNvPr id="77" name="SlideDiagram"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>
+        <p:blipFill><a:blip r:embed="$diagramRelId"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
+        <p:spPr>
+          <a:xfrm><a:off x="7350000" y="1650000"/><a:ext cx="4162000" cy="4200000"/></a:xfrm>
+          <a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 4000"/></a:avLst></a:prstGeom>
+          <a:ln w="12700"><a:solidFill><a:srgbClr val="${spec.accentHex}"/></a:solidFill></a:ln>
+        </p:spPr>
+      </p:pic>''';
   }
 
   static String _buildStandardContentBody(

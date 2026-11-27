@@ -226,12 +226,18 @@ class DocumentGenerationService {
       fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Guide.pdf';
     } else if (format == 'docx') {
       final docxStyle = DocxExporter.fromStyleId(styleId);
+      final diagramImages = await _fetchSectionDiagrams(
+        structuredDoc,
+        PdfStudyStyle.modernClean,
+        allowEvenWithSvg: true,
+      );
       bytes = DocxExporter.createDocument(
         title: structuredDoc.title,
         subject: subject,
         content: structuredDoc.toStructuredMarkdown(),
         structuredDoc: structuredDoc,
         style: docxStyle,
+        sectionDiagramImages: diagramImages,
       );
       fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Notes.docx';
     } else {
@@ -240,11 +246,18 @@ class DocumentGenerationService {
       final slides = DocumentPipelineService.toSlideDeck(structuredDoc);
       slideCount = slides.length;
       final bgBytes = await _loadPptxBackgroundAsset(pptxStyle);
+      final sectionDiagrams = await _fetchSectionDiagrams(
+        structuredDoc,
+        PdfStudyStyle.modernClean,
+        allowEvenWithSvg: true,
+      );
+      final slideDiagrams = _mapSectionDiagramsToSlides(structuredDoc, slides, sectionDiagrams);
       bytes = PptxExporter.createPresentation(
         presentationTitle: structuredDoc.title,
         slides: slides,
         style: pptxStyle,
         backgroundImageBytes: bgBytes,
+        slideDiagramImages: slideDiagrams,
       );
       fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Slides.pptx';
     }
@@ -360,8 +373,9 @@ class DocumentGenerationService {
 
   static Future<Map<int, Uint8List>> _fetchSectionDiagrams(
     StructuredStudyDocument doc,
-    PdfStudyStyle style,
-  ) async {
+    PdfStudyStyle style, {
+    bool allowEvenWithSvg = false,
+  }) async {
     final result = <int, Uint8List>{};
     final styleCue = switch (style) {
       PdfStudyStyle.handwritten => 'hand-drawn ink pen sketch on cream notebook paper',
@@ -373,7 +387,7 @@ class DocumentGenerationService {
     int fetched = 0;
     for (int i = 0; i < doc.sections.length && fetched < 2; i++) {
       final s = doc.sections[i];
-      if (s.diagramSvg != null && s.diagramSvg!.contains('<svg')) continue;
+      if (!allowEvenWithSvg && s.diagramSvg != null && s.diagramSvg!.contains('<svg')) continue;
       final prompt = s.diagramPrompt?.trim() ?? '';
       if (prompt.isEmpty) continue;
 
@@ -389,10 +403,30 @@ class DocumentGenerationService {
           fetched++;
         }
       } catch (_) {
-        // Non-blocking fallback: PDF still renders cleanly without external image
+        // Non-blocking fallback
       }
     }
     return result;
+  }
+
+  static Map<int, Uint8List> _mapSectionDiagramsToSlides(
+    StructuredStudyDocument doc,
+    List<PptxSlideData> slides,
+    Map<int, Uint8List> sectionDiagrams,
+  ) {
+    final mapped = <int, Uint8List>{};
+    if (sectionDiagrams.isEmpty) return mapped;
+    for (final entry in sectionDiagrams.entries) {
+      if (entry.key >= doc.sections.length) continue;
+      final heading = doc.sections[entry.key].heading.toLowerCase();
+      for (int sIdx = 1; sIdx < slides.length; sIdx++) {
+        if (slides[sIdx].title.toLowerCase().contains(heading)) {
+          mapped[sIdx] = entry.value;
+          break;
+        }
+      }
+    }
+    return mapped;
   }
 
   /// Compound Multi-Feature Generator: composes Mind Map or Quiz generation

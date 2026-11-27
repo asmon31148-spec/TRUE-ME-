@@ -479,6 +479,21 @@ class PdfExporter {
       if (s.calloutWarning != null && s.calloutWarning!.isNotEmpty) {
         widgets.add(_buildStickyCallout('Exam Alert: ${_sanitize(s.calloutWarning!)}', style));
       }
+      if (s.citations.isNotEmpty) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 2, bottom: 6),
+            child: pw.Text(
+              'Sources: ${s.citations.map(_sanitize).join(' · ')}',
+              style: pw.TextStyle(
+                fontSize: 7.5,
+                fontStyle: pw.FontStyle.italic,
+                color: PdfColor.fromHex('#64748B'),
+              ),
+            ),
+          ),
+        );
+      }
     }
 
     if (doc.sourceReferences.isNotEmpty) {

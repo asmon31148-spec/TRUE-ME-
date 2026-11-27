@@ -119,6 +119,7 @@ Return ONLY valid JSON matching this schema:
       "tableRows": [["Column A", "Column B"], ["Value 1", "Value 2"]],
       "diagramSvg": "Optional compact <svg viewBox='0 0 400 180'>...</svg> labeled schematic when a visual diagram helps",
       "diagramPrompt": "Optional short visual prompt for a hand-drawn textbook illustration (e.g. 'hand-drawn ink sketch of eukaryotic cell organelles')",
+      "citations": ["SourceName.pdf (p. 4)"],
       "calloutWarning": "Common exam trap or caveat (optional)"
     }
   ],
@@ -210,6 +211,7 @@ $compactSource
         processSteps: s.processSteps.map(_stripMarkers).where((e) => e.isNotEmpty).toList(),
         diagramSvg: s.diagramSvg,
         diagramPrompt: s.diagramPrompt,
+        citations: s.citations.map(_stripMarkers).where((e) => e.isNotEmpty).toList(),
       );
     }).toList();
 

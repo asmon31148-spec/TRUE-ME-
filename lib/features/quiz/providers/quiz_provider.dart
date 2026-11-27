@@ -4,6 +4,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/smai/memory_event_service.dart';
 import '../../../core/ai/smai/smai_models.dart';
+import '../../../core/ai/study_loop_service.dart';
 import '../../../core/ai/error_boundary.dart';
 import '../../../core/models/quiz_model.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -191,6 +192,23 @@ class QuizNotifier extends StateNotifier<QuizState> {
     });
 
     final newCorrectCount = isCorrect ? state.correctCount + 1 : state.correctCount;
+    if (!isCorrect) {
+      unawaited(
+        StudyLoopService.recordQuizMistake(
+          subject: quiz.subject,
+          notebookId: quiz.notebookId,
+          topic: quiz.topic,
+          question: currentQ.question,
+          wrongAnswer: selectedIdx < currentQ.options.length
+              ? currentQ.options[selectedIdx]
+              : '',
+          correctAnswer: currentQ.correctOptionIndex < currentQ.options.length
+              ? currentQ.options[currentQ.correctOptionIndex]
+              : '',
+          explanation: currentQ.explanation,
+        ),
+      );
+    }
     state = state.copyWith(
       hasSubmitted: true,
       correctCount: newCorrectCount,

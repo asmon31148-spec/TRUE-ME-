@@ -100,6 +100,7 @@ class DocumentLayoutValidator {
           processSteps: s.processSteps,
           diagramSvg: s.diagramSvg,
           diagramPrompt: s.diagramPrompt,
+          citations: s.citations,
         ),
       );
     }

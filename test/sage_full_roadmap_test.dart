@@ -9,10 +9,12 @@ import 'package:trueme/core/ai/rag_service.dart';
 import 'package:trueme/core/ai/retrieval_engine.dart';
 import 'package:trueme/core/ai/sage_benchmark_service.dart';
 import 'package:trueme/core/ai/sage_orchestrator.dart';
+import 'package:trueme/core/ai/study_loop_service.dart';
 import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
 import 'package:trueme/core/services/offline_cache_service.dart';
 import 'package:trueme/core/services/supabase_service.dart';
+import 'package:trueme/features/export/docx_exporter.dart';
 import 'package:trueme/features/export/models/structured_study_document.dart';
 import 'package:trueme/features/export/pdf_exporter.dart';
 import 'package:trueme/features/export/pptx_exporter.dart';
@@ -421,6 +423,73 @@ void main() {
         style: PdfStudyStyle.handwritten,
       );
       expect(String.fromCharCodes(pdfBytes.take(5)), '%PDF-');
+    });
+
+    test('Phases 1-3: PPTX/DOCX diagram embedding, inline citations & Mistake Bank loop', () async {
+      final pngStub = Uint8List.fromList([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
+
+      // Phase 1: PPTX & DOCX diagram PNG embedding
+      final pptxBytes = PptxExporter.createPresentation(
+        presentationTitle: 'Cell Biology',
+        slides: const [
+          PptxSlideData(title: 'Cover', bulletPoints: ['Overview']),
+          PptxSlideData(title: 'Organelles', bulletPoints: ['Mitochondria produces ATP']),
+        ],
+        slideDiagramImages: {1: pngStub},
+      );
+      final pptxZip = ZipDecoder().decodeBytes(pptxBytes);
+      expect(pptxZip.any((f) => f.name == 'ppt/media/diagram_2.png'), isTrue);
+
+      const citedDoc = StructuredStudyDocument(
+        title: 'Cell Biology',
+        subject: 'Biology',
+        topic: 'Organelles',
+        purpose: 'Study Guide',
+        academicLevel: 'Course Level',
+        executiveSummary: 'Summary',
+        sections: [
+          StudySectionBlock(
+            heading: 'Mitochondria',
+            body: 'Powerhouse of the cell.',
+            citations: ['Lecture2.pdf (p. 4)'],
+          ),
+        ],
+      );
+      final docxBytes = DocxExporter.createDocument(
+        title: citedDoc.title,
+        subject: citedDoc.subject,
+        content: '',
+        structuredDoc: citedDoc,
+        sectionDiagramImages: {0: pngStub},
+      );
+      final docxZip = ZipDecoder().decodeBytes(docxBytes);
+      expect(docxZip.any((f) => f.name == 'word/media/diagram_1.png'), isTrue);
+      final docXml = utf8.decode(
+        docxZip.firstWhere((f) => f.name == 'word/document.xml').content as List<int>,
+      );
+      expect(docXml, contains('<w:drawing>'));
+      expect(docXml, contains('Lecture2.pdf (p. 4)'));
+
+      // Phase 3: Mistake Bank -> Flashcard -> Weakest Topic
+      await StudyLoopService.recordQuizMistake(
+        subject: 'Biology',
+        notebookId: 'nb_bio',
+        topic: 'Glycolysis',
+        question: 'Which enzyme catalyzes the committed step of glycolysis?',
+        wrongAnswer: 'Hexokinase',
+        correctAnswer: 'PFK-1',
+        explanation: 'PFK-1 is the rate-limiting committed step.',
+      );
+      final mistakes = await StudyLoopService.getMistakes(subject: 'Biology');
+      expect(mistakes, isNotEmpty);
+      final card = await StudyLoopService.convertMistakeToFlashcard(mistakes.first);
+      expect(card.back, contains('PFK-1'));
+      final rec = await StudyLoopService.findWeakestTopic(
+        userId: 'test_user',
+        subjectId: 'Biology',
+      );
+      expect(rec, isNotNull);
+      expect(rec!.topic, 'Glycolysis');
     });
   });
 }

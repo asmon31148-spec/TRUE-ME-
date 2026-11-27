@@ -39,14 +39,27 @@ class DocxExporter {
     required String content,
     StructuredStudyDocument? structuredDoc,
     DocxStudyStyle style = DocxStudyStyle.elegantAcademicNotes,
+    Map<int, Uint8List>? sectionDiagramImages,
   }) {
     final archive = Archive();
     final palette = _paletteFor(style);
+    final validDiagrams = <int, Uint8List>{};
+    if (sectionDiagramImages != null) {
+      for (final entry in sectionDiagramImages.entries) {
+        if (entry.value.isNotEmpty) {
+          validDiagrams[entry.key] = entry.value;
+          archive.addFile(
+            ArchiveFile('word/media/diagram_${entry.key + 1}.png', entry.value.length, entry.value),
+          );
+        }
+      }
+    }
 
-    const contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  ${validDiagrams.isNotEmpty ? '<Default Extension="png" ContentType="image/png"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>''';
@@ -58,16 +71,20 @@ class DocxExporter {
 </Relationships>''';
     archive.addFile(_createArchiveFile('_rels/.rels', rootRelsXml));
 
-    const docRelsXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final diagRels = validDiagrams.keys
+        .map((idx) => '<Relationship Id="rIdDiag${idx + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/diagram_${idx + 1}.png"/>')
+        .join('\n  ');
+    final docRelsXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  $diagRels
 </Relationships>''';
     archive.addFile(_createArchiveFile('word/_rels/document.xml.rels', docRelsXml));
 
     archive.addFile(_createArchiveFile('word/styles.xml', _buildStylesXml(palette)));
 
     final bodyXml = structuredDoc != null
-        ? _buildFromStructured(structuredDoc, palette, style)
+        ? _buildFromStructured(structuredDoc, palette, style, validDiagrams: validDiagrams)
         : _buildFromMarkdown(content, palette);
 
     final bannerTextColor =
@@ -76,7 +93,7 @@ class DocxExporter {
         style == DocxStudyStyle.professionalResearchReport ? 'DBEAFE' : '6B7280';
 
     final documentXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
   <w:body>
     <w:p>
       <w:pPr>
@@ -128,8 +145,9 @@ class DocxExporter {
   static String _buildFromStructured(
     StructuredStudyDocument doc,
     _DocxPalette p,
-    DocxStudyStyle style,
-  ) {
+    DocxStudyStyle style, {
+    Map<int, Uint8List> validDiagrams = const {},
+  }) {
     final buf = StringBuffer();
     if (doc.executiveSummary.isNotEmpty) {
       buf.write(_h1('Overview', p));
@@ -171,8 +189,14 @@ class DocxExporter {
       if (s.tableRows.isNotEmpty) {
         buf.write(_table(s.tableRows, p));
       }
+      if (validDiagrams.containsKey(i)) {
+        buf.write(_drawing('rIdDiag${i + 1}', i + 1, s.heading, p));
+      }
       if (s.calloutWarning != null && s.calloutWarning!.isNotEmpty) {
         buf.write(_callout('Exam Alert: ${s.calloutWarning!}', p));
+      }
+      if (s.citations.isNotEmpty) {
+        buf.write(_para('Sources: ${s.citations.join(' · ')}', p));
       }
     }
 
@@ -244,6 +268,11 @@ class DocxExporter {
     }).join('');
 
     return '<w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="CBD5E1"/><w:bottom w:val="single" w:sz="4" w:color="CBD5E1"/><w:insideH w:val="single" w:sz="4" w:color="E2E8F0"/><w:insideV w:val="single" w:sz="4" w:color="E2E8F0"/></w:tblBorders></w:tblPr>$rowsXml</w:tbl><w:p></w:p>';
+  }
+
+  static String _drawing(String relId, int docPrId, String caption, _DocxPalette p) {
+    // 5.2" x 3.4" centered inline diagram image (4754880 x 3108960 EMU)
+    return '''<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="100" w:after="40"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="4754880" cy="3108960"/><wp:docPr id="$docPrId" name="Diagram$docPrId"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="$docPrId" name="Diagram$docPrId"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="$relId"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4754880" cy="3108960"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${p.bodyFont}" w:hAnsi="${p.bodyFont}"/><w:i/><w:sz w:val="18"/><w:color w:val="64748B"/></w:rPr><w:t>Figure: ${_escapeXml(caption)}</w:t></w:r></w:p>''';
   }
 
   static String _buildStylesXml(_DocxPalette p) {

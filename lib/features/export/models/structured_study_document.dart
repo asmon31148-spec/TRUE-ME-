@@ -11,6 +11,7 @@ class StudySectionBlock {
   final List<String> processSteps;
   final String? diagramSvg;
   final String? diagramPrompt;
+  final List<String> citations;
 
   const StudySectionBlock({
     required this.heading,
@@ -23,6 +24,7 @@ class StudySectionBlock {
     this.processSteps = const [],
     this.diagramSvg,
     this.diagramPrompt,
+    this.citations = const [],
   });
 
   factory StudySectionBlock.fromMap(Map<String, dynamic> map) {
@@ -53,6 +55,10 @@ class StudySectionBlock {
           .toList(),
       diagramSvg: map['diagramSvg']?.toString().trim(),
       diagramPrompt: map['diagramPrompt']?.toString().trim(),
+      citations: (map['citations'] as List? ?? [])
+          .map((e) => e.toString().trim())
+          .where((s) => s.isNotEmpty)
+          .toList(),
     );
   }
 
@@ -67,6 +73,7 @@ class StudySectionBlock {
         'processSteps': processSteps,
         if (diagramSvg != null && diagramSvg!.isNotEmpty) 'diagramSvg': diagramSvg,
         if (diagramPrompt != null && diagramPrompt!.isNotEmpty) 'diagramPrompt': diagramPrompt,
+        if (citations.isNotEmpty) 'citations': citations,
       };
 }
 
