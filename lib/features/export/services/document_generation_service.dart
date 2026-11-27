@@ -6,6 +6,7 @@ import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/smai/memory_event_service.dart';
 import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/syllabus_service.dart';
+import '../../../core/models/flashcard_model.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../docx_exporter.dart';
@@ -477,6 +478,115 @@ class DocumentGenerationService {
         topic: '$topic Mind Map',
         notebookId: targetNbId,
         sourceContext: markdownBuf.toString(),
+        sourceChatId: sourceChatId,
+      );
+    }
+
+    if (primaryTool == 'flashcards') {
+      final rawFc = await aiRouter.generateFlashcards(
+        content: sourceText.isNotEmpty
+            ? 'Topic: $subject ($topic)\n\n$sourceText'
+            : 'Core exam concepts for $subject ($topic).',
+        count: 14,
+      );
+      final fcData = AiRouter.parseJsonObject(rawFc);
+      final rawCards = (fcData['cards'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final cards = List.generate(rawCards.length, (i) {
+        final c = rawCards[i];
+        return FlashcardModel(
+          id: 'fc_$i',
+          front: c['front']?.toString() ?? 'Question ${i + 1}',
+          back: c['back']?.toString() ?? '',
+          nextReviewDate: DateTime.now(),
+        );
+      });
+
+      if (outputFormat == 'pdf') {
+        final bytes = await PdfExporter.generateFlashcardSheetPdf(
+          deckTitle: '$subject — $topic',
+          cards: cards,
+        );
+        final dir = await getApplicationDocumentsDirectory();
+        final docId = 'doc_fc_pdf_${DateTime.now().millisecondsSinceEpoch}';
+        final safeSub = subject.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+        final fileName = '${safeSub}_Flashcards_$docId.pdf';
+        final outFile = File('${dir.path}/$fileName');
+        await outFile.writeAsBytes(bytes, flush: true);
+
+        String? uploadedVaultId;
+        if (CloudVaultService.isAnyVaultConnected) {
+          try {
+            final res = await CloudVaultService.uploadFile(
+              outFile,
+              customName: fileName,
+              subject: subject,
+              section: 'Notes',
+            );
+            uploadedVaultId = res?.fileId;
+          } catch (_) {}
+        }
+
+        final structuredDoc = StructuredStudyDocument(
+          title: '$topic — Flashcard Sheet',
+          subject: subject,
+          topic: topic,
+          purpose: 'Active Recall Flashcards PDF',
+          academicLevel: 'Course Level',
+          executiveSummary: '${cards.length} active-recall flashcards for $subject ($topic).',
+          sections: [
+            StudySectionBlock(
+              heading: 'Flashcard Q&A Pairs',
+              body: 'Review each prompt and recall the answer before checking.',
+              keyPoints: cards.map((c) => '${c.front} -> ${c.back}').toList(),
+            ),
+          ],
+        );
+
+        await SyllabusService.saveArtifact(
+          documentId: docId,
+          notebookId: targetNbId,
+          artifactType: 'pdf',
+          title: structuredDoc.title,
+          topicLabel: topic,
+          styleId: styleId,
+          styleVersion: styleVersion,
+          filePath: outFile.path,
+          fileSize: bytes.length,
+          generationState: 'ready',
+          vaultId: uploadedVaultId,
+          sourceChatId: sourceChatId,
+          contentJson: fcData,
+        );
+
+        return GeneratedDocumentResult(
+          documentId: docId,
+          notebookId: targetNbId,
+          format: 'pdf',
+          styleId: styleId,
+          title: structuredDoc.title,
+          filePath: outFile.path,
+          fileSize: bytes.length,
+          structuredDoc: structuredDoc,
+        );
+      }
+
+      final fcBuf = StringBuffer('# $topic — Active Recall Flashcards\n\n');
+      for (int i = 0; i < cards.length; i++) {
+        fcBuf.writeln('## Card ${i + 1}');
+        fcBuf.writeln('**Q:** ${cards[i].front}');
+        fcBuf.writeln('**A:** ${cards[i].back}\n');
+      }
+      return generateAndSave(
+        aiRouter: aiRouter,
+        format: outputFormat,
+        styleId: styleId,
+        subject: subject,
+        topic: '$topic Flashcards',
+        notebookId: targetNbId,
+        sourceContext: fcBuf.toString(),
         sourceChatId: sourceChatId,
       );
     }

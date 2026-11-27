@@ -252,11 +252,14 @@ class SageOrchestrator {
       final docs = overrideDocs ?? OfflineCacheService.getNotebookDocuments(resolvedNbId);
 
       if (nodes.length >= 2 || docs.length >= 2) {
+        final outSuffix = wantsPdf ? 'PDF' : (wantsDocx ? 'Word Doc' : (wantsPptx ? 'Slides' : ''));
         final actionPhrase = wantsMindmap
-            ? (wantsPdf ? 'Mind Map PDF' : 'Mind Map')
+            ? 'Mind Map${outSuffix.isNotEmpty ? ' $outSuffix' : ''}'
             : (wantsQuiz
-                ? (wantsPdf ? 'Quiz PDF' : 'Quiz')
-                : (wantsPdf ? 'PDF' : 'study material'));
+                ? 'Quiz${outSuffix.isNotEmpty ? ' $outSuffix' : ''}'
+                : (wantsFlashcards
+                    ? 'Flashcards${outSuffix.isNotEmpty ? ' $outSuffix' : ''}'
+                    : (outSuffix.isNotEmpty ? outSuffix : 'study material')));
         final options = <String>[
           'Full $resolvedSub $actionPhrase (complete syllabus)',
           ...nodes.take(2).map((n) => '${n['title']} — $resolvedSub $actionPhrase'),

@@ -554,17 +554,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
         return clarifyMsg;
       }
 
-      // 1b-compound. Execute multi-feature compound workflows directly (e.g. Mind Map -> PDF)
+      // 1b-compound. Execute multi-feature compound workflows directly
+      // (Mind Map / Quiz / Flashcards -> PDF / DOCX / PPTX)
       if (intentPlan.isCompound &&
           (intentPlan.intent == SageIntentType.mindmap ||
-              intentPlan.intent == SageIntentType.quiz) &&
+              intentPlan.intent == SageIntentType.quiz ||
+              intentPlan.intent == SageIntentType.flashcards) &&
           intentPlan.secondaryOutputIntent != null) {
         final sec = intentPlan.secondaryOutputIntent!;
         final outFmt = sec == SageIntentType.exportPdf
             ? 'pdf'
             : (sec == SageIntentType.exportDocx ? 'docx' : 'pptx');
-        final primaryTool =
-            intentPlan.intent == SageIntentType.mindmap ? 'mindmap' : 'quiz';
+        final primaryTool = intentPlan.intent == SageIntentType.mindmap
+            ? 'mindmap'
+            : (intentPlan.intent == SageIntentType.quiz ? 'quiz' : 'flashcards');
+        final toolDisplay = primaryTool == 'mindmap'
+            ? 'Visual Mind Map'
+            : (primaryTool == 'quiz' ? 'Practice Quiz' : 'Flashcards');
         final subLabel = effectiveSubject.isNotEmpty ? effectiveSubject : 'Study';
         final styleId = intentPlan.explicitStyleId ??
             (outFmt == 'pdf'
@@ -575,7 +581,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
         state = state.copyWith(
           thinkingStatus:
-              'Building ${primaryTool == 'mindmap' ? 'Mind Map' : 'Quiz'} from $subLabel notes & rendering ${outFmt.toUpperCase()}...',
+              'Building $toolDisplay from $subLabel notes & rendering ${outFmt.toUpperCase()}...',
         );
         final res = await DocumentGenerationService.generateCompoundArtifact(
           aiRouter: _aiRouter,
@@ -596,10 +602,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
           id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
           isUser: false,
           text:
-              'Done! I built the **${primaryTool == 'mindmap' ? 'Visual Mind Map' : 'Practice Quiz'}** for **$subLabel — ${intentPlan.topic}** and exported it as a **${outFmt.toUpperCase()}** in your Study Library.',
+              'Done! I built the **$toolDisplay** for **$subLabel — ${intentPlan.topic}** and exported it as a **${outFmt.toUpperCase()}** in your Study Library.',
           action: SageAction(
             type: actionType,
-            label: 'Open ${primaryTool == 'mindmap' ? 'Mind Map' : 'Quiz'} ${outFmt.toUpperCase()}',
+            label: 'Open $toolDisplay ${outFmt.toUpperCase()}',
             topic: res.title,
             filePath: res.filePath,
           ),
