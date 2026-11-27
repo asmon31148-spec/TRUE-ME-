@@ -1,12 +1,18 @@
+import '../models/ingestion_models.dart';
+
 class TextChunk {
   final int index;
   final String content;
   final int charCount;
+  final int? pageNumber;
+  final String? sectionLabel;
 
   const TextChunk({
     required this.index,
     required this.content,
     required this.charCount,
+    this.pageNumber,
+    this.sectionLabel,
   });
 }
 
@@ -93,5 +99,39 @@ class TextChunker {
     }
 
     return chunks;
+  }
+
+  /// Splits page-level extracted text into provenance-preserving chunks so each
+  /// chunk retains the 1-based [pageNumber] and [sectionLabel] where it originated.
+  static List<TextChunk> splitPagesIntoChunks(
+    List<ExtractedPage> pages, {
+    String? sectionLabel,
+    int targetChunkChars = 3500,
+    int overlapChars = 400,
+  }) {
+    final List<TextChunk> result = [];
+    int globalIndex = 0;
+
+    for (final page in pages) {
+      if (!page.isReadable || page.text.trim().isEmpty) continue;
+      final pageChunks = splitIntoChunks(
+        page.text,
+        targetChunkChars: targetChunkChars,
+        overlapChars: overlapChars,
+      );
+      for (final ch in pageChunks) {
+        result.add(
+          TextChunk(
+            index: globalIndex++,
+            content: ch.content,
+            charCount: ch.charCount,
+            pageNumber: page.pageNumber,
+            sectionLabel: sectionLabel,
+          ),
+        );
+      }
+    }
+
+    return result;
   }
 }

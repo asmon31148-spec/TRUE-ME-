@@ -6,6 +6,8 @@ class DocumentChunkModel {
   final int chunkIndex;
   final String content;
   final double similarity; // Computed cosine similarity for search results
+  final int? pageNumber;
+  final String? sectionLabel;
 
   const DocumentChunkModel({
     required this.id,
@@ -15,6 +17,8 @@ class DocumentChunkModel {
     required this.chunkIndex,
     required this.content,
     this.similarity = 0.0,
+    this.pageNumber,
+    this.sectionLabel,
   });
 
   Map<String, dynamic> toMap() {
@@ -25,6 +29,8 @@ class DocumentChunkModel {
       'file_name': fileName,
       'chunk_index': chunkIndex,
       'content': content,
+      if (pageNumber != null) 'page_number': pageNumber,
+      if (sectionLabel != null) 'section_label': sectionLabel,
     };
   }
 
@@ -37,6 +43,8 @@ class DocumentChunkModel {
       chunkIndex: (map['chunk_index'] as num?)?.toInt() ?? 0,
       content: map['content']?.toString() ?? '',
       similarity: (map['similarity'] as num?)?.toDouble() ?? 0.0,
+      pageNumber: (map['page_number'] as num?)?.toInt(),
+      sectionLabel: map['section_label']?.toString(),
     );
   }
 }

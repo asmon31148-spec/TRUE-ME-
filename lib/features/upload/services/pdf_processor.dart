@@ -1,6 +1,19 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../../core/models/ingestion_models.dart';
+
+class PdfExtractionBundle {
+  final List<ExtractedPage> pages;
+  final ExtractionQualityReport report;
+  final String combinedText;
+
+  const PdfExtractionBundle({
+    required this.pages,
+    required this.report,
+    required this.combinedText,
+  });
+}
 
 class PdfProcessor {
   PdfProcessor._();
@@ -137,5 +150,104 @@ class PdfProcessor {
       } catch (_) {}
       return pages;
     });
+  }
+
+  /// Evaluates extraction quality across a list of pages (SAGE-001 quality gate).
+  static PdfExtractionBundle buildQualityBundle(List<ExtractedPage> pages) {
+    final totalPages = pages.length;
+    final readablePagesList = pages.where((p) => p.isReadable).toList();
+    final unreadableNumbers =
+        pages.where((p) => !p.isReadable).map((p) => p.pageNumber).toList();
+
+    final buf = StringBuffer();
+    for (final p in readablePagesList) {
+      if (buf.isNotEmpty) buf.write('\n\n');
+      buf.write(p.text.trim());
+    }
+    final combinedText = buf.toString().trim();
+    final charCount = combinedText.length;
+    final readableCount = readablePagesList.length;
+    final needsOcr = totalPages > 0 && readableCount == 0;
+    final isUsable = readableCount > 0 && charCount >= 20;
+
+    final String summary;
+    if (totalPages == 0) {
+      summary = 'No readable pages detected.';
+    } else if (readableCount == 0) {
+      summary = '0/$totalPages pages readable — scanned/image PDF requires OCR.';
+    } else if (unreadableNumbers.isEmpty) {
+      summary = '$readableCount/$totalPages pages readable.';
+    } else {
+      final preview = unreadableNumbers.take(6).join(', ');
+      final suffix = unreadableNumbers.length > 6 ? ', ...' : '';
+      summary =
+          '$readableCount/$totalPages pages readable; unreadable pages: $preview$suffix.';
+    }
+
+    return PdfExtractionBundle(
+      pages: pages,
+      combinedText: combinedText,
+      report: ExtractionQualityReport(
+        totalPages: totalPages,
+        readablePages: readableCount,
+        unreadablePageNumbers: unreadableNumbers,
+        charCount: charCount,
+        needsOcr: needsOcr,
+        isUsable: isUsable,
+        summaryMessage: summary,
+      ),
+    );
+  }
+
+  /// Extracts every page with 1-based page provenance and a SAGE-001 quality report.
+  static Future<PdfExtractionBundle> extractWithQualityReport(File pdfFile) async {
+    final path = pdfFile.path;
+    final pages = await Isolate.run(() async {
+      final bytes = await File(path).readAsBytes();
+      final List<ExtractedPage> extracted = [];
+      try {
+        final PdfDocument document = PdfDocument(inputBytes: bytes);
+        try {
+          final PdfTextExtractor extractor = PdfTextExtractor(document);
+          final int pageCount = document.pages.count;
+          int totalChars = 0;
+
+          for (int i = 0; i < pageCount; i++) {
+            String text = '';
+            try {
+              text = extractor.extractText(startPageIndex: i, endPageIndex: i).trim();
+            } catch (_) {
+              text = '';
+            }
+            final readable = ExtractedPage.assessReadability(text);
+            if (readable && totalChars < maxExtractedChars) {
+              totalChars += text.length;
+            }
+            extracted.add(
+              ExtractedPage(
+                pageNumber: i + 1,
+                text: readable && totalChars <= maxExtractedChars ? text : '',
+                isReadable: readable,
+              ),
+            );
+          }
+          if (extracted.isNotEmpty) return extracted;
+        } finally {
+          document.dispose();
+        }
+      } catch (_) {}
+
+      final fallback = _fallbackExtractPdfStrings(bytes);
+      final readable = ExtractedPage.assessReadability(fallback);
+      return [
+        ExtractedPage(
+          pageNumber: 1,
+          text: readable ? fallback : '',
+          isReadable: readable,
+        ),
+      ];
+    });
+
+    return buildQualityBundle(pages);
   }
 }

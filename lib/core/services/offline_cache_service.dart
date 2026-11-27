@@ -553,6 +553,44 @@ class OfflineCacheService {
     }
   }
 
+  /// Persists truthful SAGE-001 ingestion state, quality report, and chunk counts on a document.
+  static Future<void> updateDocumentIngestionState(
+    String notebookId,
+    String docId, {
+    required String ingestionStatus,
+    Map<String, dynamic>? qualityReport,
+    int? chunksCount,
+    int? chunksVerified,
+    String? ingestionError,
+  }) async {
+    final nb = getCachedNotebook(notebookId);
+    if (nb == null) return;
+    final rawDocs = nb['documents'] as List? ?? [];
+    final docs = rawDocs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    bool changed = false;
+    for (final d in docs) {
+      if (d['id'] == docId) {
+        d['ingestionStatus'] = ingestionStatus;
+        if (qualityReport != null) d['qualityReport'] = qualityReport;
+        if (chunksCount != null) d['chunksCount'] = chunksCount;
+        if (chunksVerified != null) d['chunksVerified'] = chunksVerified;
+        if (ingestionError != null) {
+          d['ingestionError'] = ingestionError;
+        } else {
+          d.remove('ingestionError');
+        }
+        d['lastIndexedAt'] = DateTime.now().toIso8601String();
+        changed = true;
+        break;
+      }
+    }
+    if (changed) {
+      nb['documents'] = docs;
+      nb['lastModified'] = DateTime.now().toIso8601String();
+      await cacheNotebook(notebookId, nb);
+    }
+  }
+
   static Future<Map<String, dynamic>> createNotebook({
     required String title,
     required String subject,
@@ -651,6 +689,44 @@ class OfflineCacheService {
     }
   }
 
+  /// Persists truthful SAGE-001 ingestion state, quality report, and chunk counts on a document.
+  static Future<void> updateDocumentIngestionState(
+    String notebookId,
+    String docId, {
+    required String ingestionStatus,
+    Map<String, dynamic>? qualityReport,
+    int? chunksCount,
+    int? chunksVerified,
+    String? ingestionError,
+  }) async {
+    final nb = getCachedNotebook(notebookId);
+    if (nb == null) return;
+    final rawDocs = nb['documents'] as List? ?? [];
+    final docs = rawDocs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    bool changed = false;
+    for (final d in docs) {
+      if (d['id'] == docId) {
+        d['ingestionStatus'] = ingestionStatus;
+        if (qualityReport != null) d['qualityReport'] = qualityReport;
+        if (chunksCount != null) d['chunksCount'] = chunksCount;
+        if (chunksVerified != null) d['chunksVerified'] = chunksVerified;
+        if (ingestionError != null) {
+          d['ingestionError'] = ingestionError;
+        } else {
+          d.remove('ingestionError');
+        }
+        d['lastIndexedAt'] = DateTime.now().toIso8601String();
+        changed = true;
+        break;
+      }
+    }
+    if (changed) {
+      nb['documents'] = docs;
+      nb['lastModified'] = DateTime.now().toIso8601String();
+      await cacheNotebook(notebookId, nb);
+    }
+  }
+
   static Future<void> updateDocumentInNotebook(
     String notebookId,
     String docId, {
@@ -678,6 +754,44 @@ class OfflineCacheService {
     if (changed) {
       nb['documents'] = docs;
       nb['fileRefs'] = docs.map((d) => (d['fileName'] as String? ?? '')).where((s) => s.isNotEmpty).toList();
+      nb['lastModified'] = DateTime.now().toIso8601String();
+      await cacheNotebook(notebookId, nb);
+    }
+  }
+
+  /// Persists truthful SAGE-001 ingestion state, quality report, and chunk counts on a document.
+  static Future<void> updateDocumentIngestionState(
+    String notebookId,
+    String docId, {
+    required String ingestionStatus,
+    Map<String, dynamic>? qualityReport,
+    int? chunksCount,
+    int? chunksVerified,
+    String? ingestionError,
+  }) async {
+    final nb = getCachedNotebook(notebookId);
+    if (nb == null) return;
+    final rawDocs = nb['documents'] as List? ?? [];
+    final docs = rawDocs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    bool changed = false;
+    for (final d in docs) {
+      if (d['id'] == docId) {
+        d['ingestionStatus'] = ingestionStatus;
+        if (qualityReport != null) d['qualityReport'] = qualityReport;
+        if (chunksCount != null) d['chunksCount'] = chunksCount;
+        if (chunksVerified != null) d['chunksVerified'] = chunksVerified;
+        if (ingestionError != null) {
+          d['ingestionError'] = ingestionError;
+        } else {
+          d.remove('ingestionError');
+        }
+        d['lastIndexedAt'] = DateTime.now().toIso8601String();
+        changed = true;
+        break;
+      }
+    }
+    if (changed) {
+      nb['documents'] = docs;
       nb['lastModified'] = DateTime.now().toIso8601String();
       await cacheNotebook(notebookId, nb);
     }

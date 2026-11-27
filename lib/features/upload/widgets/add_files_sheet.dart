@@ -11,6 +11,7 @@ import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/ai/rag_service.dart';
 import '../../../core/ai/syllabus_service.dart';
+import '../../../core/models/ingestion_models.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/drive_service.dart';
 import '../../../core/services/mega_vault_service.dart';
@@ -103,11 +104,16 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
     required String fileType,
     File? originalFile,
     String? driveFileId,
+    List<ExtractedPage>? pages,
+    ExtractionQualityReport? qualityReport,
+    IngestionStatus? initialStatus,
   }) async {
     String? uploadedDriveId = driveFileId;
     if (uploadedDriveId == null && originalFile != null && CloudVaultService.isAnyVaultConnected) {
       try {
-        setState(() => _statusText = 'Backing up to ${CloudVaultService.activeVaultName} / ${widget.subjectName}...');
+        if (mounted) {
+          setState(() => _statusText = 'Backing up to ${CloudVaultService.activeVaultName} / ${widget.subjectName}...');
+        }
         final res = await CloudVaultService.uploadFile(
           originalFile,
           customName: fileName,
@@ -118,18 +124,27 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       } catch (_) {}
     }
 
+    final docId = 'doc_${DateTime.now().millisecondsSinceEpoch}';
+    final effectiveStatus = initialStatus ??
+        (content.trim().length >= 20
+            ? IngestionStatus.embedding
+            : IngestionStatus.needsOcr);
+
     await OfflineCacheService.addDocumentToNotebook(widget.notebookId, {
-      'id': 'doc_${DateTime.now().millisecondsSinceEpoch}',
+      'id': docId,
       'fileName': fileName,
       'section': _targetSection,
       'content': content,
       'fileType': fileType,
       'sizeBytes': content.length,
       'driveFileId': uploadedDriveId,
+      'ingestionStatus': effectiveStatus.name,
+      if (qualityReport != null) 'qualityReport': qualityReport.toMap(),
       'createdAt': DateTime.now().toIso8601String(),
     });
 
-    if (content.trim().length > 40) {
+    IngestionResult? ingestResult;
+    if (effectiveStatus != IngestionStatus.needsOcr && content.trim().length >= 20) {
       if (_targetSection.toLowerCase() == 'syllabus') {
         unawaited(
           SyllabusService.extractAndSaveSyllabus(
@@ -140,15 +155,43 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
           ).catchError((_) => <Map<String, dynamic>>[]),
         );
       }
-      unawaited(
-        RagService()
-            .ingestDocument(
-              userId: OfflineCacheService.getUserId(),
-              notebookId: widget.notebookId,
-              fileName: fileName,
-              fullText: content,
-            )
-            .catchError((_) => 0),
+
+      if (mounted) {
+        setState(() => _statusText = 'Chunking, indexing & verifying "$fileName"...');
+      }
+
+      ingestResult = await RagService().ingestDocumentWithVerification(
+        userId: OfflineCacheService.getUserId(),
+        notebookId: widget.notebookId,
+        fileName: fileName,
+        fullText: content,
+        pages: pages,
+        sectionLabel: _targetSection,
+        onStage: (stage) {
+          if (!mounted) return;
+          setState(() => _statusText = '${stage.displayLabel} "$fileName"...');
+        },
+      );
+
+      await OfflineCacheService.updateDocumentIngestionState(
+        widget.notebookId,
+        docId,
+        ingestionStatus: ingestResult.status.name,
+        qualityReport: qualityReport?.toMap(),
+        chunksCount: ingestResult.chunksCreated,
+        chunksVerified: ingestResult.chunksVerified,
+        ingestionError: ingestResult.errorMessage,
+      );
+    } else if (effectiveStatus == IngestionStatus.needsOcr) {
+      await OfflineCacheService.updateDocumentIngestionState(
+        widget.notebookId,
+        docId,
+        ingestionStatus: IngestionStatus.needsOcr.name,
+        qualityReport: qualityReport?.toMap(),
+        chunksCount: 0,
+        chunksVerified: 0,
+        ingestionError: qualityReport?.summaryMessage ??
+            'No selectable text found. Use Photo OCR or upload a selectable PDF.',
       );
     }
 
@@ -156,10 +199,15 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
 
     if (mounted) {
       Navigator.pop(context);
+      final statusMsg = ingestResult == null
+          ? (effectiveStatus == IngestionStatus.needsOcr
+              ? 'Added "$fileName" (Needs OCR — no selectable text found)'
+              : 'Added "$fileName" to $_targetSection')
+          : (ingestResult.status == IngestionStatus.searchable
+              ? 'Indexed & verified "$fileName" (${ingestResult.chunksVerified} chunks)'
+              : 'Added "$fileName" (${ingestResult.status.displayLabel}: ${ingestResult.errorMessage ?? ''})');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Added "$fileName" (${content.length} chars) to $_targetSection'),
-        ),
+        SnackBar(content: Text(statusMsg)),
       );
     }
   }
@@ -193,21 +241,39 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       }
 
       String extracted = '';
+      List<ExtractedPage>? pages;
+      ExtractionQualityReport? qualityReport;
+      IngestionStatus? initialStatus;
+
       if (ext == 'pdf') {
         try {
-          extracted = await PdfProcessor.extractText(file);
+          final bundle = await PdfProcessor.extractWithQualityReport(file);
+          pages = bundle.pages;
+          qualityReport = bundle.report;
+          extracted = bundle.combinedText;
+          if (!bundle.report.isUsable) {
+            extracted = '';
+            initialStatus = IngestionStatus.needsOcr;
+          }
         } catch (_) {
           extracted = '';
+          initialStatus = IngestionStatus.failed;
         }
       } else {
         extracted = await file.readAsString();
-      }
-
-      if (extracted.trim().isEmpty) {
-        extracted =
-            'Uploaded file: $fileName (${sizeMb.toStringAsFixed(1)} MB). '
-            'No selectable text could be extracted automatically (likely scanned or image-heavy PDF). '
-            'You can still back it up to your Cloud Vault or use Photo OCR for key pages.';
+        final readable = ExtractedPage.assessReadability(extracted);
+        qualityReport = ExtractionQualityReport(
+          totalPages: 1,
+          readablePages: readable ? 1 : 0,
+          unreadablePageNumbers: readable ? const [] : const [1],
+          charCount: extracted.trim().length,
+          needsOcr: !readable,
+          isUsable: readable,
+          summaryMessage: readable
+              ? '1/1 text source readable (${extracted.trim().length} chars).'
+              : 'Text file appears empty or unreadable.',
+        );
+        if (!readable) initialStatus = IngestionStatus.needsOcr;
       }
 
       await _saveExtractedDocument(
@@ -215,6 +281,9 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
         content: extracted,
         fileType: ext,
         originalFile: file,
+        pages: pages,
+        qualityReport: qualityReport,
+        initialStatus: initialStatus,
       );
     } catch (e) {
       if (mounted) {
