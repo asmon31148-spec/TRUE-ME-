@@ -325,4 +325,198 @@ class DocumentGenerationService {
       structuredDoc: structuredDoc,
     );
   }
+
+  /// Compound Multi-Feature Generator: composes Mind Map or Quiz generation
+  /// directly into a verified PDF/DOCX/PPTX artifact saved in Study Library.
+  static Future<GeneratedDocumentResult> generateCompoundArtifact({
+    required AiRouter aiRouter,
+    required String primaryTool, // 'mindmap' | 'quiz'
+    required String outputFormat, // 'pdf' | 'docx' | 'pptx'
+    required String styleId,
+    required String subject,
+    required String topic,
+    String? notebookId,
+    String? sourceChatId,
+  }) async {
+    final targetNbId = await resolveTargetNotebookId(
+      notebookId: notebookId,
+      subject: subject,
+    );
+    final sourceText = OfflineCacheService.getNotebookCombinedText(
+      targetNbId,
+      maxChars: 14000,
+    );
+
+    if (primaryTool == 'mindmap') {
+      final rawJson = await aiRouter.generateMindmap(
+        topic: '$subject: $topic',
+        content: sourceText,
+      );
+      final data = AiRouter.parseJsonObject(rawJson);
+      final rootTitle = (data['root'] as String? ?? '$topic Mind Map').trim();
+      final branches = (data['branches'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
+      if (outputFormat == 'pdf') {
+        final pdfStyle = PdfExporter.fromStyleId(styleId);
+        final bytes = await PdfExporter.generateMindmapPdf(
+          title: rootTitle,
+          subject: subject,
+          mindmapData: data,
+          style: pdfStyle,
+        );
+        final dir = await getApplicationDocumentsDirectory();
+        final docId = 'doc_mindmap_pdf_${DateTime.now().millisecondsSinceEpoch}';
+        final safeSub = subject.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+        final fileName = '${safeSub}_MindMap_$docId.pdf';
+        final outFile = File('${dir.path}/$fileName');
+        await outFile.writeAsBytes(bytes, flush: true);
+
+        String? uploadedVaultId;
+        if (CloudVaultService.isAnyVaultConnected) {
+          try {
+            final res = await CloudVaultService.uploadFile(
+              outFile,
+              customName: fileName,
+              subject: subject,
+              section: 'Notes',
+            );
+            uploadedVaultId = res?.fileId;
+          } catch (_) {}
+        }
+
+        final structuredDoc = StructuredStudyDocument(
+          title: '$rootTitle — Mind Map',
+          subject: subject,
+          topic: topic,
+          purpose: 'Visual Mind Map PDF',
+          academicLevel: 'Course Level',
+          executiveSummary: 'Visual concept map covering ${branches.length} branches of $rootTitle.',
+          sections: branches
+              .map((b) => StudySectionBlock(
+                    heading: (b['title'] as String? ?? 'Branch').trim(),
+                    body: (b['summary'] as String? ?? '').trim(),
+                    keyPoints: (b['children'] as List? ?? [])
+                        .whereType<Map>()
+                        .map((c) => '${c['title']}: ${c['summary'] ?? ''}')
+                        .toList(),
+                  ))
+              .toList(),
+        );
+
+        await SyllabusService.saveArtifact(
+          documentId: docId,
+          notebookId: targetNbId,
+          artifactType: 'pdf',
+          title: structuredDoc.title,
+          topicLabel: topic,
+          styleId: styleId,
+          styleVersion: styleVersion,
+          filePath: outFile.path,
+          fileSize: bytes.length,
+          generationState: 'ready',
+          vaultId: uploadedVaultId,
+          sourceChatId: sourceChatId,
+          contentJson: data,
+        );
+
+        unawaited(
+          MemoryEventService.capture(
+            eventType: SmaiEventType.studyArtifactCreated,
+            idempotencyKey: 'art_$docId',
+            subjectId: targetNbId,
+            payload: {
+              'documentId': docId,
+              'format': 'pdf',
+              'primaryTool': 'mindmap',
+              'title': structuredDoc.title,
+              'topic': topic,
+              if (sourceChatId != null) 'sourceChatId': sourceChatId,
+            },
+            searchText: '$subject $topic mind map pdf',
+          ).catchError((_) => LearningEvent(
+                id: '',
+                userId: '',
+                eventType: SmaiEventType.studyArtifactCreated,
+                idempotencyKey: 'err',
+                occurredAt: DateTime.now(),
+              )),
+        );
+
+        return GeneratedDocumentResult(
+          documentId: docId,
+          notebookId: targetNbId,
+          format: 'pdf',
+          styleId: styleId,
+          title: structuredDoc.title,
+          filePath: outFile.path,
+          fileSize: bytes.length,
+          structuredDoc: structuredDoc,
+        );
+      }
+
+      // DOCX or PPTX export of Mind Map
+      final markdownBuf = StringBuffer('# $rootTitle — Mind Map\n\n');
+      for (final b in branches) {
+        markdownBuf.writeln('## ${b['title']}');
+        if ((b['summary'] as String? ?? '').isNotEmpty) {
+          markdownBuf.writeln(b['summary']);
+        }
+        for (final c in (b['children'] as List? ?? []).whereType<Map>()) {
+          markdownBuf.writeln('- **${c['title']}**: ${c['summary'] ?? ''}');
+        }
+        markdownBuf.writeln();
+      }
+      return generateAndSave(
+        aiRouter: aiRouter,
+        format: outputFormat,
+        styleId: styleId,
+        subject: subject,
+        topic: '$topic Mind Map',
+        notebookId: targetNbId,
+        sourceContext: markdownBuf.toString(),
+        sourceChatId: sourceChatId,
+      );
+    }
+
+    // Quiz -> PDF/DOCX/PPTX
+    final rawQuiz = await aiRouter.generateQuiz(
+      topic: '$subject: $topic',
+      notesContent: sourceText.isNotEmpty
+          ? sourceText
+          : 'Core exam concepts for $subject ($topic).',
+      questionCount: 8,
+    );
+    final quizData = AiRouter.parseJsonObject(rawQuiz);
+    final questions = (quizData['questions'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final quizBuf = StringBuffer('# $topic — Practice Quiz & Answer Key\n\n');
+    for (int i = 0; i < questions.length; i++) {
+      final q = questions[i];
+      quizBuf.writeln('## Question ${i + 1}');
+      quizBuf.writeln(q['question']?.toString() ?? '');
+      final opts = (q['options'] as List? ?? []).map((o) => o.toString()).toList();
+      for (int j = 0; j < opts.length; j++) {
+        quizBuf.writeln('- ${String.fromCharCode(65 + j)}) ${opts[j]}');
+      }
+      final ansIdx = (q['correctOptionIndex'] as num?)?.toInt() ?? 0;
+      final ansLetter = String.fromCharCode(65 + ansIdx.clamp(0, 3));
+      quizBuf.writeln('Answer: $ansLetter — ${q['explanation'] ?? ''}\n');
+    }
+
+    return generateAndSave(
+      aiRouter: aiRouter,
+      format: outputFormat,
+      styleId: styleId,
+      subject: subject,
+      topic: '$topic Quiz',
+      notebookId: targetNbId,
+      sourceContext: quizBuf.toString(),
+      sourceChatId: sourceChatId,
+    );
+  }
 }

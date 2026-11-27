@@ -862,6 +862,44 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                             ],
                                           ),
                                         ),
+                                  if (!msg.isUser && msg.quickReplies.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: msg.quickReplies
+                                          .map((option) => InkWell(
+                                                onTap: () {
+                                                  HapticFeedback.selectionClick();
+                                                  _sendMessage(option);
+                                                },
+                                                borderRadius: BorderRadius.circular(14),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 11, vertical: 7),
+                                                  decoration: BoxDecoration(
+                                                    color: isDark
+                                                        ? AppColors.darkAccentWash
+                                                        : AppColors.accentWash,
+                                                    borderRadius: BorderRadius.circular(14),
+                                                    border: Border.all(
+                                                      color: context.accentColor
+                                                          .withValues(alpha: 0.35),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    option,
+                                                    style: TextStyle(
+                                                      fontSize: 12.5,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: context.accentColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ))
+                                          .toList(),
+                                    ),
+                                  ],
                                   if (!msg.isUser && msg.action != null) ...[
                                     const SizedBox(height: 8),
                                     InkWell(

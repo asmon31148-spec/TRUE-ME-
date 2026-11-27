@@ -1,4 +1,6 @@
 import '../../features/export/services/document_generation_service.dart';
+import '../services/offline_cache_service.dart';
+import 'syllabus_service.dart';
 
 enum SageScopeMode { globalSage, subjectSage }
 
@@ -24,42 +26,97 @@ enum SourcePriority { teacherNotesFirst, syllabusFirst, pyqFirst, balanced }
 /// Structured orchestration plan produced before retrieval/generation (SAGE-004).
 class SageIntentPlan {
   final SageIntentType intent;
+  final SageIntentType? secondaryOutputIntent; // e.g. mindmap -> exportPdf
   final SageScopeMode scopeMode;
   final SourcePriority sourcePriority;
   final String topic;
+  final String? resolvedNotebookId;
+  final String? resolvedSubject;
   final String? explicitStyleId;
   final bool needsClarification;
   final String? clarificationQuestion;
+  final List<String> clarificationOptions;
 
   const SageIntentPlan({
     required this.intent,
+    this.secondaryOutputIntent,
     required this.scopeMode,
     required this.sourcePriority,
     required this.topic,
+    this.resolvedNotebookId,
+    this.resolvedSubject,
     this.explicitStyleId,
     this.needsClarification = false,
     this.clarificationQuestion,
+    this.clarificationOptions = const [],
   });
+
+  bool get isCompound => secondaryOutputIntent != null;
 
   bool get isDocumentExport =>
       intent == SageIntentType.exportPdf ||
       intent == SageIntentType.exportDocx ||
-      intent == SageIntentType.exportPptx;
+      intent == SageIntentType.exportPptx ||
+      secondaryOutputIntent == SageIntentType.exportPdf ||
+      secondaryOutputIntent == SageIntentType.exportDocx ||
+      secondaryOutputIntent == SageIntentType.exportPptx;
 }
 
-/// SAGE-004 Intent Understanding & Orchestration layer.
+/// SAGE-004 Intent Understanding, Cross-App Subject Resolution & Compound Orchestration.
 class SageOrchestrator {
   SageOrchestrator._();
+
+  /// Resolves a subject/notebook from natural language even when invoked from Main Sage.
+  static Map<String, dynamic>? resolveSubjectFromQuery(
+    String query, {
+    List<Map<String, dynamic>>? overrideNotebooks,
+  }) {
+    final lower = query.toLowerCase();
+    final notebooks = overrideNotebooks ?? OfflineCacheService.getAllCachedNotebooks();
+    Map<String, dynamic>? best;
+    int bestLen = 0;
+
+    for (final nb in notebooks) {
+      final title = (nb['title'] as String? ?? '').trim();
+      if (title.length < 2) continue;
+      final tLower = title.toLowerCase();
+      if (lower.contains(tLower) && tLower.length > bestLen) {
+        best = nb;
+        bestLen = tLower.length;
+      }
+    }
+    return best;
+  }
 
   static SageIntentPlan classify({
     required String query,
     String? notebookId,
     String? subject,
+    List<Map<String, dynamic>>? overrideNotebooks,
+    List<Map<String, dynamic>>? overrideSyllabusNodes,
+    List<Map<String, dynamic>>? overrideDocs,
   }) {
     final q = query.trim();
     final lower = q.toLowerCase();
-    final hasSubject = (notebookId != null && notebookId.trim().isNotEmpty) ||
-        (subject != null && subject.trim().isNotEmpty);
+
+    // Auto-resolve subject from query if not already scoped
+    String? resolvedNbId = (notebookId != null && notebookId.trim().isNotEmpty)
+        ? notebookId.trim()
+        : null;
+    String? resolvedSub = (subject != null && subject.trim().isNotEmpty)
+        ? subject.trim()
+        : null;
+
+    if (resolvedNbId == null) {
+      final matchedNb = resolveSubjectFromQuery(q, overrideNotebooks: overrideNotebooks);
+      if (matchedNb != null) {
+        resolvedNbId = matchedNb['id']?.toString();
+        resolvedSub ??= matchedNb['title']?.toString();
+      }
+    }
+
+    final hasSubject = (resolvedNbId != null && resolvedNbId.isNotEmpty) ||
+        (resolvedSub != null && resolvedSub.isNotEmpty);
     final scopeMode =
         hasSubject ? SageScopeMode.subjectSage : SageScopeMode.globalSage;
 
@@ -76,31 +133,41 @@ class SageOrchestrator {
       priority = SourcePriority.balanced;
     }
 
-    // 2. Intent classification
-    SageIntentType intent = SageIntentType.answer;
-    String? formatForStyle;
+    // 2. Detect primary & secondary (compound) output format
+    final wantsPdf = RegExp(r'\b(pdf|study sheet)\b').hasMatch(lower) &&
+        RegExp(r'\b(make|create|export|give|provide|convert|generate|save|download|send|as a|into)\b')
+            .hasMatch(lower);
+    final wantsDocx = RegExp(r'\b(docx|word doc|word file|word document)\b').hasMatch(lower);
+    final wantsPptx = RegExp(r'\b(pptx|powerpoint|ppt|slides|presentation)\b').hasMatch(lower) &&
+        RegExp(r'\b(make|create|export|give|provide|convert|generate|build|send)\b')
+            .hasMatch(lower);
 
-    if (RegExp(r'\b(pdf|study sheet)\b').hasMatch(lower) &&
-        RegExp(r'\b(make|create|export|give|provide|convert|generate|save|download|as a|into)\b')
-            .hasMatch(lower)) {
-      intent = SageIntentType.exportPdf;
-      formatForStyle = 'pdf';
-    } else if (RegExp(r'\b(docx|word doc|word file|word document)\b').hasMatch(lower)) {
-      intent = SageIntentType.exportDocx;
-      formatForStyle = 'docx';
-    } else if (RegExp(r'\b(pptx|powerpoint|ppt|slides|presentation)\b').hasMatch(lower) &&
-        RegExp(r'\b(make|create|export|give|provide|convert|generate|build)\b')
-            .hasMatch(lower)) {
-      intent = SageIntentType.exportPptx;
-      formatForStyle = 'pptx';
-    } else if (RegExp(r'\b(mind ?map|concept map)\b').hasMatch(lower)) {
-      intent = SageIntentType.mindmap;
-    } else if (RegExp(r'\b(flashcard|flash card|cards)\b').hasMatch(lower) &&
+    final SageIntentType? exportFormatIntent = wantsPdf
+        ? SageIntentType.exportPdf
+        : (wantsDocx
+            ? SageIntentType.exportDocx
+            : (wantsPptx ? SageIntentType.exportPptx : null));
+
+    final wantsMindmap = RegExp(r'\b(mind ?map|concept map)\b').hasMatch(lower);
+    final wantsQuiz = RegExp(r'\b(quiz|test me|mcq|practice questions)\b').hasMatch(lower);
+    final wantsFlashcards = RegExp(r'\b(flashcard|flash card|cards)\b').hasMatch(lower) &&
         RegExp(r'\b(make|create|generate|build|give|open|practice|review)\b')
-            .hasMatch(lower)) {
-      intent = SageIntentType.flashcards;
-    } else if (RegExp(r'\b(quiz|test me|mcq|practice questions)\b').hasMatch(lower)) {
+            .hasMatch(lower);
+
+    SageIntentType intent = SageIntentType.answer;
+    SageIntentType? secondaryOutputIntent;
+
+    if (wantsMindmap) {
+      intent = SageIntentType.mindmap;
+      secondaryOutputIntent = exportFormatIntent;
+    } else if (wantsQuiz) {
       intent = SageIntentType.quiz;
+      secondaryOutputIntent = exportFormatIntent;
+    } else if (wantsFlashcards) {
+      intent = SageIntentType.flashcards;
+      secondaryOutputIntent = exportFormatIntent;
+    } else if (exportFormatIntent != null) {
+      intent = exportFormatIntent;
     } else if (RegExp(r'\b(audio explainer|narrated|podcast|listen)\b').hasMatch(lower)) {
       intent = SageIntentType.explainer;
     } else if (RegExp(r'\b(schedule|today.?s plan|add task|study plan)\b').hasMatch(lower) &&
@@ -121,41 +188,109 @@ class SageOrchestrator {
       intent = SageIntentType.explain;
     }
 
-    // 3. Carry explicit user style constraint
+    final formatForStyle = exportFormatIntent == SageIntentType.exportPdf
+        ? 'pdf'
+        : (exportFormatIntent == SageIntentType.exportDocx
+            ? 'docx'
+            : (exportFormatIntent == SageIntentType.exportPptx ? 'pptx' : null));
     final explicitStyleId = formatForStyle != null
         ? DocumentGenerationService.detectExplicitStyleId(q, formatForStyle)
         : null;
 
-    // 4. Clarification check when user asks for an artifact with no subject and no topic
-    final isArtifactIntent = formatForStyle != null ||
-        intent == SageIntentType.quiz ||
-        intent == SageIntentType.flashcards ||
-        intent == SageIntentType.mindmap;
-    final strippedTopic = q
+    // 3. Topic extraction
+    var strippedTopic = q
         .replaceAll(
           RegExp(
-            r'\b(make|create|generate|build|export|give|me|a|an|the|pdf|docx|pptx|ppt|slides|presentation|quiz|flashcards|mind ?map|please)\b',
+            r'\b(make|create|generate|build|export|give|send|provide|convert|save|download|me|a|an|the|of|my|for|on|in|and|as|into|to|subject|pdf|docx|pptx|ppt|slides|presentation|quiz|flashcards|mind ?map|concept map|please)\b',
             caseSensitive: false,
           ),
-          '',
+          ' ',
         )
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
-    final needsClarification =
-        isArtifactIntent && !hasSubject && strippedTopic.length < 3;
+    if (resolvedSub != null &&
+        strippedTopic.toLowerCase() == resolvedSub.toLowerCase()) {
+      strippedTopic = '';
+    }
+
+    // 4. Smart Clarification:
+    // Case A: Artifact requested with no subject and no topic ("make a ppt")
+    final isArtifactIntent = exportFormatIntent != null ||
+        wantsMindmap ||
+        wantsQuiz ||
+        wantsFlashcards;
+
+    if (isArtifactIntent && !hasSubject && strippedTopic.length < 3) {
+      return SageIntentPlan(
+        intent: intent,
+        secondaryOutputIntent: secondaryOutputIntent,
+        scopeMode: scopeMode,
+        sourcePriority: priority,
+        topic: 'Study',
+        explicitStyleId: explicitStyleId,
+        needsClarification: true,
+        clarificationQuestion: 'Which subject or topic would you like me to create this for?',
+      );
+    }
+
+    // Case B: Broad subject-level compound/mindmap/export request where the subject
+    // has multiple syllabus topics or files and user hasn't specified "full/all/entire" or a subtopic
+    final explicitlyBroad = RegExp(
+      r'\b(full|entire|whole|complete|all units|all chapters|everything|overview)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
+    if (isArtifactIntent &&
+        resolvedNbId != null &&
+        resolvedSub != null &&
+        strippedTopic.isEmpty &&
+        !explicitlyBroad) {
+      final nodes = (overrideSyllabusNodes ?? SyllabusService.getSyllabusNodes(resolvedNbId))
+          .where((n) => n['nodeType'] == 'unit' || n['nodeType'] == 'topic')
+          .toList();
+      final docs = overrideDocs ?? OfflineCacheService.getNotebookDocuments(resolvedNbId);
+
+      if (nodes.length >= 2 || docs.length >= 2) {
+        final actionPhrase = wantsMindmap
+            ? (wantsPdf ? 'Mind Map PDF' : 'Mind Map')
+            : (wantsQuiz
+                ? (wantsPdf ? 'Quiz PDF' : 'Quiz')
+                : (wantsPdf ? 'PDF' : 'study material'));
+        final options = <String>[
+          'Full $resolvedSub $actionPhrase (complete syllabus)',
+          ...nodes.take(2).map((n) => '${n['title']} — $resolvedSub $actionPhrase'),
+          if (nodes.isEmpty)
+            ...docs.take(2).map((d) => '${d['fileName']} — $resolvedSub $actionPhrase'),
+        ];
+        return SageIntentPlan(
+          intent: intent,
+          secondaryOutputIntent: secondaryOutputIntent,
+          scopeMode: scopeMode,
+          sourcePriority: priority,
+          topic: resolvedSub,
+          resolvedNotebookId: resolvedNbId,
+          resolvedSubject: resolvedSub,
+          explicitStyleId: explicitStyleId,
+          needsClarification: true,
+          clarificationQuestion:
+              'I found multiple topics/sources in **$resolvedSub**. Should I build the **$actionPhrase** for the full subject or focus on a specific unit/file?',
+          clarificationOptions: options,
+        );
+      }
+    }
 
     return SageIntentPlan(
       intent: intent,
+      secondaryOutputIntent: secondaryOutputIntent,
       scopeMode: scopeMode,
       sourcePriority: priority,
       topic: strippedTopic.isNotEmpty
           ? strippedTopic
-          : (subject?.trim().isNotEmpty == true ? subject!.trim() : 'Study'),
+          : (resolvedSub ?? 'Study'),
+      resolvedNotebookId: resolvedNbId,
+      resolvedSubject: resolvedSub,
       explicitStyleId: explicitStyleId,
-      needsClarification: needsClarification,
-      clarificationQuestion: needsClarification
-          ? 'Which subject or topic would you like me to create this for?'
-          : null,
     );
   }
 }

@@ -82,6 +82,7 @@ class ChatMessage {
   final String? citation;
   final SageAction? action;
   final AnswerVerificationReport? verification;
+  final List<String> quickReplies;
   final DateTime timestamp;
 
   const ChatMessage({
@@ -91,6 +92,7 @@ class ChatMessage {
     this.citation,
     this.action,
     this.verification,
+    this.quickReplies = const [],
     required this.timestamp,
   });
 
@@ -101,6 +103,7 @@ class ChatMessage {
         'citation': citation,
         'action': action?.toMap(),
         if (verification != null) 'verification': verification!.toMap(),
+        if (quickReplies.isNotEmpty) 'quickReplies': quickReplies,
         'timestamp': timestamp.toIso8601String(),
       };
 
@@ -118,6 +121,9 @@ class ChatMessage {
               Map<String, dynamic>.from(map['verification'] as Map),
             )
           : null,
+      quickReplies: (map['quickReplies'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       timestamp: DateTime.tryParse(map['timestamp'] as String? ?? '') ?? DateTime.now(),
     );
   }
@@ -520,17 +526,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
         effectiveSubject = (nb?['title'] as String? ?? '').trim();
       }
 
-      // 1b. SAGE-004 Intent & Scope Orchestration
+      // 1b. SAGE-004 Intent & Scope Orchestration (also resolves subject mentioned in Main Sage)
       final intentPlan = SageOrchestrator.classify(
         query: cleanQuestion,
         notebookId: targetNbId,
         subject: effectiveSubject,
       );
+      if ((targetNbId == null || targetNbId.isEmpty) &&
+          intentPlan.resolvedNotebookId != null) {
+        targetNbId = intentPlan.resolvedNotebookId;
+        effectiveSubject = intentPlan.resolvedSubject ?? effectiveSubject;
+      }
+
       if (intentPlan.needsClarification && intentPlan.clarificationQuestion != null) {
         final clarifyMsg = ChatMessage(
           id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
           isUser: false,
           text: intentPlan.clarificationQuestion!,
+          quickReplies: intentPlan.clarificationOptions,
           timestamp: DateTime.now(),
         );
         state = state.copyWith(
@@ -539,6 +552,60 @@ class ChatNotifier extends StateNotifier<ChatState> {
         );
         await _persist();
         return clarifyMsg;
+      }
+
+      // 1b-compound. Execute multi-feature compound workflows directly (e.g. Mind Map -> PDF)
+      if (intentPlan.isCompound &&
+          (intentPlan.intent == SageIntentType.mindmap ||
+              intentPlan.intent == SageIntentType.quiz) &&
+          intentPlan.secondaryOutputIntent != null) {
+        final sec = intentPlan.secondaryOutputIntent!;
+        final outFmt = sec == SageIntentType.exportPdf
+            ? 'pdf'
+            : (sec == SageIntentType.exportDocx ? 'docx' : 'pptx');
+        final primaryTool =
+            intentPlan.intent == SageIntentType.mindmap ? 'mindmap' : 'quiz';
+        final subLabel = effectiveSubject.isNotEmpty ? effectiveSubject : 'Study';
+        final styleId = intentPlan.explicitStyleId ??
+            (outFmt == 'pdf'
+                ? OfflineCacheService.getPreferredPdfStyle()
+                : (outFmt == 'pptx'
+                    ? OfflineCacheService.getPreferredPptxStyle()
+                    : 'elegant_academic_notes'));
+
+        state = state.copyWith(
+          thinkingStatus:
+              'Building ${primaryTool == 'mindmap' ? 'Mind Map' : 'Quiz'} from $subLabel notes & rendering ${outFmt.toUpperCase()}...',
+        );
+        final res = await DocumentGenerationService.generateCompoundArtifact(
+          aiRouter: _aiRouter,
+          primaryTool: primaryTool,
+          outputFormat: outFmt,
+          styleId: styleId,
+          subject: subLabel,
+          topic: intentPlan.topic,
+          notebookId: targetNbId,
+          sourceChatId: scopeKey,
+        );
+        final compoundMsg = ChatMessage(
+          id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
+          isUser: false,
+          text:
+              'Done! I built the **${primaryTool == 'mindmap' ? 'Visual Mind Map' : 'Practice Quiz'}** for **$subLabel — ${intentPlan.topic}** and exported it as a **${outFmt.toUpperCase()}** in your Study Library.',
+          action: SageAction(
+            type: sec,
+            label: 'Open ${primaryTool == 'mindmap' ? 'Mind Map' : 'Quiz'} ${outFmt.toUpperCase()}',
+            topic: res.title,
+            filePath: res.filePath,
+          ),
+          timestamp: DateTime.now(),
+        );
+        state = state.copyWith(
+          messages: [...state.messages, compoundMsg],
+          isThinking: false,
+        );
+        await _persist();
+        return compoundMsg;
       }
 
       // 1c. SAGE-002 Hybrid Retrieval & Evidence Engine (strictly scoped to targetNbId)

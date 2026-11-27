@@ -870,6 +870,203 @@ class PdfExporter {
     return pdf.save();
   }
 
+  /// Renders a structured visual Mind Map (root -> color-coded branches -> child concepts) into PDF.
+  static Future<Uint8List> generateMindmapPdf({
+    required String title,
+    required String subject,
+    required Map<String, dynamic> mindmapData,
+    PdfStudyStyle style = PdfStudyStyle.modernClean,
+  }) async {
+    await _ensureFontsLoaded();
+    final pdf = pw.Document(theme: _themeFor(style));
+    final rootTitle = _sanitize((mindmapData['root'] as String? ?? title).trim());
+    final branches = (mindmapData['branches'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final branchPalette = <PdfColor>[
+      PdfColor.fromHex('#4F46E5'),
+      PdfColor.fromHex('#059669'),
+      PdfColor.fromHex('#D97706'),
+      PdfColor.fromHex('#DB2777'),
+      PdfColor.fromHex('#0284C7'),
+      PdfColor.fromHex('#7C3AED'),
+    ];
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 32),
+        header: (ctx) => pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                _sanitize('${subject.toUpperCase()} · VISUAL MIND MAP'),
+                style: pw.TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.grey600),
+              ),
+              pw.Text(
+                'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+                style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey600),
+              ),
+            ],
+          ),
+        ),
+        build: (ctx) => [
+          // Centered Root Node
+          pw.Center(
+            child: pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromHex('#EEF2FF'),
+                borderRadius: pw.BorderRadius.circular(14),
+                border: pw.Border.all(color: PdfColor.fromHex('#4F46E5'), width: 1.6),
+              ),
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    rootTitle,
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromHex('#1E1B4B'),
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    '${branches.length} Core Branches',
+                    style: pw.TextStyle(
+                        fontSize: 9, color: PdfColor.fromHex('#4F46E5')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Color-coded Branch Trees
+          ...List.generate(branches.length, (i) {
+            final b = branches[i];
+            final color = branchPalette[i % branchPalette.length];
+            final bTitle = _sanitize((b['title'] as String? ?? 'Branch ${i + 1}').trim());
+            final bSummary = _sanitize((b['summary'] as String? ?? '').trim());
+            final children = (b['children'] as List? ?? [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+
+            return pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 12),
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.white,
+                borderRadius: pw.BorderRadius.circular(10),
+                border: pw.Border.all(color: color, width: 1.2),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(
+                    children: [
+                      pw.Container(
+                        width: 18,
+                        height: 18,
+                        alignment: pw.Alignment.center,
+                        decoration: pw.BoxDecoration(
+                          color: color,
+                          shape: pw.BoxShape.circle,
+                        ),
+                        child: pw.Text(
+                          '${i + 1}',
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                      ),
+                      pw.SizedBox(width: 8),
+                      pw.Expanded(
+                        child: pw.Text(
+                          bTitle,
+                          style: pw.TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (bSummary.isNotEmpty) ...[
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      bSummary,
+                      style: const pw.TextStyle(
+                          fontSize: 9.5, color: PdfColors.grey800),
+                    ),
+                  ],
+                  if (children.isNotEmpty) ...[
+                    pw.SizedBox(height: 8),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.only(left: 10),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border(
+                          left: pw.BorderSide(color: color, width: 1.5),
+                        ),
+                      ),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: children.map((c) {
+                          final cTitle = _sanitize(
+                              (c['title'] as String? ?? 'Concept').trim());
+                          final cSum = _sanitize(
+                              (c['summary'] as String? ?? '').trim());
+                          return pw.Padding(
+                            padding: const pw.EdgeInsets.only(bottom: 5),
+                            child: pw.RichText(
+                              text: pw.TextSpan(
+                                children: [
+                                  pw.TextSpan(
+                                    text: '-> $cTitle',
+                                    style: pw.TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: pw.FontWeight.bold,
+                                      color: PdfColors.grey900,
+                                    ),
+                                  ),
+                                  if (cSum.isNotEmpty)
+                                    pw.TextSpan(
+                                      text: ': $cSum',
+                                      style: const pw.TextStyle(
+                                        fontSize: 9.5,
+                                        color: PdfColors.grey700,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+    return pdf.save();
+  }
+
   static Future<void> printPdf(Uint8List bytes, {String name = 'Study_Guide'}) async {
     await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => bytes, name: name);
   }

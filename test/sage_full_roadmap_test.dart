@@ -10,6 +10,7 @@ import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
 import 'package:trueme/core/services/offline_cache_service.dart';
 import 'package:trueme/core/services/supabase_service.dart';
+import 'package:trueme/features/export/pdf_exporter.dart';
 import 'package:trueme/features/export/services/document_generation_service.dart';
 
 class _StubRagService extends RagService {
@@ -280,6 +281,62 @@ void main() {
       expect(report.citationPrecision, 1.0);
       expect(report.gapAbstentionScore, 1.0);
       expect(report.syllabusMappingAccuracy, 1.0);
+    });
+
+    test('Compound Orchestrator resolves subject, clarifies broad scope, and renders visual Mind Map PDF', () async {
+      final notebooks = [
+        {'id': 'nb_micro', 'title': 'Microbiology'},
+        {'id': 'nb_chem', 'title': 'Chemistry'},
+      ];
+      final syllabus = [
+        {'id': 'u1', 'nodeType': 'unit', 'title': 'Bacterial Genetics'},
+        {'id': 'u2', 'nodeType': 'unit', 'title': 'Virology & Immunology'},
+      ];
+
+      // 1. Broad request from Main Sage asks concise clarification with quick replies
+      final broadPlan = SageOrchestrator.classify(
+        query: 'give me the mind map of my microbiology subject and send me as pdf',
+        overrideNotebooks: notebooks,
+        overrideSyllabusNodes: syllabus,
+      );
+      expect(broadPlan.resolvedNotebookId, 'nb_micro');
+      expect(broadPlan.resolvedSubject, 'Microbiology');
+      expect(broadPlan.intent, SageIntentType.mindmap);
+      expect(broadPlan.secondaryOutputIntent, SageIntentType.exportPdf);
+      expect(broadPlan.needsClarification, isTrue);
+      expect(broadPlan.clarificationOptions.length, greaterThanOrEqualTo(2));
+
+      // 2. Clarified request executes compound Mind Map -> PDF without re-asking
+      final clarifiedPlan = SageOrchestrator.classify(
+        query: 'Full Microbiology Mind Map PDF (complete syllabus)',
+        overrideNotebooks: notebooks,
+        overrideSyllabusNodes: syllabus,
+      );
+      expect(clarifiedPlan.needsClarification, isFalse);
+      expect(clarifiedPlan.isCompound, isTrue);
+      expect(clarifiedPlan.intent, SageIntentType.mindmap);
+      expect(clarifiedPlan.secondaryOutputIntent, SageIntentType.exportPdf);
+
+      // 3. Visual Mind Map PDF renders valid %PDF bytes
+      final pdfBytes = await PdfExporter.generateMindmapPdf(
+        title: 'Microbiology Overview',
+        subject: 'Microbiology',
+        mindmapData: {
+          'root': 'Microbiology Overview',
+          'branches': [
+            {
+              'title': 'Bacterial Genetics',
+              'summary': 'Gene transfer mechanisms',
+              'children': [
+                {'title': 'Conjugation', 'summary': 'F-plasmid transfer via pilus'},
+                {'title': 'Transduction', 'summary': 'Bacteriophage-mediated transfer'},
+              ],
+            },
+          ],
+        },
+      );
+      expect(pdfBytes.length, greaterThan(500));
+      expect(String.fromCharCodes(pdfBytes.take(5)), '%PDF-');
     });
   });
 }
