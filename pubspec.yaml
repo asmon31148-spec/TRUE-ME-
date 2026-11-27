@@ -89,6 +89,7 @@ flutter:
   assets:
     - assets/icons/
     - assets/fonts/
+    - assets/styles/
 
 dependency_overrides:
   record_platform_interface: 1.1.0

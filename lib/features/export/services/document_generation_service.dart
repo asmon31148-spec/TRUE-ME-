@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import '../../../core/ai/ai_router.dart';
+import '../../../core/ai/pollinations_service.dart';
 import '../../../core/ai/smai/memory_event_service.dart';
 import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/syllabus_service.dart';
@@ -210,6 +213,7 @@ class DocumentGenerationService {
     if (format == 'pdf') {
       await OfflineCacheService.savePreferredPdfStyle(styleId);
       final pdfStyle = PdfExporter.fromStyleId(styleId);
+      final diagramImages = await _fetchSectionDiagrams(structuredDoc, pdfStyle);
       bytes = await PdfExporter.generateStudyGuidePdf(
         title: structuredDoc.title,
         subject: subject,
@@ -217,6 +221,7 @@ class DocumentGenerationService {
         keyTakeaways: structuredDoc.takeaways,
         structuredDoc: structuredDoc,
         style: pdfStyle,
+        sectionDiagramImages: diagramImages,
       );
       fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Guide.pdf';
     } else if (format == 'docx') {
@@ -234,10 +239,12 @@ class DocumentGenerationService {
       final pptxStyle = PptxExporter.fromStyleId(styleId);
       final slides = DocumentPipelineService.toSlideDeck(structuredDoc);
       slideCount = slides.length;
+      final bgBytes = await _loadPptxBackgroundAsset(pptxStyle);
       bytes = PptxExporter.createPresentation(
         presentationTitle: structuredDoc.title,
         slides: slides,
         style: pptxStyle,
+        backgroundImageBytes: bgBytes,
       );
       fileName = '${safeBase}_${safeTopic}_${styleId}_${uniqueSuffix}_Slides.pptx';
     }
@@ -334,6 +341,58 @@ class DocumentGenerationService {
       slideCount: slideCount,
       structuredDoc: structuredDoc,
     );
+  }
+
+  static Future<Uint8List?> _loadPptxBackgroundAsset(PptxStudyStyle style) async {
+    final assetPath = switch (style) {
+      PptxStudyStyle.minimalCute => 'assets/styles/pptx_pastel_floral.png',
+      PptxStudyStyle.modernHighYield => 'assets/styles/pptx_dark_neon.png',
+      PptxStudyStyle.zenPaperInk => 'assets/styles/pptx_modern_business.png',
+      PptxStudyStyle.handwrittenNotebook => 'assets/styles/pptx_creative_infographic.png',
+    };
+    try {
+      final data = await rootBundle.load(assetPath);
+      return data.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<int, Uint8List>> _fetchSectionDiagrams(
+    StructuredStudyDocument doc,
+    PdfStudyStyle style,
+  ) async {
+    final result = <int, Uint8List>{};
+    final styleCue = switch (style) {
+      PdfStudyStyle.handwritten => 'hand-drawn ink pen sketch on cream notebook paper',
+      PdfStudyStyle.minimalCute => 'cute pastel illustrated study diagram on white background',
+      PdfStudyStyle.zenPaperInk => 'vintage archival scientific ink illustration on parchment',
+      PdfStudyStyle.modernClean => 'clean modern academic textbook vector diagram on white',
+    };
+
+    int fetched = 0;
+    for (int i = 0; i < doc.sections.length && fetched < 2; i++) {
+      final s = doc.sections[i];
+      if (s.diagramSvg != null && s.diagramSvg!.contains('<svg')) continue;
+      final prompt = s.diagramPrompt?.trim() ?? '';
+      if (prompt.isEmpty) continue;
+
+      try {
+        final url = PollinationsService.getImageUrl(
+          prompt: '$prompt, $styleCue',
+          width: 768,
+          height: 512,
+        );
+        final resp = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+        if (resp.statusCode == 200 && resp.bodyBytes.length > 1000) {
+          result[i] = resp.bodyBytes;
+          fetched++;
+        }
+      } catch (_) {
+        // Non-blocking fallback: PDF still renders cleanly without external image
+      }
+    }
+    return result;
   }
 
   /// Compound Multi-Feature Generator: composes Mind Map or Quiz generation

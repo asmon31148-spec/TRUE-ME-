@@ -98,9 +98,9 @@ class PdfExporter {
         );
       case PdfStudyStyle.handwritten:
         return pw.ThemeData.withFont(
-          base: _latoReg ?? pw.Font.helvetica(),
+          base: _patrickHand ?? _latoReg ?? pw.Font.helvetica(),
           bold: _patrickHand ?? _latoBold ?? pw.Font.helveticaBold(),
-          italic: _latoReg ?? pw.Font.helveticaOblique(),
+          italic: _patrickHand ?? _latoReg ?? pw.Font.helveticaOblique(),
           boldItalic: _patrickHand ?? _latoBold ?? pw.Font.helveticaBoldOblique(),
         );
       case PdfStudyStyle.minimalCute:
@@ -121,6 +121,7 @@ class PdfExporter {
     List<String> keyTakeaways = const [],
     StructuredStudyDocument? structuredDoc,
     PdfStudyStyle style = PdfStudyStyle.handwritten,
+    Map<int, Uint8List>? sectionDiagramImages,
   }) async {
     await _ensureFontsLoaded();
     final pdf = pw.Document(theme: _themeFor(style));
@@ -128,7 +129,11 @@ class PdfExporter {
     final safeSubject = _sanitize(subject);
 
     final bodyWidgets = structuredDoc != null
-        ? _buildFromStructured(structuredDoc, style)
+        ? _buildFromStructured(
+            structuredDoc,
+            style,
+            sectionDiagramImages: sectionDiagramImages,
+          )
         : _buildFormattedContent(content, style);
 
     final effectiveTakeaways = keyTakeaways.isNotEmpty
@@ -140,13 +145,13 @@ class PdfExporter {
 
     if (style == PdfStudyStyle.handwritten) {
       pageBgColor = PdfColor.fromHex('#FDFBF7');
-      pageMargin = const pw.EdgeInsets.fromLTRB(44, 28, 28, 34);
+      pageMargin = const pw.EdgeInsets.fromLTRB(48, 28, 28, 34);
     } else if (style == PdfStudyStyle.minimalCute) {
-      pageBgColor = PdfColor.fromHex('#FFF5F7');
-      pageMargin = const pw.EdgeInsets.fromLTRB(28, 28, 28, 34);
+      pageBgColor = PdfColor.fromHex('#FFF5F9');
+      pageMargin = const pw.EdgeInsets.fromLTRB(30, 28, 30, 34);
     } else if (style == PdfStudyStyle.zenPaperInk) {
-      pageBgColor = PdfColor.fromHex('#FBF9F5');
-      pageMargin = const pw.EdgeInsets.fromLTRB(36, 34, 36, 38);
+      pageBgColor = PdfColor.fromHex('#F5E9D3');
+      pageMargin = const pw.EdgeInsets.fromLTRB(38, 36, 38, 38);
     }
 
     pdf.addPage(
@@ -202,12 +207,45 @@ class PdfExporter {
               ),
               // Red vertical Cornell margin line
               pw.Positioned(
-                left: 34,
+                left: 38,
                 top: 0,
                 bottom: 0,
                 child: pw.Container(
                   width: 1.2,
                   color: PdfColor.fromHex('#FCA5A5'),
+                ),
+              ),
+              // Spiral notebook rings along left edge
+              pw.Positioned(
+                left: 6,
+                top: 22,
+                bottom: 22,
+                child: pw.Column(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: List.generate(
+                    22,
+                    (_) => pw.Row(
+                      children: [
+                        pw.Container(
+                          width: 14,
+                          height: 5,
+                          decoration: pw.BoxDecoration(
+                            color: PdfColor.fromHex('#64748B'),
+                            borderRadius: pw.BorderRadius.circular(2.5),
+                          ),
+                        ),
+                        pw.SizedBox(width: 2),
+                        pw.Container(
+                          width: 6,
+                          height: 6,
+                          decoration: pw.BoxDecoration(
+                            color: PdfColor.fromHex('#CBD5E1'),
+                            shape: pw.BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -221,11 +259,54 @@ class PdfExporter {
         ignoreMargins: true,
         child: pw.Container(
           color: bg,
-          padding: const pw.EdgeInsets.all(16),
+          padding: const pw.EdgeInsets.all(14),
           child: pw.Container(
+            padding: const pw.EdgeInsets.all(4),
             decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColor.fromHex('#D6D3D1'), width: 1),
+              border: pw.Border.all(color: PdfColor.fromHex('#8B5A2B'), width: 1.4),
             ),
+            child: pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColor.fromHex('#C49A6C'), width: 0.7),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (style == PdfStudyStyle.minimalCute) {
+      return pw.FullPage(
+        ignoreMargins: true,
+        child: pw.Container(
+          color: bg,
+          child: pw.Stack(
+            children: [
+              pw.Positioned(
+                right: -30,
+                top: -30,
+                child: pw.Container(
+                  width: 110,
+                  height: 110,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromHex('#FCE7F3'),
+                    shape: pw.BoxShape.circle,
+                  ),
+                ),
+              ),
+              pw.Positioned(
+                left: -25,
+                bottom: -25,
+                child: pw.Container(
+                  width: 95,
+                  height: 95,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromHex('#EDE9FE'),
+                    shape: pw.BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -233,14 +314,39 @@ class PdfExporter {
 
     return pw.FullPage(
       ignoreMargins: true,
-      child: pw.Container(color: bg),
+      child: pw.Container(
+        color: bg,
+        child: pw.Stack(
+          children: [
+            pw.Positioned(
+              left: 0,
+              top: 0,
+              right: 0,
+              child: pw.Container(height: 5, color: PdfColor.fromHex('#1E3A8A')),
+            ),
+            pw.Positioned(
+              right: -35,
+              bottom: -35,
+              child: pw.Container(
+                width: 130,
+                height: 130,
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#EFF6FF'),
+                  shape: pw.BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   static List<pw.Widget> _buildFromStructured(
     StructuredStudyDocument doc,
-    PdfStudyStyle style,
-  ) {
+    PdfStudyStyle style, {
+    Map<int, Uint8List>? sectionDiagramImages,
+  }) {
     final widgets = <pw.Widget>[];
 
     if (doc.executiveSummary.isNotEmpty) {
@@ -274,6 +380,8 @@ class PdfExporter {
           ...s.keyPoints.map((k) => _buildBullet(_sanitize(k), style)),
           ...s.examples.map((e) => _buildStickyCallout('Example: ${_sanitize(e)}', style)),
           if (s.processSteps.isNotEmpty) _buildProcessFlowchart(s.processSteps, style),
+          if (s.diagramSvg != null || sectionDiagramImages?[i] != null)
+            _buildSectionDiagram(s, sectionDiagramImages?[i], style),
           if (s.tableRows.isNotEmpty) _buildPdfTable(s.tableRows, style),
         ];
 
@@ -361,6 +469,9 @@ class PdfExporter {
       if (s.processSteps.isNotEmpty) {
         widgets.add(_buildHeading3('Process Flowchart', style));
         widgets.add(_buildProcessFlowchart(s.processSteps, style));
+      }
+      if (s.diagramSvg != null || sectionDiagramImages?[i] != null) {
+        widgets.add(_buildSectionDiagram(s, sectionDiagramImages?[i], style));
       }
       if (s.tableRows.isNotEmpty) {
         widgets.add(_buildPdfTable(s.tableRows, style));
@@ -526,6 +637,66 @@ class PdfExporter {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: rows,
+      ),
+    );
+  }
+
+  /// Renders either an AI-generated vector SVG diagram or a raster diagram PNG
+  /// inside a styled, non-clipping figure container.
+  static pw.Widget _buildSectionDiagram(
+    StudySectionBlock s,
+    Uint8List? imageBytes,
+    PdfStudyStyle style,
+  ) {
+    final accent = switch (style) {
+      PdfStudyStyle.handwritten => PdfColor.fromHex('#6D28D9'),
+      PdfStudyStyle.minimalCute => PdfColor.fromHex('#DB2777'),
+      PdfStudyStyle.zenPaperInk => PdfColor.fromHex('#7C2D12'),
+      PdfStudyStyle.modernClean => PdfColor.fromHex('#1D4ED8'),
+    };
+    pw.Widget? graphic;
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      try {
+        graphic = pw.Image(
+          pw.MemoryImage(imageBytes),
+          height: 170,
+          fit: pw.BoxFit.contain,
+        );
+      } catch (_) {}
+    }
+    if (graphic == null && s.diagramSvg != null && s.diagramSvg!.contains('<svg')) {
+      try {
+        graphic = pw.SvgImage(
+          svg: s.diagramSvg!,
+          height: 165,
+          fit: pw.BoxFit.contain,
+        );
+      } catch (_) {}
+    }
+    if (graphic == null) return pw.SizedBox();
+
+    return pw.Container(
+      margin: const pw.EdgeInsets.symmetric(vertical: 8),
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: accent, width: 0.9),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          graphic,
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Figure: ${_sanitize(s.heading)}',
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontStyle: pw.FontStyle.italic,
+              color: PdfColor.fromHex('#475569'),
+            ),
+          ),
+        ],
       ),
     );
   }

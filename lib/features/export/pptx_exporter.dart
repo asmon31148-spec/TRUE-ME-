@@ -186,16 +186,19 @@ class PptxExporter {
     required String presentationTitle,
     required List<PptxSlideData> slides,
     PptxStudyStyle style = PptxStudyStyle.minimalCute,
+    Uint8List? backgroundImageBytes,
   }) {
     final validated = DocumentLayoutValidator.validateAndOptimizeSlides(slides);
     final effectiveSlides = validated.slides.isNotEmpty ? validated.slides : slides;
     final spec = _themeSpecFor(style);
     final archive = Archive();
+    final hasBgImage = backgroundImageBytes != null && backgroundImageBytes.isNotEmpty;
 
     final contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-officedocument.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  ${hasBgImage ? '<Default Extension="png" ContentType="image/png"/>' : ''}
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
   <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -260,6 +263,12 @@ class PptxExporter {
 </Relationships>''';
     archive.addFile(_createArchiveFile('ppt/slideLayouts/_rels/slideLayout1.xml.rels', slideLayoutRelsXml));
 
+    if (hasBgImage) {
+      archive.addFile(
+        ArchiveFile('ppt/media/theme_bg.png', backgroundImageBytes.length, backgroundImageBytes),
+      );
+    }
+
     for (int i = 0; i < effectiveSlides.length; i++) {
       final slideXml = _buildSlideXml(
         effectiveSlides[i],
@@ -268,11 +277,13 @@ class PptxExporter {
         presentationTitle,
         style,
         spec,
+        hasBgImage: hasBgImage,
       );
       archive.addFile(_createArchiveFile('ppt/slides/slide${i + 1}.xml', slideXml));
-      const slideRelXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      final slideRelXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+  ${hasBgImage ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/theme_bg.png"/>' : ''}
 </Relationships>''';
       archive.addFile(_createArchiveFile('ppt/slides/_rels/slide${i + 1}.xml.rels', slideRelXml));
     }
@@ -288,14 +299,24 @@ class PptxExporter {
     int totalSlides,
     String deckTitle,
     PptxStudyStyle style,
-    _PptxThemeSpec spec,
-  ) {
+    _PptxThemeSpec spec, {
+    bool hasBgImage = false,
+  }) {
     final tagText = (s.tag != null && s.tag!.trim().isNotEmpty)
         ? s.tag!.trim()
         : 'SLIDE ${index + 1}/$totalSlides';
     final footerText = 'TRUE ME · ${spec.label} · ${_escapeXml(deckTitle)} (${index + 1}/$totalSlides)';
 
-    final decorXml = _buildThemeDecor(style, spec, isCover: s.layoutKind == SlideLayoutKind.cover);
+    final bgPicXml = hasBgImage
+        ? '''<p:pic>
+        <p:nvPicPr><p:cNvPr id="89" name="ThemeBg"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>
+        <p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
+        <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="$slideW" cy="$slideH"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
+      </p:pic>'''
+        : '';
+    final decorXml = hasBgImage
+        ? bgPicXml
+        : _buildThemeDecor(style, spec, isCover: s.layoutKind == SlideLayoutKind.cover);
     final String bodyXml;
 
     switch (s.layoutKind) {

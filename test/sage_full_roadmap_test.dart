@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -377,8 +378,10 @@ void main() {
         presentationTitle: 'Cell Biology',
         slides: rawSlides,
         style: PptxExporter.fromStyleId('dark_neon'),
+        backgroundImageBytes: Uint8List.fromList([137, 80, 78, 71, 13, 10, 26, 10]),
       );
       final archive = ZipDecoder().decodeBytes(pptxBytes);
+      expect(archive.any((f) => f.name == 'ppt/media/theme_bg.png'), isTrue);
       final presXml = utf8.decode(
         archive.firstWhere((f) => f.name == 'ppt/presentation.xml').content as List<int>,
       );
@@ -406,6 +409,7 @@ void main() {
             heading: 'Mitosis',
             body: 'Cell division produces two identical daughter cells.',
             processSteps: ['Prophase', 'Metaphase', 'Anaphase', 'Telophase'],
+            diagramSvg: '<svg viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="40" r="24" fill="#EDE9FE" stroke="#6D28D9" stroke-width="2"/><text x="50" y="44" text-anchor="middle" font-size="10">Cell</text></svg>',
           ),
         ],
       );

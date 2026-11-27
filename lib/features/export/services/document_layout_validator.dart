@@ -98,6 +98,8 @@ class DocumentLayoutValidator {
           calloutWarning: s.calloutWarning,
           tableRows: safeTable,
           processSteps: s.processSteps,
+          diagramSvg: s.diagramSvg,
+          diagramPrompt: s.diagramPrompt,
         ),
       );
     }

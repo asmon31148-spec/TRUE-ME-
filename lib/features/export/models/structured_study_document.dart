@@ -9,6 +9,8 @@ class StudySectionBlock {
   final String? calloutWarning;
   final List<List<String>> tableRows;
   final List<String> processSteps;
+  final String? diagramSvg;
+  final String? diagramPrompt;
 
   const StudySectionBlock({
     required this.heading,
@@ -19,6 +21,8 @@ class StudySectionBlock {
     this.calloutWarning,
     this.tableRows = const [],
     this.processSteps = const [],
+    this.diagramSvg,
+    this.diagramPrompt,
   });
 
   factory StudySectionBlock.fromMap(Map<String, dynamic> map) {
@@ -47,6 +51,8 @@ class StudySectionBlock {
           .map((e) => e.toString().trim())
           .where((s) => s.isNotEmpty)
           .toList(),
+      diagramSvg: map['diagramSvg']?.toString().trim(),
+      diagramPrompt: map['diagramPrompt']?.toString().trim(),
     );
   }
 
@@ -59,6 +65,8 @@ class StudySectionBlock {
         if (calloutWarning != null && calloutWarning!.isNotEmpty) 'calloutWarning': calloutWarning,
         'tableRows': tableRows,
         'processSteps': processSteps,
+        if (diagramSvg != null && diagramSvg!.isNotEmpty) 'diagramSvg': diagramSvg,
+        if (diagramPrompt != null && diagramPrompt!.isNotEmpty) 'diagramPrompt': diagramPrompt,
       };
 }
 
