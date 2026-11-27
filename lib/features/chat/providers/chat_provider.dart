@@ -1,9 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/ai_router.dart';
-import '../../../core/ai/cognitive/app_capabilities_manifest.dart';
-import '../../../core/ai/cognitive/student_cognitive_profile.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/ai/sage_context_builder.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/utils/text_chunker.dart';
 import '../../export/services/document_generation_service.dart';
@@ -327,16 +326,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
             pendingSourceContext: contentForExport,
           );
         }
-        final res = await DocumentGenerationService.generateAndSave(
+        final res = await GenerationJobService.runDurableJob(
           aiRouter: _aiRouter,
           format: format,
           styleId: explicitStyle,
           subject: subject,
           topic: topic,
+          scopeLabel: 'Explicit Chat Request',
           notebookId: notebookId,
           sourceContext: contentForExport,
           sourceChatId: scopeKey,
         );
+        if (res == null) {
+          throw StateError('Document generation did not produce a file.');
+        }
         return SageAction(
           type: type,
           label: 'Open ${format.toUpperCase()} (${res.title})',
@@ -477,8 +480,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           if (localDocs.isNotEmpty) {
             final queryTerms = cleanQuestion
                 .toLowerCase()
-                .split(RegExp(r'[^a-z0-9]+'))
-                .where((w) => w.length >= 3)
+                .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+                .where((w) => w.length >= 2)
                 .toSet();
 
             final List<Map<String, dynamic>> scoredChunks = [];
@@ -499,11 +502,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 for (final term in queryTerms) {
                   if (lower.contains(term)) score++;
                 }
-                scoredChunks.add({
-                  'score': score,
-                  'text': '[Source: $fName ($section)]\n${ch.content}',
-                  'citation': '$fName ($section)',
-                });
+                if (score > 0) {
+                  scoredChunks.add({
+                    'score': score,
+                    'text': '[Source: $fName ($section)]\n${ch.content}',
+                    'citation': '$fName ($section)',
+                  });
+                }
               }
             }
 
@@ -552,42 +557,30 @@ class ChatNotifier extends StateNotifier<ChatState> {
             : 'Done! I generated your ${directIntent.name.replaceFirst('export', '').toUpperCase()} file for **$subjectLabel**. Tap the button below to open it.';
       } else {
         try {
+          final builtCtx = SageContextBuilder.build(
+            studentName: name,
+            subject: effectiveSubject.isNotEmpty ? effectiveSubject : null,
+            notebookId: targetNbId,
+            retrievedExcerpts: retrievedExcerpts,
+            citationSource: citationSource,
+          );
           if (retrievedExcerpts.isEmpty) {
-            final cognitiveProfile = StudentCognitiveProfile.buildLive(
-              subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
-            );
-            final cognitiveContext = cognitiveProfile.toSageContextString();
-            final manifest = AppCapabilitiesManifest.manifestPrompt;
-
-            final scopeInstruction = effectiveSubject.isNotEmpty
-                ? 'You are scoped to the subject "$effectiveSubject". Track and mentor for "$effectiveSubject".\nStudent Progress in $effectiveSubject:\n$progressSummary'
-                : 'General study mentor mode.';
-            final systemPrompt = '''
-You are Sage, the autonomous cognitive study companion, diagnostic mentor, and academic co-pilot for $name in the True Me app.
-$scopeInstruction
-
-$cognitiveContext
-
-$manifest
-
-### RESPONSE DIRECTIVES:
-- Empathic, proactive diagnosis. Meet the student at their verified cognitive level (${(cognitiveProfile.activeSubjectTier ?? cognitiveProfile.overallTier).name.toUpperCase()}).
-- When you detect gaps, recommend concrete action and append the corresponding action tag on its own line:
-  [ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|schedule|voice_tutor | <short topic>]
-- Format with clean ## headings and high-yield bullet points (- ).
-- CRITICAL: NEVER output markdown pipe tables (| col |).
-''';
             rawAnswer = await _aiRouter.executeRealtimeChat(
               prompt: cleanQuestion,
-              systemPrompt: systemPrompt,
+              systemPrompt: builtCtx.systemPrompt,
             );
           } else {
+            final enrichedSummary = [
+              if (progressSummary != null && progressSummary.isNotEmpty) progressSummary,
+              if (builtCtx.syllabusSummary != null && builtCtx.syllabusSummary!.isNotEmpty)
+                builtCtx.syllabusSummary!,
+            ].join('\n');
             rawAnswer = await _aiRouter.chatWithNotes(
               question: cleanQuestion,
               retrievedChunks: retrievedExcerpts,
               studentName: name,
               subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
-              subjectProgressSummary: progressSummary,
+              subjectProgressSummary: enrichedSummary.isNotEmpty ? enrichedSummary : null,
             );
           }
         } catch (aiError) {
@@ -600,20 +593,9 @@ $manifest
         final resolvedActionType = directIntent ?? tagType;
 
         if (resolvedActionType != null) {
-          String exportSource = rawAnswer;
-          if ((resolvedActionType == SageActionType.exportPdf ||
-                  resolvedActionType == SageActionType.exportDocx ||
-                  resolvedActionType == SageActionType.exportPptx) &&
-              targetNbId != null &&
-              exportSource.length < 300) {
-            final nbText = OfflineCacheService.getNotebookCombinedText(targetNbId, maxChars: 12000);
-            if (nbText.trim().isNotEmpty) {
-              exportSource = await _aiRouter.executeHeavyReasoning(
-                prompt:
-                    'Create a clean, well-structured study guide for "$subjectLabel" ($tagTopic) from these notes using ## headings and - bullet points.\n\n$nbText',
-              );
-            }
-          }
+          // If the chat response is brief, pass empty context so DocumentGenerationService
+          // loads the full subject sources through DocumentPipelineService map-reduce.
+          final exportSource = rawAnswer.length >= 300 ? rawAnswer : '';
 
           finalAction = await _executeAction(
             type: resolvedActionType,

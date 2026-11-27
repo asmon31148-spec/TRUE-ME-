@@ -15,6 +15,8 @@ class PptxSlideData {
   final String? subtitle;
   final String? tag;
   final String? takeaway;
+  final List<List<String>>? tableRows;
+  final List<String>? processSteps;
 
   const PptxSlideData({
     required this.title,
@@ -22,6 +24,8 @@ class PptxSlideData {
     this.subtitle,
     this.tag,
     this.takeaway,
+    this.tableRows,
+    this.processSteps,
   });
 }
 
@@ -146,7 +150,14 @@ class PptxExporter {
     String deckTitle,
     PptxStudyStyle style,
   ) {
-    final safeBullets = s.bulletPoints.isNotEmpty ? s.bulletPoints : ['Key concept summary'];
+    final combinedBullets = <String>[
+      ...s.bulletPoints,
+      if (s.processSteps != null && s.processSteps!.isNotEmpty)
+        'Process: ${s.processSteps!.asMap().entries.map((e) => '(${e.key + 1}) ${e.value}').join('  →  ')}',
+      if (s.tableRows != null && s.tableRows!.isNotEmpty)
+        ...s.tableRows!.take(4).map((r) => r.join('  |  ')),
+    ];
+    final safeBullets = combinedBullets.isNotEmpty ? combinedBullets : ['Key concept summary'];
     final tagText = (s.tag != null && s.tag!.trim().isNotEmpty)
         ? s.tag!.trim()
         : 'SLIDE ${index + 1}/$totalSlides';

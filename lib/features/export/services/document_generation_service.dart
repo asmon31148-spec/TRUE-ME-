@@ -198,13 +198,19 @@ class DocumentGenerationService {
     }
 
     onStageChanged?.call(5, 'Rendering & checking final file...');
-    // Output QA Gate: verify magic bytes & non-empty payload before saving/marking ready
+    // Output QA Gate: verify magic bytes, non-empty payload, and structural parseability
     final expectedFmt = format == 'pdf'
         ? ParsedDocFormat.pdf
         : (format == 'docx' ? ParsedDocFormat.docx : ParsedDocFormat.pptx);
     final detected = DocumentParserService.detectFormat(bytes, fileName);
     if (bytes.isEmpty || detected != expectedFmt) {
       throw StateError('Generated $format failed integrity verification ($detected).');
+    }
+    if (expectedFmt == ParsedDocFormat.docx && DocumentParserService.parseDocx(bytes).isEmpty) {
+      throw StateError('Generated DOCX failed structural content verification.');
+    }
+    if (expectedFmt == ParsedDocFormat.pptx && DocumentParserService.parsePptx(bytes).isEmpty) {
+      throw StateError('Generated PPTX failed structural slide verification.');
     }
 
     onStageChanged?.call(6, 'Saving artifact to Study Library...');

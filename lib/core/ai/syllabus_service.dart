@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../services/offline_cache_service.dart';
+import '../services/supabase_service.dart';
+import '../utils/text_chunker.dart';
 import 'ai_router.dart';
 
 /// Syllabus-first hierarchy & source coverage service (Phases C & D).
@@ -26,9 +29,8 @@ class SyllabusService {
   }
 
   static Future<void> saveSyllabusNodes(String notebookId, List<Map<String, dynamic>> nodes) async {
-    try {
-      await _notebooksBox.put('$_syllabusBoxPrefix$notebookId', nodes);
-    } catch (_) {}
+    await _notebooksBox.put('$_syllabusBoxPrefix$notebookId', nodes);
+    unawaited(_syncNodesToSupabase(notebookId, nodes));
   }
 
   static List<Map<String, dynamic>> getSourceMappings(String notebookId) {
@@ -41,9 +43,7 @@ class SyllabusService {
   }
 
   static Future<void> saveSourceMappings(String notebookId, List<Map<String, dynamic>> mappings) async {
-    try {
-      await _notebooksBox.put('$_mappingBoxPrefix$notebookId', mappings);
-    } catch (_) {}
+    await _notebooksBox.put('$_mappingBoxPrefix$notebookId', mappings);
   }
 
   /// Saved Study Artifacts per subject (PDF, Word, Slides, Summary, Mind Map, Explainer, Quiz, Flashcards).
@@ -78,7 +78,6 @@ class SyllabusService {
     List<String>? sourceRefs,
     Map<String, dynamic>? contentJson,
   }) async {
-    try {
       final existing = getArtifacts(notebookId);
       final id = documentId ?? 'art_${DateTime.now().millisecondsSinceEpoch}';
       final entry = {
@@ -112,11 +111,60 @@ class SyllabusService {
       }
       if (existing.length > 150) existing.removeRange(150, existing.length);
       await _notebooksBox.put('$_artifactBoxPrefix$notebookId', existing);
+      unawaited(_syncArtifactToSupabase(entry));
+  }
+
+  static Future<void> _syncArtifactToSupabase(Map<String, dynamic> entry) async {
+    try {
+      final client = SupabaseService.instance.clientOrNull;
+      final uid = SupabaseService.instance.authUserId;
+      if (client == null || uid == null) return;
+      await client.from('study_artifacts').upsert({
+        'id': entry['id'],
+        'user_id': uid,
+        'notebook_id': entry['notebookId'],
+        'node_id': entry['nodeId'],
+        'artifact_type': entry['artifactType'],
+        'title': entry['title'],
+        'topic_label': entry['topicLabel'],
+        'depth_level': entry['depthLevel'],
+        'file_path': entry['filePath'],
+        'vault_id': entry['vaultId'],
+        'source_chat_id': entry['sourceChatId'],
+        'content_json': entry['contentJson'],
+        'archived': entry['archived'] == true,
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> _syncNodesToSupabase(
+    String notebookId,
+    List<Map<String, dynamic>> nodes,
+  ) async {
+    try {
+      final client = SupabaseService.instance.clientOrNull;
+      final uid = SupabaseService.instance.authUserId;
+      if (client == null || uid == null || nodes.isEmpty) return;
+      final payload = nodes.map((n) => {
+        'id': n['id'],
+        'user_id': uid,
+        'notebook_id': notebookId,
+        'parent_id': n['parentId'],
+        'node_type': n['nodeType'],
+        'title': n['title'],
+        'academic_level': n['academicLevel'],
+        'source_origin': n['sourceOrigin'] ?? 'official_syllabus',
+        'status': n['status'] ?? 'pending',
+        'confirmed': n['confirmed'] == true,
+        'archived': n['archived'] == true,
+        'sort_order': n['sortOrder'] ?? 0,
+      }).toList();
+      await client.from('syllabus_nodes').upsert(payload);
     } catch (_) {}
   }
 
   /// Extracts a `semester -> unit -> topic -> subtopic` hierarchy from an uploaded syllabus.
-  /// Archives prior active syllabus nodes (preserving old artifacts' topic labels).
+  /// Chunks long syllabi so units are not silently truncated.
   static Future<List<Map<String, dynamic>>> extractAndSaveSyllabus({
     required AiRouter aiRouter,
     required String notebookId,
@@ -125,12 +173,20 @@ class SyllabusService {
   }) async {
     final trimmed = syllabusText.trim();
     if (trimmed.isEmpty) return [];
-    final sample = trimmed.length > 14000 ? trimmed.substring(0, 14000) : trimmed;
 
-    final raw = await aiRouter.executeHeavyReasoning(
-      jsonMode: true,
-      prompt: '''
-Analyze this syllabus for "$subject". Extract the academic hierarchy and course level.
+    final chunks = trimmed.length > 12000
+        ? TextChunker.splitIntoChunks(trimmed, targetChunkChars: 12000, overlapChars: 400)
+        : null;
+    final segments = chunks != null ? chunks.map((c) => c.content).toList() : [trimmed];
+
+    final List<dynamic> items = [];
+    String academicLevel = 'Unknown';
+
+    for (int i = 0; i < segments.length; i++) {
+      final raw = await aiRouter.executeHeavyReasoning(
+        jsonMode: true,
+        prompt: '''
+Analyze this syllabus segment (${i + 1}/${segments.length}) for "$subject". Extract the academic hierarchy and course level.
 Return ONLY valid JSON:
 {
   "academicLevel": "BSc | MSc | High School | Competitive | Unknown",
@@ -150,13 +206,15 @@ Return ONLY valid JSON:
 }
 
 Syllabus text:
-$sample
+${segments[i]}
 ''',
-    );
-
-    final parsed = AiRouter.parseJsonObject(raw);
-    final items = parsed['items'] as List? ?? [];
-    final academicLevel = (parsed['academicLevel'] ?? 'Unknown').toString();
+      );
+      final parsed = AiRouter.parseJsonObject(raw);
+      if (academicLevel == 'Unknown' && parsed['academicLevel'] != null) {
+        academicLevel = parsed['academicLevel'].toString();
+      }
+      items.addAll(parsed['items'] as List? ?? []);
+    }
 
     // Archive existing active nodes on syllabus revision (preserving artifact links)
     final previous = getSyllabusNodes(notebookId, includeArchived: true)

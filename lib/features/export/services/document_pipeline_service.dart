@@ -11,7 +11,7 @@ class DocumentPipelineService {
 
   static const int _singlePassCharLimit = 14000;
   static const int _chunkSizeChars = 12000;
-  static const int _maxMapChunks = 6;
+  static const int _maxMapChunks = 24; // Up to ~288K chars (~50,000 words)
 
   static Future<StructuredStudyDocument> generateStructuredDocument({
     required AiRouter aiRouter,
@@ -51,11 +51,12 @@ ${processedChunks[i].content}
             extractedParts.add('### Part ${i + 1}\n${part.trim()}');
           }
         } catch (_) {
-          // Keep raw excerpt fallback for this chunk if map call fails
+          // Keep generous raw excerpt fallback (up to 6,000 chars) and flag partial extraction
           final rawSnippet = processedChunks[i].content;
           extractedParts.add(
-            rawSnippet.length > 2200 ? rawSnippet.substring(0, 2200) : rawSnippet,
+            rawSnippet.length > 6000 ? rawSnippet.substring(0, 6000) : rawSnippet,
           );
+          coverageNote = '${coverageNote ?? ''} Segment ${i + 1} used raw source fallback due to AI timeout.'.trim();
         }
       }
 
@@ -203,12 +204,24 @@ ${synthesizedContext.isNotEmpty ? synthesizedContext : 'No uploaded source selec
         ...s.definitions.map((d) => 'Def: $d'),
         ...s.keyPoints,
         ...s.examples.map((e) => 'Example: $e'),
-        ...s.processSteps.asMap().entries.map((e) => 'Step ${e.key + 1}: ${e.value}'),
-        if (s.tableRows.isNotEmpty)
-          ...s.tableRows.skip(1).map((r) => r.join(' — ')),
       ];
 
-      if (allPoints.isEmpty) continue;
+      if (allPoints.isEmpty && s.processSteps.isEmpty && s.tableRows.isEmpty) continue;
+
+      if (allPoints.isEmpty) {
+        slides.add(
+          PptxSlideData(
+            title: s.heading,
+            subtitle: doc.topic,
+            tag: doc.topic.toUpperCase(),
+            bulletPoints: const [],
+            processSteps: s.processSteps.isNotEmpty ? s.processSteps : null,
+            tableRows: s.tableRows.isNotEmpty ? s.tableRows : null,
+            takeaway: s.calloutWarning,
+          ),
+        );
+        continue;
+      }
 
       final totalPages = (allPoints.length / maxBulletsPerSlide).ceil();
       for (int p = 0; p < totalPages; p++) {
@@ -223,6 +236,8 @@ ${synthesizedContext.isNotEmpty ? synthesizedContext : 'No uploaded source selec
             subtitle: doc.topic,
             tag: doc.topic.toUpperCase(),
             bulletPoints: chunk,
+            processSteps: p == totalPages - 1 && s.processSteps.isNotEmpty ? s.processSteps : null,
+            tableRows: p == totalPages - 1 && s.tableRows.isNotEmpty ? s.tableRows : null,
             takeaway: p == totalPages - 1 ? s.calloutWarning : null,
           ),
         );

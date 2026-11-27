@@ -10,6 +10,7 @@ import 'package:trueme/core/ai/monitor/provider_quota_adapters.dart';
 import 'package:trueme/core/ai/monitor/quota_calculation_engine.dart';
 import 'package:trueme/core/ai/cognitive/student_cognitive_profile.dart';
 import 'package:trueme/core/ai/rag_service.dart';
+import 'package:trueme/core/ai/sage_context_builder.dart';
 import 'package:trueme/core/ai/syllabus_service.dart';
 import 'package:trueme/core/config/env_config.dart';
 import 'package:trueme/core/models/document_chunk_model.dart';
@@ -455,6 +456,23 @@ void main() {
       });
       expect(interrupted.status, GenerationJobStatus.failed);
       expect(interrupted.errorMessage, contains('Retry'));
+    });
+
+    test('SageContextBuilder enforces subject isolation and discloses missing sources', () {
+      final ctxNoSrc = SageContextBuilder.build(
+        studentName: 'Asha',
+        subject: 'Microbiology',
+      );
+      expect(ctxNoSrc.systemPrompt, contains('Microbiology'));
+      expect(ctxNoSrc.systemPrompt, contains('No matching uploaded source excerpt'));
+
+      final ctxWithSrc = SageContextBuilder.build(
+        studentName: 'Asha',
+        subject: 'Microbiology',
+        retrievedExcerpts: const ['[Source: Chapter1.pdf]\nGram-positive bacteria have thick peptidoglycan.'],
+      );
+      expect(ctxWithSrc.systemPrompt, contains('VERIFIED SOURCE EXCERPTS'));
+      expect(ctxWithSrc.systemPrompt, contains('peptidoglycan'));
     });
   });
 }
