@@ -35,11 +35,15 @@ class AiThinkingIndicator extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 9),
-          Text(
-            label,
-            style: AppTypography.bodySmall.copyWith(
-              color: context.textSecondary,
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: context.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

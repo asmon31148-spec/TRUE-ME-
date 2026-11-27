@@ -149,6 +149,7 @@ class ChatSessionMeta {
 class ChatState {
   final List<ChatMessage> messages;
   final bool isThinking;
+  final String? thinkingStatus;
   final String? activeCitation;
   final String? error;
   final String activeSessionId;
@@ -157,6 +158,7 @@ class ChatState {
   const ChatState({
     this.messages = const [],
     this.isThinking = false,
+    this.thinkingStatus,
     this.activeCitation,
     this.error,
     this.activeSessionId = 'default',
@@ -166,6 +168,7 @@ class ChatState {
   ChatState copyWith({
     List<ChatMessage>? messages,
     bool? isThinking,
+    String? thinkingStatus,
     String? activeCitation,
     String? error,
     String? activeSessionId,
@@ -174,6 +177,7 @@ class ChatState {
     return ChatState(
       messages: messages ?? this.messages,
       isThinking: isThinking ?? this.isThinking,
+      thinkingStatus: thinkingStatus ?? this.thinkingStatus,
       activeCitation: activeCitation ?? this.activeCitation,
       error: error,
       activeSessionId: activeSessionId ?? this.activeSessionId,
@@ -489,6 +493,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(
       messages: [...state.messages, userMsg],
       isThinking: true,
+      thinkingStatus: 'Understanding intent & subject scope...',
       error: null,
     );
     _persist();
@@ -534,6 +539,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
 
       // 1c. SAGE-002 Hybrid Retrieval & Evidence Engine (strictly scoped to targetNbId)
+      if (targetNbId != null && targetNbId.isNotEmpty) {
+        state = state.copyWith(
+          thinkingStatus:
+              'Searching ${effectiveSubject.isNotEmpty ? effectiveSubject : 'subject'} notes & syllabus...',
+        );
+      }
       final retrievalEngine = RetrievalEngine(ragService: _ragService);
       EvidenceBundle evidenceBundle = await retrievalEngine.retrieveEvidence(
         query: cleanQuestion,
@@ -626,12 +637,32 @@ class ChatNotifier extends StateNotifier<ChatState> {
             mentorMemory: mentorMemory,
             recentTurns: recentTurns,
           );
+          final isDeepResearch = intentPlan.intent == SageIntentType.explain ||
+              intentPlan.intent == SageIntentType.compare ||
+              intentPlan.intent == SageIntentType.summarize ||
+              intentPlan.intent == SageIntentType.extract ||
+              cleanQuestion.length > 90;
+
           if (retrievedExcerpts.isEmpty) {
-            rawAnswer = await _aiRouter.executeRealtimeChat(
-              prompt: cleanQuestion,
-              systemPrompt: builtCtx.systemPrompt,
+            state = state.copyWith(
+              thinkingStatus: isDeepResearch
+                  ? 'Researching deep explanation with Sage...'
+                  : 'Thinking with Sage...',
             );
+            rawAnswer = isDeepResearch
+                ? await _aiRouter.executeHeavyReasoning(
+                    prompt: cleanQuestion,
+                    systemPrompt: builtCtx.systemPrompt,
+                  )
+                : await _aiRouter.executeRealtimeChat(
+                    prompt: cleanQuestion,
+                    systemPrompt: builtCtx.systemPrompt,
+                  );
           } else {
+            state = state.copyWith(
+              thinkingStatus:
+                  'Found ${evidenceBundle.passages.length} source passage(s) · Synthesizing grounded answer...',
+            );
             final enrichedSummary = [
               if (progressSummary != null && progressSummary.isNotEmpty) progressSummary,
               if (builtCtx.syllabusSummary != null && builtCtx.syllabusSummary!.isNotEmpty)
@@ -653,11 +684,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
               "I could not reach the AI models right now ($aiError). Please check your internet connection and try again.";
         }
 
+        state = state.copyWith(
+          thinkingStatus: 'Verifying claims & citations against sources...',
+        );
         final (cleanAnswer, tagType, tagTopic) = _extractActionTag(rawAnswer, subjectLabel);
         rawAnswer = cleanAnswer;
         final resolvedActionType = directIntent ?? tagType;
 
         if (resolvedActionType != null) {
+          state = state.copyWith(
+            thinkingStatus: 'Preparing ${resolvedActionType.name}...',
+          );
           // If the chat response is brief, pass empty context so DocumentGenerationService
           // loads the full subject sources through DocumentPipelineService map-reduce.
           final exportSource = rawAnswer.length >= 300 ? rawAnswer : '';

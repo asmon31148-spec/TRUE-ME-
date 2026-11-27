@@ -1,5 +1,6 @@
 import '../models/document_chunk_model.dart';
 import '../services/offline_cache_service.dart';
+import '../services/supabase_service.dart';
 import '../utils/text_chunker.dart';
 import 'rag_service.dart';
 
@@ -125,42 +126,48 @@ class RetrievalEngine {
     final queryTerms = extractQueryTerms(query);
     final Map<String, EvidencePassage> deduped = {};
 
-    // 1. Vector semantic retrieval (Supabase pgvector) with relevance threshold
-    try {
-      final vectorChunks = await _ragService
-          .retrieveContext(
-            query: query,
-            userId: userId,
-            notebookId: notebookId,
-            topK: topK + 2,
-          )
-          .timeout(const Duration(milliseconds: 2500), onTimeout: () => <DocumentChunkModel>[]);
+    // 1. Vector semantic retrieval (Supabase pgvector) with tight 1.2s timeout
+    // Skip cloud RPC completely when offline/unauthenticated (0ms delay!)
+    if (SupabaseService.instance.isCloudReady || overrideLocalDocs == null) {
+      try {
+        if (SupabaseService.instance.isCloudReady) {
+          final vectorChunks = await _ragService
+              .retrieveContext(
+                query: query,
+                userId: userId,
+                notebookId: notebookId,
+                topK: topK + 2,
+              )
+              .timeout(const Duration(milliseconds: 1200),
+                  onTimeout: () => <DocumentChunkModel>[]);
 
-      for (final c in vectorChunks) {
-        if (c.similarity > 0 && c.similarity < minVectorSimilarity) continue;
-        final fName = c.fileName ?? 'Notebook';
-        if (sectionFilter != null &&
-            sectionFilter.isNotEmpty &&
-            c.sectionLabel != null &&
-            c.sectionLabel!.toLowerCase() != sectionFilter.toLowerCase()) {
-          continue;
+          for (final c in vectorChunks) {
+            if (c.similarity > 0 && c.similarity < minVectorSimilarity) continue;
+            final fName = c.fileName ?? 'Notebook';
+            if (sectionFilter != null &&
+                sectionFilter.isNotEmpty &&
+                c.sectionLabel != null &&
+                c.sectionLabel!.toLowerCase() != sectionFilter.toLowerCase()) {
+              continue;
+            }
+            final key = '$fName::${c.chunkIndex}';
+            deduped[key] = EvidencePassage(
+              fileName: fName,
+              sectionLabel: c.sectionLabel,
+              pageNumber: c.pageNumber,
+              chunkIndex: c.chunkIndex,
+              content: c.content,
+              score: c.similarity > 0 ? c.similarity : 0.55,
+              retrievalMethod: 'vector',
+              relevanceReason: c.similarity > 0
+                  ? 'Semantic match (${(c.similarity * 100).toStringAsFixed(0)}%)'
+                  : 'Semantic match',
+            );
+          }
         }
-        final key = '$fName::${c.chunkIndex}';
-        deduped[key] = EvidencePassage(
-          fileName: fName,
-          sectionLabel: c.sectionLabel,
-          pageNumber: c.pageNumber,
-          chunkIndex: c.chunkIndex,
-          content: c.content,
-          score: c.similarity > 0 ? c.similarity : 0.55,
-          retrievalMethod: 'vector',
-          relevanceReason: c.similarity > 0
-              ? 'Semantic match (${(c.similarity * 100).toStringAsFixed(0)}%)'
-              : 'Semantic match',
-        );
+      } catch (_) {
+        // Fall back to lexical retrieval over local verified documents
       }
-    } catch (_) {
-      // Fall back to lexical retrieval over local verified documents
     }
 
     // 2. Lexical retrieval over local notebook documents (skipping unreadable/empty docs)

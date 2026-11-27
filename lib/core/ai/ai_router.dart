@@ -227,12 +227,14 @@ class AiRouter {
     // 1. Groq OSS 20B (Extreme speed 500-800 tokens/sec on LPUs)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
-        final out = await _groq.complete8B(
-          prompt: prompt,
-          systemPrompt: systemPrompt,
-          maxTokens: 1400,
-          temperature: 0.4,
-        );
+        final out = await _groq
+            .complete8B(
+              prompt: prompt,
+              systemPrompt: systemPrompt,
+              maxTokens: 1400,
+              temperature: 0.4,
+            )
+            .timeout(const Duration(seconds: 12));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'groq_speed',
@@ -247,11 +249,13 @@ class AiRouter {
     // 2. OpenRouter Nemotron 3.5 Lightning:free (Fast conversational inference)
     if (_openRouter.isConfigured && await RateLimitGuardian.isAvailable('openrouter')) {
       try {
-        final out = await _openRouter.completeFallback(
-          prompt: prompt,
-          systemPrompt: systemPrompt,
-          model: OpenRouterService.modelNemotronLightning,
-        );
+        final out = await _openRouter
+            .completeFallback(
+              prompt: prompt,
+              systemPrompt: systemPrompt,
+              model: OpenRouterService.modelNemotronLightning,
+            )
+            .timeout(const Duration(seconds: 12));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'openrouter',

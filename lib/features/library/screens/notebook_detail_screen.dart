@@ -412,12 +412,22 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     }
   }
 
-  Future<void> _launchExportStudio(String format) async {
+  Future<void> _launchExportStudio(
+    String format, {
+    StudyToolScopeSelection? scope,
+  }) async {
     final title = _notebook?['title'] as String? ?? 'Subject';
-    final combinedText = OfflineCacheService.getNotebookCombinedText(widget.notebookId);
-    if (combinedText.trim().isEmpty) {
+    final scopedText = (scope != null && (scope.sourceDocId != null || scope.sourceFileName != null))
+        ? OfflineCacheService.getNotebookDocumentText(
+            widget.notebookId,
+            docId: scope.sourceDocId,
+            fileName: scope.sourceFileName,
+          )
+        : OfflineCacheService.getNotebookCombinedText(widget.notebookId);
+
+    if (scopedText.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one file or note before exporting.')),
+        const SnackBar(content: Text('No readable text in the selected source. Add notes or run OCR first.')),
       );
       return;
     }
@@ -427,7 +437,10 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     await _exportStudyFile(
       format: format,
       chosenStyle: style.id,
-      customDocTitle: '$title Study Guide',
+      customDocTitle: scope?.topicLabel.isNotEmpty == true ? scope!.topicLabel : '$title Study Guide',
+      scopedText: scopedText,
+      nodeId: scope?.nodeId,
+      depthLevel: scope?.depthLevel ?? 'Course Level',
     );
   }
 
@@ -435,9 +448,12 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     required String format,
     String? chosenStyle,
     String? customDocTitle,
+    String? scopedText,
+    String? nodeId,
+    String depthLevel = 'Course Level',
   }) async {
     final title = _notebook?['title'] as String? ?? 'Study Guide';
-    final combinedText = OfflineCacheService.getNotebookCombinedText(widget.notebookId);
+    final combinedText = scopedText ?? OfflineCacheService.getNotebookCombinedText(widget.notebookId);
     if (combinedText.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add at least one file or note before exporting.')),
@@ -464,6 +480,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
         scopeLabel: customDocTitle ?? 'Full Subject Sources',
         notebookId: widget.notebookId,
         sourceContext: combinedText,
+        nodeId: nodeId,
+        depthLevel: depthLevel,
       );
 
       if (mounted && result != null) {
@@ -920,7 +938,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                           artifactType: 'pdf',
                                           toolTitle: 'PDF Sheet',
                                         );
-                                        if (scope != null && mounted) _launchExportStudio('pdf');
+                                        if (scope != null && mounted) _launchExportStudio('pdf', scope: scope);
                                       },
                               ),
                             ),
@@ -943,7 +961,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                           artifactType: 'docx',
                                           toolTitle: 'Word Document',
                                         );
-                                        if (scope != null && mounted) _launchExportStudio('docx');
+                                        if (scope != null && mounted) _launchExportStudio('docx', scope: scope);
                                       },
                               ),
                             ),
@@ -966,7 +984,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                           artifactType: 'pptx',
                                           toolTitle: 'Slides Deck',
                                         );
-                                        if (scope != null && mounted) _launchExportStudio('pptx');
+                                        if (scope != null && mounted) _launchExportStudio('pptx', scope: scope);
                                       },
                               ),
                             ),

@@ -696,11 +696,13 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                       itemCount: chatState.messages.length + (chatState.isThinking ? 1 : 0),
                       itemBuilder: (context, idx) {
                         if (idx == chatState.messages.length) {
-                          return const Align(
+                          return Align(
                             alignment: Alignment.centerLeft,
                             child: Padding(
-                              padding: EdgeInsets.only(bottom: 12),
-                              child: AiThinkingIndicator(label: 'Sage is working...'),
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: AiThinkingIndicator(
+                                label: chatState.thinkingStatus ?? 'Sage is thinking...',
+                              ),
                             ),
                           );
                         }

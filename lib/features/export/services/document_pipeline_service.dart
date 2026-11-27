@@ -129,7 +129,45 @@ ${synthesizedContext.isNotEmpty ? synthesizedContext : 'No uploaded source selec
 ''',
     );
 
-    final decoded = AiRouter.parseJsonObject(raw);
+    Map<String, dynamic> decoded;
+    try {
+      decoded = AiRouter.parseJsonObject(raw);
+    } catch (_) {
+      // Compact JSON retry if the first response was truncated or had invalid syntax
+      final compactSource = synthesizedContext.length > 10000
+          ? synthesizedContext.substring(0, 10000)
+          : synthesizedContext;
+      final retryRaw = await aiRouter.executeHeavyReasoning(
+        jsonMode: true,
+        prompt: '''
+Return ONLY a valid JSON object (no markdown fences) for "$subject" — "$topic":
+{
+  "title": "$topic",
+  "purpose": "$purpose",
+  "academicLevel": "$depthLevel",
+  "executiveSummary": "Concise 2-3 sentence summary.",
+  "learningObjectives": ["Objective 1", "Objective 2"],
+  "sections": [
+    {
+      "heading": "Core Concepts",
+      "body": "Clear explanation.",
+      "keyPoints": ["Point 1", "Point 2"],
+      "definitions": [],
+      "examples": [],
+      "processSteps": [],
+      "tableRows": []
+    }
+  ],
+  "takeaways": ["Key takeaway 1"],
+  "sourceReferences": []
+}
+
+Source:
+$compactSource
+''',
+      );
+      decoded = AiRouter.parseJsonObject(retryRaw);
+    }
     final rawDoc = StructuredStudyDocument.fromMap(
       decoded,
       fallbackTitle: '$topic — $subject',
