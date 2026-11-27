@@ -519,10 +519,14 @@ class PdfExporter {
     for (int i = 0; i < steps.length; i += perRow) {
       final chunk = steps.sublist(i, (i + perRow).clamp(0, steps.length));
       final rowChildren = <pw.Widget>[];
+      final colWidths = <int, pw.TableColumnWidth>{};
+      int colIdx = 0;
+
       for (int c = 0; c < chunk.length; c++) {
         final stepNum = i + c + 1;
-        final box = pw.Expanded(
-          child: pw.Container(
+        colWidths[colIdx++] = const pw.FlexColumnWidth(1);
+        rowChildren.add(
+          pw.Container(
             padding: isSketchy ? const pw.EdgeInsets.all(2) : pw.EdgeInsets.zero,
             decoration: isSketchy
                 ? pw.BoxDecoration(
@@ -572,38 +576,41 @@ class PdfExporter {
             ),
           ),
         );
-        rowChildren.add(box);
         if (c < chunk.length - 1) {
+          colWidths[colIdx++] = const pw.FixedColumnWidth(20);
           rowChildren.add(
-            pw.CustomPaint(
-              size: const PdfPoint(20, 24),
-              painter: (canvas, size) {
-                final midY = size.y / 2;
-                canvas
-                  ..setStrokeColor(accent)
-                  ..setLineWidth(isSketchy ? 1.4 : 1.1)
-                  ..moveTo(2, midY)
-                  ..lineTo(size.x - 4, midY)
-                  ..moveTo(size.x - 8, midY + 4)
-                  ..lineTo(size.x - 3, midY)
-                  ..lineTo(size.x - 8, midY - 4)
-                  ..strokePath();
-                if (isSketchy) {
+            pw.Center(
+              child: pw.CustomPaint(
+                size: const PdfPoint(20, 24),
+                painter: (canvas, size) {
+                  final midY = size.y / 2;
                   canvas
-                    ..setLineWidth(0.6)
-                    ..moveTo(3, midY + 1.2)
-                    ..lineTo(size.x - 5, midY + 0.8)
+                    ..setStrokeColor(accent)
+                    ..setLineWidth(isSketchy ? 1.4 : 1.1)
+                    ..moveTo(2, midY)
+                    ..lineTo(size.x - 4, midY)
+                    ..moveTo(size.x - 8, midY + 4)
+                    ..lineTo(size.x - 3, midY)
+                    ..lineTo(size.x - 8, midY - 4)
                     ..strokePath();
-                }
-              },
+                  if (isSketchy) {
+                    canvas
+                      ..setLineWidth(0.6)
+                      ..moveTo(3, midY + 1.2)
+                      ..lineTo(size.x - 5, midY + 0.8)
+                      ..strokePath();
+                  }
+                },
+              ),
             ),
           );
         }
       }
       rows.add(
-        pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          children: rowChildren,
+        pw.Table(
+          columnWidths: colWidths,
+          defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+          children: [pw.TableRow(children: rowChildren)],
         ),
       );
       if (i + perRow < steps.length) {
@@ -635,7 +642,7 @@ class PdfExporter {
     return pw.Padding(
       padding: const pw.EdgeInsets.only(top: 4, bottom: 8),
       child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: rows,
       ),
     );
