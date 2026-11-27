@@ -11,6 +11,7 @@ import '../../export/screens/document_viewer_screen.dart';
 class StudyToolScopeSelection {
   final String? nodeId;
   final String topicLabel;
+  final String? sourceDocId;
   final String? sourceFileName;
   final String depthLevel;
   final String customInstructions;
@@ -18,6 +19,7 @@ class StudyToolScopeSelection {
   const StudyToolScopeSelection({
     this.nodeId,
     required this.topicLabel,
+    this.sourceDocId,
     this.sourceFileName,
     required this.depthLevel,
     required this.customInstructions,
@@ -69,6 +71,7 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
   final TextEditingController _instructionsCtrl = TextEditingController();
 
   String? _selectedNodeId;
+  String? _selectedSourceId;
   String? _selectedSourceName;
   String _selectedDepth = 'Course Level';
 
@@ -257,7 +260,7 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String?>(
-                              initialValue: _selectedSourceName,
+                              initialValue: _selectedSourceId,
                               isExpanded: true,
                               decoration: InputDecoration(
                                 filled: true,
@@ -273,14 +276,21 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                                   child: Text('All relevant mapped sources'),
                                 ),
                                 ...docs.map((d) {
+                                  final id = d['id']?.toString() ?? d['fileName']?.toString() ?? '';
                                   final name = d['fileName']?.toString() ?? 'Document';
                                   return DropdownMenuItem<String?>(
-                                    value: name,
+                                    value: id,
                                     child: Text(name, overflow: TextOverflow.ellipsis),
                                   );
                                 }),
                               ],
-                              onChanged: (val) => setState(() => _selectedSourceName = val),
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedSourceId = val;
+                                  final match = docs.where((d) => (d['id']?.toString() ?? d['fileName']?.toString()) == val).firstOrNull;
+                                  _selectedSourceName = match?['fileName']?.toString();
+                                });
+                              },
                             ),
                             const SizedBox(height: 14),
                           ],
@@ -326,6 +336,7 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                                 StudyToolScopeSelection(
                                   nodeId: _selectedNodeId,
                                   topicLabel: topic,
+                                  sourceDocId: _selectedSourceId,
                                   sourceFileName: _selectedSourceName,
                                   depthLevel: _selectedDepth,
                                   customInstructions: _instructionsCtrl.text.trim(),

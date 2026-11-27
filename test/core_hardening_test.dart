@@ -501,5 +501,24 @@ void main() {
       expect(blocks.any((b) => b.kind == 'title' && b.fillHex == '1E3A8A'), isTrue);
       expect(blocks.any((b) => b.kind == 'callout' && b.fillHex == 'EFF6FF'), isTrue);
     });
+
+    test('DocumentParserService extracts PPTX tag and takeaway separately', () {
+      final bytes = PptxExporter.createPresentation(
+        presentationTitle: 'Microbiology',
+        slides: const [
+          PptxSlideData(
+            title: 'Gram Stain',
+            tag: 'DIAGNOSTICS',
+            bulletPoints: ['Crystal violet primary stain', 'Safranin counterstain'],
+            takeaway: 'Gram-positive retains purple crystal violet.',
+          ),
+        ],
+      );
+      final slides = DocumentParserService.parsePptx(bytes);
+      expect(slides.length, 1);
+      expect(slides.first.tag, 'DIAGNOSTICS');
+      expect(slides.first.takeaway, contains('Gram-positive retains purple'));
+      expect(slides.first.bullets.any((b) => b.contains('KEY TAKEAWAY')), isFalse);
+    });
   });
 }

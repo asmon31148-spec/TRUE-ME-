@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/ai/ai_router.dart';
 import '../../../core/services/offline_cache_service.dart';
+import '../../../core/services/supabase_service.dart';
 import 'document_generation_service.dart';
 
 enum GenerationJobStatus { queued, running, ready, failed }
@@ -178,6 +180,48 @@ class GenerationJobService {
     }
     jobsNotifier.value = list;
     _persist();
+    unawaited(_syncJobToSupabase(job));
+  }
+
+  static Future<void> _syncJobToSupabase(GenerationJob job) async {
+    try {
+      final client = SupabaseService.instance.clientOrNull;
+      final uid = SupabaseService.instance.authUserId;
+      if (client == null || uid == null) return;
+      await client.from('generation_jobs').upsert({
+        'job_id': job.jobId,
+        'user_id': uid,
+        'notebook_id': job.notebookId,
+        'subject': job.subject,
+        'topic': job.topic,
+        'scope_label': job.scopeLabel,
+        'format': job.format,
+        'style_id': job.styleId,
+        'status': job.status.name,
+        'stage_index': job.stageIndex,
+        'stage_label': job.stageLabel,
+        if (job.filePath != null) 'file_path': job.filePath,
+        if (job.title != null) 'title': job.title,
+        if (job.errorMessage != null) 'error_message': job.errorMessage,
+        'updated_at': job.updatedAt.toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  static Future<GeneratedDocumentResult?> retryJob(
+    GenerationJob failedJob,
+    AiRouter aiRouter,
+  ) {
+    return runDurableJob(
+      aiRouter: aiRouter,
+      format: failedJob.format,
+      styleId: failedJob.styleId,
+      subject: failedJob.subject,
+      topic: failedJob.topic,
+      scopeLabel: failedJob.scopeLabel,
+      notebookId: failedJob.notebookId.isNotEmpty ? failedJob.notebookId : null,
+      existingJobId: failedJob.jobId,
+    );
   }
 
   static Future<GeneratedDocumentResult?> runDurableJob({
@@ -192,9 +236,10 @@ class GenerationJobService {
     String? nodeId,
     String? sourceChatId,
     String depthLevel = 'Course Level',
+    String? existingJobId,
   }) async {
     await ensureInitialized();
-    final jobId = 'job_${format}_${DateTime.now().millisecondsSinceEpoch}';
+    final jobId = existingJobId ?? 'job_${format}_${DateTime.now().millisecondsSinceEpoch}';
     final userId = OfflineCacheService.getUserId();
 
     var current = GenerationJob(

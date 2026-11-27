@@ -672,12 +672,12 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'SLIDE ${slide.index}',
+                slide.tag != null ? '${slide.tag} · SLIDE ${slide.index}' : 'SLIDE ${slide.index}',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: fg.withValues(alpha: 0.65),
+                  letterSpacing: 1.1,
+                  color: fg.withValues(alpha: 0.7),
                 ),
               ),
               Icon(Icons.slideshow_rounded, size: 18, color: fg.withValues(alpha: 0.55)),
@@ -694,26 +694,68 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ListView(
-              children: slide.bullets
-                  .map(
-                    (b) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('• ', style: TextStyle(fontSize: 15, color: fg)),
-                          Expanded(
-                            child: Text(
-                              b,
-                              style: TextStyle(fontSize: 14.5, height: 1.4, color: fg.withValues(alpha: 0.92)),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 7,
+                  child: ListView(
+                    children: slide.bullets
+                        .map(
+                          (b) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('• ', style: TextStyle(fontSize: 15, color: fg)),
+                                Expanded(
+                                  child: Text(
+                                    b,
+                                    style: TextStyle(fontSize: 14.5, height: 1.4, color: fg.withValues(alpha: 0.92)),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        )
+                        .toList(),
+                  ),
+                ),
+                if (slide.takeaway != null && slide.takeaway!.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: fg.withValues(alpha: 0.08),
+                        border: Border.all(color: fg.withValues(alpha: 0.25)),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'KEY TAKEAWAY',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                                color: fg.withValues(alpha: 0.85),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              slide.takeaway!,
+                              style: TextStyle(fontSize: 12.5, height: 1.35, color: fg.withValues(alpha: 0.9)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  )
-                  .toList(),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

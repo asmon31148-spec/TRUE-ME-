@@ -25,12 +25,16 @@ class ParsedPptxSlide {
   final String title;
   final List<String> bullets;
   final String? backgroundHex;
+  final String? tag;
+  final String? takeaway;
 
   const ParsedPptxSlide({
     required this.index,
     required this.title,
     required this.bullets,
     this.backgroundHex,
+    this.tag,
+    this.takeaway,
   });
 }
 
@@ -169,14 +173,43 @@ class DocumentParserService {
       final bgMatch = RegExp(r'<p:bg>[\s\S]*?<a:srgbClr\s+val="([0-9A-Fa-f]{6})"').firstMatch(xml);
       final bgHex = bgMatch?.group(1);
 
+      String? tag;
+      String? takeaway;
       final paragraphs = <String>[];
-      for (final pMatch in RegExp(r'<a:p\b[\s\S]*?</a:p>').allMatches(xml)) {
+
+      final takeawayMatch = RegExp(r'<p:sp>[\s\S]*?name="Takeaway"[\s\S]*?</p:sp>').firstMatch(xml);
+      if (takeawayMatch != null) {
+        final tParts = RegExp(r'<a:t\b[^>]*>([\s\S]*?)</a:t>')
+            .allMatches(takeawayMatch.group(0)!)
+            .map((m) => _unescapeXml(m.group(1) ?? '').trim())
+            .where((t) => t.isNotEmpty && t != 'KEY TAKEAWAY')
+            .toList();
+        if (tParts.isNotEmpty) takeaway = tParts.join(' ');
+      }
+
+      final badgeMatch = RegExp(r'<p:sp>[\s\S]*?name="(?:Badge|PillBadge)"[\s\S]*?</p:sp>').firstMatch(xml);
+      if (badgeMatch != null) {
+        final bText = RegExp(r'<a:t\b[^>]*>([\s\S]*?)</a:t>')
+            .allMatches(badgeMatch.group(0)!)
+            .map((m) => _unescapeXml(m.group(1) ?? '').trim())
+            .join('');
+        if (bText.isNotEmpty && !RegExp(r'^(?:[✦⚡].*)?SLIDE\s+\d+/\d+.*$').hasMatch(bText)) {
+          tag = bText;
+        }
+      }
+
+      final xmlWithoutTakeaway = takeawayMatch != null
+          ? xml.replaceFirst(takeawayMatch.group(0)!, '')
+          : xml;
+
+      for (final pMatch in RegExp(r'<a:p\b[\s\S]*?</a:p>').allMatches(xmlWithoutTakeaway)) {
         final text = RegExp(r'<a:t\b[^>]*>([\s\S]*?)</a:t>')
             .allMatches(pMatch.group(0)!)
             .map((m) => _unescapeXml(m.group(1) ?? ''))
             .join('')
             .trim();
         if (text.isNotEmpty &&
+            text != tag &&
             !RegExp(r'^(?:[✦⚡].*)?SLIDE\s+\d+/\d+.*$').hasMatch(text)) {
           paragraphs.add(text);
         }
@@ -191,6 +224,8 @@ class DocumentParserService {
           title: title,
           bullets: bullets,
           backgroundHex: bgHex,
+          tag: tag,
+          takeaway: takeaway,
         ),
       );
     }

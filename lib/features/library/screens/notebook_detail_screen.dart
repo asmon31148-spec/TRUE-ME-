@@ -513,23 +513,69 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                         ValueListenableBuilder<List<GenerationJob>>(
                           valueListenable: GenerationJobService.jobsNotifier,
                           builder: (ctx, jobs, _) {
-                            final active = jobs.where((j) =>
+                            final running = jobs.where((j) =>
                                 j.notebookId == widget.notebookId &&
                                 j.status == GenerationJobStatus.running).toList();
-                            if (active.isEmpty && _exportingFormat == null) {
+                            final failed = jobs.where((j) =>
+                                j.notebookId == widget.notebookId &&
+                                j.status == GenerationJobStatus.failed).toList();
+
+                            if (running.isEmpty && failed.isEmpty && _exportingFormat == null) {
                               return const SizedBox.shrink();
                             }
-                            final job = active.isNotEmpty ? active.first : null;
+                            if (running.isNotEmpty || _exportingFormat != null) {
+                              final job = running.isNotEmpty ? running.first : null;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: GenerationProgressView(
+                                  compact: true,
+                                  title: job != null
+                                      ? 'Generating ${job.format.toUpperCase()} · ${job.topic}'
+                                      : 'Generating ${(_exportingFormat ?? 'doc').toUpperCase()} for $title',
+                                  realStageIndex: job?.stageIndex ?? 0,
+                                  realTotalStages: 7,
+                                  realStageLabel: job?.stageLabel ?? 'Starting durable background job...',
+                                ),
+                              );
+                            }
+                            final lastFailed = failed.first;
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 14),
-                              child: GenerationProgressView(
-                                compact: true,
-                                title: job != null
-                                    ? 'Generating ${job.format.toUpperCase()} · ${job.topic}'
-                                    : 'Generating ${(_exportingFormat ?? 'doc').toUpperCase()} for $title',
-                                realStageIndex: job?.stageIndex ?? 0,
-                                realTotalStages: 7,
-                                realStageLabel: job?.stageLabel ?? 'Starting durable background job...',
+                              child: TrueMeCard(
+                                borderRadius: 16,
+                                padding: const EdgeInsets.all(12),
+                                borderColor: AppColors.error.withValues(alpha: 0.45),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${lastFailed.format.toUpperCase()} interrupted: ${lastFailed.topic}',
+                                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                          ),
+                                          Text(
+                                            lastFailed.errorMessage ?? lastFailed.stageLabel,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    TrueMeTonalPill(
+                                      label: 'Retry',
+                                      onTap: () => GenerationJobService.retryJob(
+                                        lastFailed,
+                                        ref.read(aiRouterProvider),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },

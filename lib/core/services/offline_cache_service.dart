@@ -731,6 +731,26 @@ class OfflineCacheService {
     return result;
   }
 
+  /// Resolves a single source document's text by stable [docId] (with [fileName] fallback).
+  static String getNotebookDocumentText(
+    String notebookId, {
+    String? docId,
+    String? fileName,
+    int maxChars = 120000,
+  }) {
+    final docs = getNotebookDocuments(notebookId);
+    for (final d in docs) {
+      final idMatch = docId != null && docId.isNotEmpty && d['id']?.toString() == docId;
+      final nameMatch =
+          (docId == null || docId.isEmpty) && fileName != null && d['fileName']?.toString() == fileName;
+      if (idMatch || nameMatch) {
+        final content = (d['content'] as String? ?? '').trim();
+        return content.length > maxChars ? content.substring(0, maxChars) : content;
+      }
+    }
+    return '';
+  }
+
   static List<Map<String, dynamic>> getAllCachedNotebooks() {
     final box = Hive.box(notebooksBox);
     return box.values
