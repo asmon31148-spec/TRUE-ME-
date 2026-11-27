@@ -74,7 +74,10 @@ class DocumentGenerationService {
         if (q.contains('pastel') || q.contains('floral') || q.contains('creative illustrated')) {
           return 'pastel_floral';
         }
-        if (q.contains('neon') || q.contains('dark') || q.contains('infographic presentation')) {
+        if (q.contains('infographic presentation')) {
+          return 'infographic_presentation';
+        }
+        if (q.contains('neon') || q.contains('dark')) {
           return 'dark_neon';
         }
         if (q.contains('business') || q.contains('scientific') || q.contains('professional')) {

@@ -321,6 +321,6 @@ $compactSource
       }
     }
 
-    return slides;
+    return DocumentLayoutValidator.validateAndOptimizeSlides(slides).slides;
   }
 }
