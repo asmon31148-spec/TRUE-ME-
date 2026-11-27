@@ -8,7 +8,6 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/screens/document_viewer_screen.dart';
-import '../../../features/export/services/document_generation_service.dart';
 import '../../../features/export/services/generation_job_service.dart';
 import '../../../features/export/widgets/style_picker_sheet.dart';
 import '../../../shared/widgets/app_components.dart';
