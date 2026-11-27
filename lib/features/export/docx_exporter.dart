@@ -199,7 +199,7 @@ class DocxExporter {
     for (final rawLine in content.split('\n')) {
       final line = rawLine.trim().replaceAll('**', '');
       if (line.isEmpty) {
-        buf.write('<w:p/>');
+        buf.write('<w:p></w:p>');
         continue;
       }
       if (line.startsWith('# ')) {
@@ -243,7 +243,7 @@ class DocxExporter {
       return '<w:tr>$cellsXml</w:tr>';
     }).join('');
 
-    return '<w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="CBD5E1"/><w:bottom w:val="single" w:sz="4" w:color="CBD5E1"/><w:insideH w:val="single" w:sz="4" w:color="E2E8F0"/><w:insideV w:val="single" w:sz="4" w:color="E2E8F0"/></w:tblBorders></w:tblPr>$rowsXml</w:tbl><w:p/>';
+    return '<w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="CBD5E1"/><w:bottom w:val="single" w:sz="4" w:color="CBD5E1"/><w:insideH w:val="single" w:sz="4" w:color="E2E8F0"/><w:insideV w:val="single" w:sz="4" w:color="E2E8F0"/></w:tblBorders></w:tblPr>$rowsXml</w:tbl><w:p></w:p>';
   }
 
   static String _buildStylesXml(_DocxPalette p) {
