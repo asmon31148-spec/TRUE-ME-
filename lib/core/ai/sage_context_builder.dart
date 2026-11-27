@@ -77,9 +77,10 @@ class SageContextBuilder {
             'Be honest if a detail is general knowledge rather than from the student\'s uploaded notes.';
 
     final tierName =
-        (cognitiveProfile?.activeSubjectTier ?? cognitiveProfile?.overallTier ?? LearningTier.intermediate)
-            .name
-            .toUpperCase();
+        (cognitiveProfile?.activeSubjectTier ?? cognitiveProfile?.overallTier)
+            ?.name
+            .toUpperCase() ??
+        'INTERMEDIATE';
     final systemPrompt = '''
 You are Sage, the autonomous cognitive study companion, diagnostic mentor, and academic co-pilot for $studentName in the True Me app.
 $scopeInstruction
