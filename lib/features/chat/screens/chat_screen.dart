@@ -61,9 +61,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // Editorial Top Header matching Sage Reference
+              // Unified Sleek Editorial Header with Inline Scope Selector
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
                 child: Row(
                   children: [
                     TrueMeCircleIconButton(
@@ -77,27 +77,78 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         }
                       },
                     ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 'Sage',
                                 style: AppTypography.screenTitle.copyWith(
-                                  fontSize: 22,
+                                  fontSize: 21,
                                   color: context.textPrimary,
                                 ),
                               ),
                               const SizedBox(width: 5),
-                              Icon(Icons.auto_awesome_rounded, size: 17, color: context.accentColor),
+                              Icon(Icons.auto_awesome_rounded, size: 16, color: context.accentColor),
                             ],
                           ),
-                          Text(
-                            'Your AI Learning Companion',
-                            style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
-                          ),
+                          if (subjects.isNotEmpty || widget.notebookId != null)
+                            GestureDetector(
+                              onTap: subjects.isNotEmpty && widget.notebookId == null
+                                  ? () {
+                                      HapticFeedback.selectionClick();
+                                      _showScopePicker(context, subjects);
+                                    }
+                                  : null,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isFullNotebook
+                                          ? Icons.auto_stories_rounded
+                                          : Icons.bookmark_rounded,
+                                      size: 12,
+                                      color: context.accentColor,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        isFullNotebook
+                                            ? (subjects.isNotEmpty
+                                                ? 'All Subjects (${subjects.length})'
+                                                : 'Global Mentor')
+                                            : _activeSubject!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    if (subjects.isNotEmpty && widget.notebookId == null) ...[
+                                      const SizedBox(width: 2),
+                                      Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        size: 15,
+                                        color: context.textSecondary,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            Text(
+                              'Your AI Learning Companion',
+                              style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                            ),
                         ],
                       ),
                     ),
@@ -110,19 +161,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     PopupMenuButton<String>(
                       icon: Icon(Icons.more_horiz_rounded, size: 22, color: context.textSecondary),
                       onSelected: (val) {
-                        if (val == 'clear') {
+                        if (val == 'new') {
+                          HapticFeedback.lightImpact();
+                          ref.read(chatProvider(_scopeKey).notifier).startNewChat(
+                                subjectLabel: _activeSubject ?? 'this subject',
+                              );
+                        } else if (val == 'clear') {
                           HapticFeedback.mediumImpact();
                           ref.read(chatProvider(_scopeKey).notifier).clearHistory();
                         }
                       },
                       itemBuilder: (context) => const [
                         PopupMenuItem(
+                          value: 'new',
+                          child: Row(
+                            children: [
+                              Icon(Icons.add_comment_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('New Chat'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
                           value: 'clear',
                           child: Row(
                             children: [
                               Icon(Icons.delete_sweep_outlined, size: 18, color: AppColors.error),
                               SizedBox(width: 8),
-                              Text('Clear Chat History', style: TextStyle(color: AppColors.error)),
+                              Text('Clear Current Chat', style: TextStyle(color: AppColors.error)),
                             ],
                           ),
                         ),
@@ -131,59 +197,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ],
                 ),
               ),
-
-              // Compact Subject Scope Selector Pill
-              if (subjects.isNotEmpty || widget.notebookId != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: GestureDetector(
-                    onTap: subjects.isNotEmpty && widget.notebookId == null
-                        ? () {
-                            HapticFeedback.selectionClick();
-                            _showScopePicker(context, subjects);
-                          }
-                        : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: context.surfaceColor.withValues(alpha: 0.88),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: context.borderColor),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isFullNotebook ? Icons.auto_stories_rounded : Icons.bookmark_rounded,
-                            size: 14,
-                            color: context.accentColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              isFullNotebook
-                                  ? (subjects.isNotEmpty
-                                      ? 'All Sources (${subjects.length} subjects)'
-                                      : 'Global Study Context')
-                                  : _activeSubject!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: context.textPrimary,
-                              ),
-                            ),
-                          ),
-                          if (subjects.isNotEmpty && widget.notebookId == null) ...[
-                            const SizedBox(width: 4),
-                            Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: context.textSecondary),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
 
               // Live Sage Chat Body
               Expanded(

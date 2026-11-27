@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
+import '../../../core/ai/answer_verifier.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../core/services/stt_service.dart';
 import '../../../shared/widgets/ai_thinking_indicator.dart';
@@ -41,6 +42,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
   final ScrollController _scrollCtrl = ScrollController();
   SttService? _sttService;
   bool _isListening = false;
+  bool _showScrollToLatest = false;
   late final AnimationController _orbCtrl;
 
   String get _scopeKey {
@@ -60,6 +62,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 6),
     )..repeat(reverse: true);
+    _scrollCtrl.addListener(_onScrollChanged);
 
     if (widget.initialPrompt != null && widget.initialPrompt!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -81,10 +84,20 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
 
   @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScrollChanged);
     _orbCtrl.dispose();
     _textCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _onScrollChanged() {
+    if (!_scrollCtrl.hasClients) return;
+    final distFromBottom = _scrollCtrl.position.maxScrollExtent - _scrollCtrl.offset;
+    final shouldShow = distFromBottom > 240;
+    if (shouldShow != _showScrollToLatest && mounted) {
+      setState(() => _showScrollToLatest = shouldShow);
+    }
   }
 
   Future<void> _sendMessage([String? textToSend]) async {
@@ -416,9 +429,9 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
 
     return Column(
       children: [
-        // Compact Subject Session Switcher + New Chat Bar
+        // Unified Sleek Session Switcher & New Chat Bar
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
           child: Row(
             children: [
               Expanded(
@@ -428,19 +441,19 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                     _showSessionsSheet(context, chatState);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                     decoration: BoxDecoration(
-                      color: context.surfaceColor.withValues(alpha: 0.88),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: context.borderColor),
+                      color: context.milkyFill,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: context.borderColor.withValues(alpha: 0.7)),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           hasMentorMemory
-                              ? Icons.psychology_outlined
+                              ? Icons.psychology_rounded
                               : Icons.forum_outlined,
-                          size: 16,
+                          size: 15,
                           color: context.accentColor,
                         ),
                         const SizedBox(width: 7),
@@ -457,17 +470,24 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                           ),
                         ),
                         if (chatState.sessions.length > 1) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            '${chatState.sessions.length}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: context.accentColor,
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: context.accentColor.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${chatState.sessions.length}',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: context.accentColor,
+                              ),
                             ),
                           ),
                         ],
-                        const SizedBox(width: 2),
+                        const SizedBox(width: 3),
                         Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 16,
@@ -488,29 +508,28 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                               subjectLabel: subjectTitle,
                             );
                       },
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                   decoration: BoxDecoration(
-                    color: chatState.messages.isEmpty
-                        ? context.surfaceColor.withValues(alpha: 0.55)
-                        : (isDark ? AppColors.darkAccentWash : AppColors.accentWash),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: chatState.messages.isEmpty
-                          ? context.borderColor
-                          : context.accentColor.withValues(alpha: 0.35),
-                    ),
+                    gradient: chatState.messages.isEmpty
+                        ? null
+                        : AppColors.indigoButtonGradient,
+                    color: chatState.messages.isEmpty ? context.milkyFill : null,
+                    borderRadius: BorderRadius.circular(20),
+                    border: chatState.messages.isEmpty
+                        ? Border.all(color: context.borderColor.withValues(alpha: 0.7))
+                        : null,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.add_comment_outlined,
-                        size: 15,
+                        size: 14,
                         color: chatState.messages.isEmpty
                             ? context.textSecondary
-                            : context.accentColor,
+                            : Colors.white,
                       ),
                       const SizedBox(width: 5),
                       Text(
@@ -520,7 +539,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                           fontWeight: FontWeight.w700,
                           color: chatState.messages.isEmpty
                               ? context.textSecondary
-                              : context.accentColor,
+                              : Colors.white,
                         ),
                       ),
                     ],
@@ -667,158 +686,304 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                     ],
                   ),
                 )
-              : ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  itemCount: chatState.messages.length + (chatState.isThinking ? 1 : 0),
-                  itemBuilder: (context, idx) {
-                    if (idx == chatState.messages.length) {
-                      return const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: AiThinkingIndicator(label: 'Sage is working...'),
-                        ),
-                      );
-                    }
+              : Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _scrollCtrl,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      itemCount: chatState.messages.length + (chatState.isThinking ? 1 : 0),
+                      itemBuilder: (context, idx) {
+                        if (idx == chatState.messages.length) {
+                          return const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: 12),
+                              child: AiThinkingIndicator(label: 'Sage is working...'),
+                            ),
+                          );
+                        }
 
-                    final msg = chatState.messages[idx];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Align(
-                        alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.86,
-                          ),
-                          child: Column(
-                            crossAxisAlignment:
-                                msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                            children: [
-                              msg.isUser
-                                  ? Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        gradient: AppColors.indigoButtonGradient,
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(18),
-                                          topRight: Radius.circular(18),
-                                          bottomLeft: Radius.circular(18),
-                                          bottomRight: Radius.circular(5),
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.accent.withValues(alpha: 0.22),
-                                            blurRadius: 12,
-                                            offset: const Offset(0, 4),
+                        final msg = chatState.messages[idx];
+                        final trust = msg.verification?.trustLevel;
+                        final trustColor = trust == EvidenceTrustLevel.grounded
+                            ? AppColors.success
+                            : (trust == EvidenceTrustLevel.partiallyGrounded
+                                ? const Color(0xFFD97706)
+                                : context.textSecondary);
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Align(
+                            alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.88,
+                              ),
+                              child: Column(
+                                crossAxisAlignment:
+                                    msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                children: [
+                                  msg.isUser
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                          decoration: BoxDecoration(
+                                            gradient: AppColors.indigoButtonGradient,
+                                            borderRadius: const BorderRadius.only(
+                                              topLeft: Radius.circular(20),
+                                              topRight: Radius.circular(20),
+                                              bottomLeft: Radius.circular(20),
+                                              bottomRight: Radius.circular(6),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppColors.accent.withValues(alpha: 0.22),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                      child: SelectableText(
-                                        msg.text,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          height: 1.42,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w500,
+                                          child: SelectableText(
+                                            msg.text,
+                                            style: const TextStyle(
+                                              fontSize: 15,
+                                              height: 1.44,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        )
+                                      : TrueMeCard(
+                                          borderRadius: 20,
+                                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    width: 22,
+                                                    height: 22,
+                                                    decoration: BoxDecoration(
+                                                      color: isDark
+                                                          ? AppColors.darkAccentWash
+                                                          : AppColors.accentWash,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.auto_awesome_rounded,
+                                                      size: 13,
+                                                      color: context.accentColor,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 7),
+                                                  Text(
+                                                    hasSubject ? 'Subject Mentor' : 'Sage',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: context.textSecondary,
+                                                    ),
+                                                  ),
+                                                  const Spacer(),
+                                                  if (trust != null)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                          horizontal: 8, vertical: 3),
+                                                      decoration: BoxDecoration(
+                                                        color: trustColor.withValues(alpha: 0.12),
+                                                        borderRadius: BorderRadius.circular(10),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            trust == EvidenceTrustLevel.grounded
+                                                                ? Icons.verified_rounded
+                                                                : Icons.info_outline_rounded,
+                                                            size: 11.5,
+                                                            color: trustColor,
+                                                          ),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            trust.badgeLabel,
+                                                            style: TextStyle(
+                                                              fontSize: 10.5,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: trustColor,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 10),
+                                              FormattedMessageBody(
+                                                text: msg.text,
+                                                textColor: context.textPrimary,
+                                              ),
+                                              if (msg.verification?.gapDisclosure != null &&
+                                                  msg.verification!.gapDisclosure!.isNotEmpty) ...[
+                                                const SizedBox(height: 10),
+                                                Container(
+                                                  width: double.infinity,
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 10, vertical: 7),
+                                                  decoration: BoxDecoration(
+                                                    color: context.bgColor.withValues(alpha: 0.7),
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    border: Border.all(
+                                                        color: context.borderColor
+                                                            .withValues(alpha: 0.7)),
+                                                  ),
+                                                  child: Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Icon(Icons.info_outline_rounded,
+                                                          size: 13.5, color: context.textSecondary),
+                                                      const SizedBox(width: 6),
+                                                      Expanded(
+                                                        child: Text(
+                                                          msg.verification!.gapDisclosure!,
+                                                          style: AppTypography.smallLabel.copyWith(
+                                                            color: context.textSecondary,
+                                                            fontSize: 11,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                  if (!msg.isUser && msg.action != null) ...[
+                                    const SizedBox(height: 8),
+                                    InkWell(
+                                      onTap: () => _runAction(msg.action!),
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: context.accentColor.withValues(alpha: 0.35),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(_actionIcon(msg.action!.type), size: 18, color: context.accentColor),
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                msg.action!.label,
+                                                style: TextStyle(
+                                                  fontSize: 13.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: context.accentColor,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Icon(Icons.arrow_forward_rounded, size: 14, color: context.accentColor),
+                                          ],
                                         ),
                                       ),
-                                    )
-                                  : TrueMeCard(
-                                      borderRadius: 18,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                      child: FormattedMessageBody(
-                                        text: msg.text,
-                                        textColor: context.textPrimary,
-                                      ),
                                     ),
-                              if (!msg.isUser && msg.action != null) ...[
-                                const SizedBox(height: 8),
-                                InkWell(
-                                  onTap: () => _runAction(msg.action!),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? AppColors.darkAccentWash : AppColors.accentWash,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: context.accentColor.withValues(alpha: 0.35),
+                                  ],
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      if (!msg.isUser && msg.citation != null)
+                                        GestureDetector(
+                                          onTap: () {
+                                            HapticFeedback.lightImpact();
+                                            _showCitationSheet(context, msg.citation!);
+                                          },
+                                          child: TrueMeTonalPill(
+                                            label: msg.citation!,
+                                            icon: Icons.menu_book_rounded,
+                                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                                          ),
+                                        ),
+                                      Text(
+                                        _formatTime(msg.timestamp),
+                                        style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
                                       ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(_actionIcon(msg.action!.type), size: 18, color: context.accentColor),
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: Text(
-                                            msg.action!.label,
-                                            style: TextStyle(
-                                              fontSize: 13.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: context.accentColor,
+                                      if (!msg.isUser)
+                                        InkWell(
+                                          onTap: () {
+                                            Clipboard.setData(ClipboardData(text: msg.text));
+                                            HapticFeedback.selectionClick();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Copied response'),
+                                                duration: Duration(seconds: 1),
+                                              ),
+                                            );
+                                          },
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(3),
+                                            child: Icon(
+                                              Icons.copy_rounded,
+                                              size: 13.5,
+                                              color: context.textSecondary,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward_rounded, size: 14, color: context.accentColor),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 5),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  if (!msg.isUser && msg.verification != null)
-                                    TrueMeTonalPill(
-                                      label: msg.verification!.trustLevel.badgeLabel,
-                                      icon: msg.verification!.citedSources.isNotEmpty
-                                          ? Icons.verified_outlined
-                                          : Icons.info_outline_rounded,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    ),
-                                  if (!msg.isUser && msg.citation != null)
-                                    GestureDetector(
-                                      onTap: () {
-                                        HapticFeedback.lightImpact();
-                                        _showCitationSheet(context, msg.citation!);
-                                      },
-                                      child: TrueMeTonalPill(
-                                        label: msg.citation!,
-                                        icon: Icons.menu_book_rounded,
-                                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                                      ),
-                                    ),
-                                  Text(
-                                    _formatTime(msg.timestamp),
-                                    style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                                    ],
                                   ),
                                 ],
                               ),
-                              if (!msg.isUser &&
-                                  msg.verification?.gapDisclosure != null &&
-                                  msg.verification!.gapDisclosure!.isNotEmpty) ...[
-                                const SizedBox(height: 4),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (_showScrollToLatest)
+                      Positioned(
+                        right: 16,
+                        bottom: 12,
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _scrollToBottom();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: context.surfaceColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: context.borderColor),
+                              boxShadow: context.cardShadow,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.arrow_downward_rounded,
+                                    size: 15, color: context.accentColor),
+                                const SizedBox(width: 4),
                                 Text(
-                                  msg.verification!.gapDisclosure!,
-                                  style: AppTypography.smallLabel.copyWith(
-                                    color: context.textSecondary,
-                                    fontStyle: FontStyle.italic,
-                                    fontSize: 11,
+                                  'Latest',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.textPrimary,
                                   ),
                                 ),
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
-                    );
-                  },
+                  ],
                 ),
         ),
 
