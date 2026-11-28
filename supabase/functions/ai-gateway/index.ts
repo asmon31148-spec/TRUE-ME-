@@ -74,6 +74,11 @@ function extractRateLimitHeaders(headers: Headers): Record<string, string> {
   return out;
 }
 
+function sanitizeModelOutput(text: string): string {
+  // Strip <think>...</think> reasoning blocks so all models produce clean student-facing output
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+}
+
 function estimateTokens(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -204,33 +209,46 @@ async function callOpenRouterChat(params: {
   prompt: string;
   systemPrompt?: string;
   jsonMode?: boolean;
+  temperature?: number;
   maxTokens?: number;
 }): Promise<ProviderCallResult | null> {
   if (!params.apiKey) return null;
   const targetModel = params.model || 'nvidia/nemotron-3.5-lightning:free';
+  const sysText = params.jsonMode
+    ? `${params.systemPrompt ? params.systemPrompt + '\n\n' : ''}CRITICAL: Return ONLY valid JSON with no markdown fences or extra commentary.`
+    : params.systemPrompt;
   const messages = [
-    ...(params.systemPrompt ? [{ role: 'system', content: params.systemPrompt }] : []),
+    ...(sysText ? [{ role: 'system', content: sysText }] : []),
     { role: 'user', content: params.prompt },
   ];
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'HTTP-Referer': 'https://github.com/asmon31148-spec/TRUE-ME-',
-      'X-Title': 'True Me Study App',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: targetModel,
-      messages,
-      ...(params.maxTokens ? { max_tokens: params.maxTokens } : {}),
-      ...(params.jsonMode ? { response_format: { type: 'json_object' } } : {}),
-    }),
-  });
+  const doFetch = (withJsonFormat: boolean) =>
+    fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        'HTTP-Referer': 'https://github.com/asmon31148-spec/TRUE-ME-',
+        'X-Title': 'True Me Study App',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages,
+        temperature: params.temperature ?? 0.3,
+        ...(params.maxTokens ? { max_tokens: params.maxTokens } : {}),
+        ...(withJsonFormat ? { response_format: { type: 'json_object' } } : {}),
+      }),
+    });
+
+  let resp = await doFetch(Boolean(params.jsonMode));
+  if (!resp.ok && params.jsonMode && resp.status === 400) {
+    resp = await doFetch(false);
+  }
   if (!resp.ok) return null;
   const data = await resp.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string' || !text.trim()) return null;
+  const rawText = data?.choices?.[0]?.message?.content;
+  if (typeof rawText !== 'string' || !rawText.trim()) return null;
+  const text = sanitizeModelOutput(rawText);
+  if (!text) return null;
 
   const usage = data?.usage;
   const hasOfficial = typeof usage?.prompt_tokens === 'number' || typeof usage?.total_tokens === 'number';
@@ -1016,7 +1034,7 @@ Deno.serve(async (req) => {
     }
 
     return jsonResponse({
-      text: result.text,
+      text: sanitizeModelOutput(result.text),
       provider: result.provider,
       model: result.model,
       requestId,
