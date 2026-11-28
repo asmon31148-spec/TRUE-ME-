@@ -220,7 +220,7 @@ void main() {
     test('AiModelRegistry discovers all configured providers without catalog bloat', () {
       final base = AiModelRegistry.discoverModels();
       final providers = base.map((m) => m.provider).toSet();
-      expect(providers, containsAll(['gemini', 'groq', 'openrouter', 'cohere', 'cloudflare']));
+      expect(providers, containsAll(['gemini', 'groq', 'openrouter', 'cohere']));
       expect(base.length, greaterThanOrEqualTo(16));
       expect(base.length, lessThan(30));
 

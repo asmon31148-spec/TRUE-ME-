@@ -15,6 +15,22 @@ const corsHeaders = {
 const MAX_PROMPT_CHARS = 80000;
 const MAX_RERANK_DOCS = 50;
 const MAX_AUDIO_BASE64_CHARS = 35 * 1024 * 1024; // ~25 MB binary
+const COOLDOWN_MS = 60_000;
+const modelCooldownUntil = new Map<string, number>();
+
+function isInCooldown(key: string): boolean {
+  const until = modelCooldownUntil.get(key);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    modelCooldownUntil.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function markCooldown(key: string) {
+  modelCooldownUntil.set(key, Date.now() + COOLDOWN_MS);
+}
 
 interface ProviderCallResult {
   text: string;
@@ -816,79 +832,156 @@ Deno.serve(async (req) => {
 
     const attempts: Array<{ name: string; run: () => Promise<ProviderCallResult | null> }> = [];
 
-    if (preferredProvider === 'cloudflare') {
+    if (preferredProvider === 'gemini') {
       attempts.push({
-        name: 'cloudflare',
-        run: () => callCloudflareSummarize({ accountId: cfAccountId, apiToken: cfApiToken, text: prompt, maxTokens }),
-      });
-    } else if (preferredProvider === 'gemini') {
-      attempts.push({
-        name: 'gemini',
+        name: 'gemini:2.5-flash',
         run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
       });
     } else if (preferredProvider === 'cohere' && !jsonMode) {
       attempts.push({
-        name: 'cohere',
+        name: 'cohere:command-r-plus',
         run: () => callCohereChat({ apiKey: cohereKey, model: modelHint, prompt, systemPrompt, temperature }),
       });
     } else if (preferredProvider === 'openrouter') {
       attempts.push({
-        name: 'openrouter',
+        name: `openrouter:${modelHint || 'nemotron-lightning'}`,
         run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint, prompt, systemPrompt, jsonMode, maxTokens }),
       });
     }
 
-    if (tier === 'realtime') {
+    if (tier === 'realtime' || taskType === 'realtime_chat' || taskType === 'groq_speed') {
       attempts.push(
         {
-          name: 'groq_speed',
-          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-20b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
-        },
-        {
-          name: 'groq_speed_fallback',
+          name: 'groq:llama-3.1-8b-instant',
           run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.1-8b-instant', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
-          name: 'openrouter',
+          name: 'openrouter:liquid-lfm-3',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'liquid/lfm-3-1.7b:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'groq:gpt-oss-20b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-20b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'openrouter:nemotron-lightning',
           run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint || 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
         },
         {
-          name: 'gemini',
+          name: 'gemini:2.5-flash',
+          run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        }
+      );
+    } else if (taskType === 'heavy_reasoning' || taskType === 'study_plan' || taskType === 'gemini_chat') {
+      attempts.push(
+        {
+          name: 'gemini:2.5-flash',
           run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
-          name: 'openrouter_liquid',
-          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'liquid/lfm-3-1.7b:free', prompt, systemPrompt, jsonMode, maxTokens }),
-        }
-      );
-    } else {
-      attempts.push(
+          name: 'openrouter:nemotron-ultra',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'nvidia/nemotron-3-ultra-550b-a55b:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
         {
-          name: 'groq_heavy',
+          name: 'groq:gpt-oss-120b',
           run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
-          name: 'groq_heavy_fallback',
+          name: 'openrouter:nemotron-omni',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'groq:llama-3.3-70b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        }
+      );
+    } else if (taskType === 'mindmap') {
+      attempts.push(
+        {
+          name: 'openrouter:nemotron-omni',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'groq:llama-3.3-70b',
           run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
-          name: 'gemini',
+          name: 'gemini:2.5-flash',
           run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
-          name: 'openrouter',
+          name: 'openrouter:nemotron-lightning',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        }
+      );
+    } else if (taskType === 'cloudflare_summarize' || taskType === 'summarize' || taskType === 'url_summarize') {
+      attempts.push(
+        {
+          name: 'openrouter:dots-3-note',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'dots-studio/dots-3-note-preview:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'groq:llama-3.1-8b-instant',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.1-8b-instant', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'openrouter:liquid-2.5',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'liquid/lfm-2.5-2.6b:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'gemini:2.5-flash',
+          run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        }
+      );
+    } else if (taskType === 'chat_with_notes' && !jsonMode) {
+      attempts.push(
+        {
+          name: 'cohere:command-r-plus',
+          run: () => callCohereChat({ apiKey: cohereKey, prompt, systemPrompt, temperature }),
+        },
+        {
+          name: 'gemini:2.5-flash',
+          run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'openrouter:nemotron-lightning',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'groq:llama-3.3-70b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        }
+      );
+    } else {
+      // Quiz, Flashcards, and general balanced chat
+      attempts.push(
+        {
+          name: 'groq:gpt-oss-120b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'openrouter:nemotron-lightning',
           run: () => callOpenRouterChat({ apiKey: openRouterKey, model: modelHint || 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
+        },
+        {
+          name: 'gemini:2.5-flash',
+          run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'groq:llama-3.3-70b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         }
       );
       if (!jsonMode) {
         attempts.push({
-          name: 'cohere',
+          name: 'cohere:command-r-plus',
           run: () => callCohereChat({ apiKey: cohereKey, prompt, systemPrompt, temperature }),
         });
       }
     }
 
     for (const attempt of attempts) {
+      if (isInCooldown(attempt.name)) continue;
       attemptCount++;
       try {
         const res = await attempt.run();
@@ -896,8 +989,25 @@ Deno.serve(async (req) => {
           result = res;
           break;
         }
+        markCooldown(attempt.name);
       } catch {
-        // Try next provider in fallback chain
+        markCooldown(attempt.name);
+      }
+    }
+
+    // Emergency pass: if every candidate was in cooldown, try once ignoring cooldown
+    if (!result) {
+      for (const attempt of attempts) {
+        attemptCount++;
+        try {
+          const res = await attempt.run();
+          if (res) {
+            result = res;
+            break;
+          }
+        } catch {
+          // continue
+        }
       }
     }
 

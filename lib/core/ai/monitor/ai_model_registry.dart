@@ -12,7 +12,6 @@ class AiModelRegistry {
     'groq',
     'openrouter',
     'cohere',
-    'cloudflare',
   ];
 
   static String providerDisplayName(String provider) {
@@ -25,8 +24,6 @@ class AiModelRegistry {
         return 'OpenRouter';
       case 'cohere':
         return 'Cohere';
-      case 'cloudflare':
-        return 'Cloudflare Workers AI';
       default:
         return provider;
     }
@@ -163,23 +160,38 @@ class AiModelRegistry {
       callbackRoutes: ['AiRouter.embedText', 'GeminiService.generateEmbedding'],
     ));
 
-    // 3. OpenRouter configured models (dynamically read from OpenRouterService.freeModels)
+    // 3. OpenRouter configured models (task-distributed across OpenRouterService.freeModels)
     for (final orId in OpenRouterService.freeModels) {
       final isDefault = orId == OpenRouterService.modelNemotronLightning;
+      final List<String> features;
+      if (orId == OpenRouterService.modelNemotronUltra) {
+        features = const ['Document Generation Fallback', 'Heavy Reasoning'];
+      } else if (orId == OpenRouterService.modelNemotronOmni) {
+        features = const ['Mindmap Reasoning', 'Complex Concept Trees'];
+      } else if (orId == OpenRouterService.modelLiquidSmall ||
+          orId == OpenRouterService.modelLiquidMedium) {
+        features = const ['Realtime Voice & Chat', 'Fast Summaries'];
+      } else if (orId == 'dots-studio/dots-3-note-preview:free') {
+        features = const ['Web Article & URL Summarizer', 'Note Synthesis'];
+      } else if (isDefault) {
+        features = const ['Quiz & Flashcards', 'Chat with Notes'];
+      } else {
+        features = const ['Multi-Model Overflow Pool'];
+      }
       register(ModelRegistryEntry(
         provider: 'openrouter',
         modelId: orId,
         displayName: _humanizeModelId(orId),
         isDefault: isDefault,
-        isFallback: true,
+        isPrimary: orId == OpenRouterService.modelNemotronOmni ||
+            orId == 'dots-studio/dots-3-note-preview:free',
+        isFallback: !isDefault,
         isFreeTier: orId.endsWith(':free'),
         contextWindow: 131072,
         inputPricePer1M: 0.0,
         outputPricePer1M: 0.0,
-        assignedFeatures: isDefault
-            ? const ['Document Generation Fallback', 'Quiz & Chat Fallback']
-            : const ['OpenRouter Standby Pool'],
-        callbackRoutes: const ['OpenRouterService.completeFallback', 'AiRouter.executeWithFallback'],
+        assignedFeatures: features,
+        callbackRoutes: const ['AiGatewayClient.chat', 'OpenRouterService.completeFallback'],
       ));
     }
 
@@ -208,19 +220,7 @@ class AiModelRegistry {
       callbackRoutes: ['CohereService.rerankDocuments', 'RagService.queryContext'],
     ));
 
-    // 5. Cloudflare Workers AI
-    register(const ModelRegistryEntry(
-      provider: 'cloudflare',
-      modelId: '@cf/meta/llama-3-8b-instruct',
-      displayName: 'Llama 3 8B Instruct (Cloudflare)',
-      isPrimary: true,
-      isFreeTier: true,
-      contextWindow: 8192,
-      assignedFeatures: ['Web Article & URL Summarizer'],
-      callbackRoutes: ['CloudflareService.summarizeText', 'UrlProcessor.fetchAndSummarize'],
-    ));
-
-    // 6. Enrich configured models with live context limits from official provider snapshots.
+    // 5. Enrich configured models with live context limits from official provider snapshots.
     // Do NOT flood the main list with 50+ unused catalog models (e.g. Cohere's full catalog);
     // only merge a discovered model if it is already configured or has actual telemetry.
     for (final entry in snapshots.entries) {
