@@ -38,6 +38,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
   String _sourceFilter = '';
   Map<String, dynamic>? _notebook;
   String? _exportingFormat; // 'pdf', 'docx', 'pptx'
+  String _artifactFilter = 'all'; // 'all', 'pdf', 'docx', 'pptx'
+  bool _showAllArtifacts = false;
 
   @override
   void initState() {
@@ -995,14 +997,55 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                           builder: (ctx) {
                             final allArtifacts = SyllabusService.getArtifacts(widget.notebookId);
                             if (allArtifacts.isEmpty) return const SizedBox.shrink();
+                            final pdfCount = allArtifacts
+                                .where((a) => (a['artifactType']?.toString().toLowerCase() ?? '') == 'pdf')
+                                .length;
+                            final docxCount = allArtifacts
+                                .where((a) => (a['artifactType']?.toString().toLowerCase() ?? '') == 'docx')
+                                .length;
+                            final pptxCount = allArtifacts
+                                .where((a) => (a['artifactType']?.toString().toLowerCase() ?? '') == 'pptx')
+                                .length;
+                            final filteredArtifacts = _artifactFilter == 'all'
+                                ? allArtifacts
+                                : allArtifacts
+                                    .where((a) =>
+                                        (a['artifactType']?.toString().toLowerCase() ?? '') ==
+                                        _artifactFilter)
+                                    .toList();
+                            final visibleArtifacts = _showAllArtifacts
+                                ? filteredArtifacts
+                                : filteredArtifacts.take(3).toList();
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 TrueMeSectionHeader(
                                   title: 'Saved Study Materials (${allArtifacts.length})',
                                 ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (final entry in <(String, String, int)>[
+                                      ('all', 'All', allArtifacts.length),
+                                      if (pdfCount > 0) ('pdf', 'PDF', pdfCount),
+                                      if (docxCount > 0) ('docx', 'Word', docxCount),
+                                      if (pptxCount > 0) ('pptx', 'Slides', pptxCount),
+                                    ])
+                                      ChoiceChip(
+                                        label: Text('${entry.$2} (${entry.$3})'),
+                                        selected: _artifactFilter == entry.$1,
+                                        selectedColor: context.accentColor.withValues(alpha: 0.16),
+                                        onSelected: (_) => setState(() {
+                                          _artifactFilter = entry.$1;
+                                          _showAllArtifacts = false;
+                                        }),
+                                      ),
+                                  ],
+                                ),
                                 const SizedBox(height: 10),
-                                ...allArtifacts.map((art) {
+                                ...visibleArtifacts.map((art) {
                                   final artId = art['id']?.toString() ??
                                       art['documentId']?.toString() ??
                                       '';
@@ -1099,6 +1142,25 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                     ),
                                   );
                                 }),
+                                if (filteredArtifacts.length > 3)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      onPressed: () =>
+                                          setState(() => _showAllArtifacts = !_showAllArtifacts),
+                                      icon: Icon(
+                                        _showAllArtifacts
+                                            ? Icons.expand_less_rounded
+                                            : Icons.expand_more_rounded,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        _showAllArtifacts
+                                            ? 'Show less'
+                                            : 'Show all (${filteredArtifacts.length})',
+                                      ),
+                                    ),
+                                  ),
                               ],
                             );
                           },

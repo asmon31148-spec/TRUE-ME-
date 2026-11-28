@@ -72,9 +72,13 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
   final TextEditingController _instructionsCtrl = TextEditingController();
 
   String? _selectedNodeId;
+  String? _selectedUnitId;
+  String? _selectedTopicId;
+  String? _selectedSubtopicId;
   String? _selectedSourceId;
   String? _selectedSourceName;
   String _selectedDepth = 'Course Level';
+  bool _showAllSaved = false;
 
   static const List<String> _depthOptions = [
     'Concise Revision',
@@ -164,6 +168,25 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
     final syllabusNodes = SyllabusService.getSyllabusNodes(widget.notebookId)
         .where((n) => n['nodeType'] == 'unit' || n['nodeType'] == 'topic' || n['nodeType'] == 'subtopic')
         .toList();
+    final units = syllabusNodes.where((n) => n['nodeType'] == 'unit').toList();
+    final allTopics = syllabusNodes.where((n) => n['nodeType'] == 'topic').toList();
+    final allSubtopics = syllabusNodes.where((n) => n['nodeType'] == 'subtopic').toList();
+
+    final effectiveUnitId =
+        units.any((n) => n['id'].toString() == _selectedUnitId) ? _selectedUnitId : null;
+    final filteredTopics = effectiveUnitId != null
+        ? allTopics.where((n) => n['parentId']?.toString() == effectiveUnitId).toList()
+        : (units.isEmpty ? allTopics : <Map<String, dynamic>>[]);
+    final effectiveTopicId =
+        filteredTopics.any((n) => n['id'].toString() == _selectedTopicId) ? _selectedTopicId : null;
+    final filteredSubtopics = effectiveTopicId != null
+        ? allSubtopics.where((n) => n['parentId']?.toString() == effectiveTopicId).toList()
+        : (units.isEmpty && allTopics.isEmpty ? allSubtopics : <Map<String, dynamic>>[]);
+    final effectiveSubtopicId =
+        filteredSubtopics.any((n) => n['id'].toString() == _selectedSubtopicId)
+            ? _selectedSubtopicId
+            : null;
+    final visibleArtifacts = _showAllSaved ? artifacts : artifacts.take(3).toList();
     final notebook = OfflineCacheService.getCachedNotebook(widget.notebookId);
     final docs = (notebook?['documents'] as List? ?? [])
         .map((d) => Map<String, dynamic>.from(d as Map))
@@ -183,111 +206,7 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
                   children: [
-                    // 1. Saved Artifacts History
-                    TrueMeSectionHeader(title: 'Saved ${widget.toolTitle}s (${artifacts.length})'),
-                    const SizedBox(height: 10),
-                    if (artifacts.isEmpty)
-                      TrueMeCard(
-                        borderRadius: 18,
-                        padding: const EdgeInsets.all(14),
-                        child: Text(
-                          'No saved ${widget.toolTitle.toLowerCase()}s yet for ${widget.subject}. Configure a focused scope below to create one.',
-                          style: AppTypography.secondary.copyWith(color: context.textSecondary),
-                        ),
-                      )
-                    else
-                      ...artifacts.take(8).map((art) {
-                        final path = art['filePath']?.toString();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: TrueMeCard(
-                            borderRadius: 16,
-                            padding: const EdgeInsets.all(14),
-                            onTap: () async {
-                              if (path != null && File(path).existsSync()) {
-                                await DocumentViewerScreen.open(
-                                  context,
-                                  filePath: path,
-                                  title: art['title']?.toString(),
-                                );
-                              } else if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${art['title']} (${art['topicLabel']})')),
-                                );
-                              }
-                            },
-                            child: Row(
-                              children: [
-                                Icon(Icons.bookmark_added_outlined, color: context.accentColor, size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        art['title']?.toString() ?? widget.toolTitle,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: context.textPrimary,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${art['topicLabel'] ?? widget.subject} · ${art['depthLevel'] ?? 'Course Level'}',
-                                        style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuButton<String>(
-                                  icon: Icon(Icons.more_vert_rounded,
-                                      size: 18, color: context.textSecondary),
-                                  onSelected: (val) async {
-                                    final artId = art['id']?.toString() ??
-                                        art['documentId']?.toString() ??
-                                        '';
-                                    if (artId.isEmpty) return;
-                                    if (val == 'rename') {
-                                      await _promptRenameArtifact(artId,
-                                          art['title']?.toString() ?? widget.toolTitle);
-                                    } else if (val == 'delete') {
-                                      await _confirmDeleteArtifact(artId,
-                                          art['title']?.toString() ?? widget.toolTitle);
-                                    }
-                                  },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(
-                                      value: 'rename',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.edit_outlined, size: 17),
-                                          SizedBox(width: 8),
-                                          Text('Rename'),
-                                        ],
-                                      ),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.delete_outline_rounded,
-                                              size: 17, color: AppColors.error),
-                                          SizedBox(width: 8),
-                                          Text('Delete',
-                                              style: TextStyle(color: AppColors.error)),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-
-                    const SizedBox(height: 22),
+                    // 1. Create Focused Tool (always first, no scroll wall)
                     TrueMeSectionHeader(title: 'Create Focused ${widget.toolTitle}'),
                     const SizedBox(height: 10),
 
@@ -297,45 +216,70 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (syllabusNodes.isNotEmpty) ...[
-                            Text(
-                              'Syllabus Unit / Topic',
-                              style: AppTypography.smallLabel.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: context.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            DropdownButtonFormField<String>(
-                              initialValue: _selectedNodeId,
-                              isExpanded: true,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: context.surfaceColor,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(color: context.borderColor),
-                                ),
-                              ),
-                              hint: const Text('Select detected syllabus topic'),
-                              items: syllabusNodes.map((n) {
-                                final prefix = n['nodeType'] == 'unit'
-                                    ? '📘 '
-                                    : (n['nodeType'] == 'topic' ? '• ' : '  ↳ ');
-                                return DropdownMenuItem<String>(
-                                  value: n['id'].toString(),
-                                  child: Text(
-                                    '$prefix${n['title']}',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              }).toList(),
+                          if (units.isNotEmpty) ...[
+                            _buildHierarchyDropdown(
+                              context: context,
+                              fieldKey: const ValueKey('unit_selector'),
+                              label: 'Unit',
+                              hint: 'Select syllabus unit',
+                              value: effectiveUnitId,
+                              nodes: units,
                               onChanged: (val) {
                                 setState(() {
+                                  _selectedUnitId = val;
+                                  _selectedTopicId = null;
+                                  _selectedSubtopicId = null;
                                   _selectedNodeId = val;
-                                  final match = syllabusNodes.where((n) => n['id'].toString() == val).firstOrNull;
+                                  final match = units.where((n) => n['id'].toString() == val).firstOrNull;
+                                  _topicCtrl.text = match?['title']?.toString() ?? '';
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (filteredTopics.isNotEmpty) ...[
+                            _buildHierarchyDropdown(
+                              context: context,
+                              fieldKey: ValueKey('topic_${effectiveUnitId ?? 'all'}'),
+                              label: 'Sub-Unit / Topic',
+                              hint: 'Select topic under unit',
+                              value: effectiveTopicId,
+                              nodes: filteredTopics,
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedTopicId = val;
+                                  _selectedSubtopicId = null;
+                                  _selectedNodeId = val ?? effectiveUnitId;
+                                  final match = filteredTopics.where((n) => n['id'].toString() == val).firstOrNull;
                                   if (match != null) {
                                     _topicCtrl.text = match['title'].toString();
+                                  } else {
+                                    final unitMatch = units.where((n) => n['id'].toString() == effectiveUnitId).firstOrNull;
+                                    _topicCtrl.text = unitMatch?['title']?.toString() ?? '';
+                                  }
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (filteredSubtopics.isNotEmpty) ...[
+                            _buildHierarchyDropdown(
+                              context: context,
+                              fieldKey: ValueKey('subtopic_${effectiveTopicId ?? 'all'}'),
+                              label: 'Sub-Topic',
+                              hint: 'Select sub-topic',
+                              value: effectiveSubtopicId,
+                              nodes: filteredSubtopics,
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedSubtopicId = val;
+                                  _selectedNodeId = val ?? effectiveTopicId ?? effectiveUnitId;
+                                  final match = filteredSubtopics.where((n) => n['id'].toString() == val).firstOrNull;
+                                  if (match != null) {
+                                    _topicCtrl.text = match['title'].toString();
+                                  } else {
+                                    final topicMatch = filteredTopics.where((n) => n['id'].toString() == effectiveTopicId).firstOrNull;
+                                    _topicCtrl.text = topicMatch?['title']?.toString() ?? '';
                                   }
                                 });
                               },
@@ -447,6 +391,131 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
                         ],
                       ),
                     ),
+
+                    const SizedBox(height: 22),
+
+                    // 2. Saved Artifacts History (compact & collapsible)
+                    TrueMeSectionHeader(title: 'Saved ${widget.toolTitle}s (${artifacts.length})'),
+                    const SizedBox(height: 10),
+                    if (artifacts.isEmpty)
+                      TrueMeCard(
+                        borderRadius: 18,
+                        padding: const EdgeInsets.all(14),
+                        child: Text(
+                          'No saved ${widget.toolTitle.toLowerCase()}s yet for ${widget.subject}. Configure a focused scope above to create one.',
+                          style: AppTypography.secondary.copyWith(color: context.textSecondary),
+                        ),
+                      )
+                    else ...[
+                      ...visibleArtifacts.map((art) {
+                        final path = art['filePath']?.toString();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: TrueMeCard(
+                            borderRadius: 16,
+                            padding: const EdgeInsets.all(14),
+                            onTap: () async {
+                              if (path != null && File(path).existsSync()) {
+                                await DocumentViewerScreen.open(
+                                  context,
+                                  filePath: path,
+                                  title: art['title']?.toString(),
+                                );
+                              } else if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('${art['title']} (${art['topicLabel']})')),
+                                );
+                              }
+                            },
+                            child: Row(
+                              children: [
+                                Icon(Icons.bookmark_added_outlined, color: context.accentColor, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        art['title']?.toString() ?? widget.toolTitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: context.textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${art['topicLabel'] ?? widget.subject} · ${art['depthLevel'] ?? 'Course Level'}',
+                                        style: AppTypography.smallLabel.copyWith(color: context.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuButton<String>(
+                                  icon: Icon(Icons.more_vert_rounded,
+                                      size: 18, color: context.textSecondary),
+                                  onSelected: (val) async {
+                                    final artId = art['id']?.toString() ??
+                                        art['documentId']?.toString() ??
+                                        '';
+                                    if (artId.isEmpty) return;
+                                    if (val == 'rename') {
+                                      await _promptRenameArtifact(artId,
+                                          art['title']?.toString() ?? widget.toolTitle);
+                                    } else if (val == 'delete') {
+                                      await _confirmDeleteArtifact(artId,
+                                          art['title']?.toString() ?? widget.toolTitle);
+                                    }
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'rename',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 17),
+                                          SizedBox(width: 8),
+                                          Text('Rename'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline_rounded,
+                                              size: 17, color: AppColors.error),
+                                          SizedBox(width: 8),
+                                          Text('Delete',
+                                              style: TextStyle(color: AppColors.error)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                      if (artifacts.length > 3)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () => setState(() => _showAllSaved = !_showAllSaved),
+                            icon: Icon(
+                              _showAllSaved
+                                  ? Icons.expand_less_rounded
+                                  : Icons.expand_more_rounded,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _showAllSaved
+                                  ? 'Show less'
+                                  : 'Show all (${artifacts.length})',
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -454,6 +523,60 @@ class _StudyToolSheetState extends State<StudyToolSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHierarchyDropdown({
+    required BuildContext context,
+    required Key fieldKey,
+    required String label,
+    required String hint,
+    required String? value,
+    required List<Map<String, dynamic>> nodes,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTypography.smallLabel.copyWith(
+            fontWeight: FontWeight.w700,
+            color: context.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String?>(
+          key: fieldKey,
+          initialValue: value,
+          isExpanded: true,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: context.surfaceColor,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: context.borderColor),
+            ),
+          ),
+          hint: Text(hint),
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text('All / Any $label', style: TextStyle(color: context.textSecondary)),
+            ),
+            ...nodes.map((n) {
+              return DropdownMenuItem<String?>(
+                value: n['id'].toString(),
+                child: Text(
+                  n['title']?.toString() ?? '',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }),
+          ],
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
