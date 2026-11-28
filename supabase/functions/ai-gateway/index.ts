@@ -834,6 +834,274 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === 'agent_step') {
+      const started = Date.now();
+      const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+      const rawTools = Array.isArray(body.tools) ? body.tools : [];
+      const temperature = typeof body.temperature === 'number' ? body.temperature : 0.35;
+      const maxTokens = typeof body.maxTokens === 'number' ? body.maxTokens : 2500;
+
+      if (rawMessages.length === 0) {
+        return jsonResponse({ error: 'messages array is required for agent_step' }, 400);
+      }
+
+      type AgentStepOut = {
+        type: 'tool_calls' | 'final';
+        text?: string;
+        calls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+        provider: string;
+        model: string;
+        inputTokens: number;
+        outputTokens: number;
+      };
+
+      const callOpenAiToolAgent = async (
+        url: string,
+        apiKey: string,
+        provider: string,
+        model: string,
+        extraHeaders: Record<string, string> = {},
+      ): Promise<AgentStepOut | null> => {
+        if (!apiKey) return null;
+        const resp = await fetch(url, {
+          method: 'POST',
+          signal: AbortSignal.timeout(18_000),
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            ...extraHeaders,
+          },
+          body: JSON.stringify({
+            model,
+            messages: rawMessages,
+            ...(rawTools.length > 0 ? { tools: rawTools, tool_choice: 'auto' } : {}),
+            temperature,
+            max_tokens: maxTokens,
+          }),
+        });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        const msg = data?.choices?.[0]?.message;
+        if (!msg) return null;
+        const usage = data?.usage;
+        const inTok = typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0;
+        const outTok = typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0;
+
+        if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+          const calls = msg.tool_calls.map((tc: Record<string, unknown>, idx: number) => {
+            const fn = (tc.function as Record<string, unknown>) || {};
+            let args: Record<string, unknown> = {};
+            try {
+              args = typeof fn.arguments === 'string'
+                ? JSON.parse(fn.arguments || '{}')
+                : (fn.arguments as Record<string, unknown>) || {};
+            } catch {
+              args = {};
+            }
+            return {
+              id: String(tc.id || `call_${idx}_${Date.now()}`),
+              name: String(fn.name || ''),
+              arguments: args,
+            };
+          }).filter((c: { name: string }) => c.name.length > 0);
+
+          if (calls.length > 0) {
+            return {
+              type: 'tool_calls',
+              calls,
+              provider,
+              model: String(data?.model || model),
+              inputTokens: inTok,
+              outputTokens: outTok,
+            };
+          }
+        }
+
+        const content = typeof msg.content === 'string' ? sanitizeModelOutput(msg.content) : '';
+        if (!content) return null;
+        return {
+          type: 'final',
+          text: content,
+          provider,
+          model: String(data?.model || model),
+          inputTokens: inTok,
+          outputTokens: outTok,
+        };
+      };
+
+      const callGeminiToolAgent = async (): Promise<AgentStepOut | null> => {
+        if (!geminiKey) return null;
+        const sysMsgs = rawMessages.filter((m: Record<string, unknown>) => m.role === 'system');
+        const systemText = sysMsgs.map((m: Record<string, unknown>) => String(m.content || '')).join('\n\n');
+        const contents: Array<Record<string, unknown>> = [];
+        for (const m of rawMessages) {
+          const role = String(m.role || '');
+          if (role === 'system') continue;
+          if (role === 'user') {
+            contents.push({ role: 'user', parts: [{ text: String(m.content || '') }] });
+          } else if (role === 'assistant') {
+            const parts: Array<Record<string, unknown>> = [];
+            if (m.content) parts.push({ text: String(m.content) });
+            if (Array.isArray(m.tool_calls)) {
+              for (const tc of m.tool_calls) {
+                const fn = (tc.function as Record<string, unknown>) || {};
+                let args: Record<string, unknown> = {};
+                try {
+                  args = typeof fn.arguments === 'string'
+                    ? JSON.parse(fn.arguments || '{}')
+                    : (fn.arguments as Record<string, unknown>) || {};
+                } catch {
+                  args = {};
+                }
+                parts.push({ functionCall: { name: String(fn.name || ''), args } });
+              }
+            }
+            if (parts.length > 0) contents.push({ role: 'model', parts });
+          } else if (role === 'tool') {
+            contents.push({
+              role: 'user',
+              parts: [{
+                functionResponse: {
+                  name: String(m.name || 'tool'),
+                  response: { result: String(m.content || '') },
+                },
+              }],
+            });
+          }
+        }
+
+        const fnDecls = rawTools.map((t: Record<string, unknown>) => {
+          const fn = (t.function as Record<string, unknown>) || {};
+          return {
+            name: fn.name,
+            description: fn.description,
+            parameters: fn.parameters,
+          };
+        });
+
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            signal: AbortSignal.timeout(18_000),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+              contents,
+              ...(fnDecls.length > 0 ? { tools: [{ functionDeclarations: fnDecls }] } : {}),
+              generationConfig: { temperature, maxOutputTokens: maxTokens },
+            }),
+          },
+        );
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        const parts = data?.candidates?.[0]?.content?.parts;
+        if (!Array.isArray(parts) || parts.length === 0) return null;
+
+        const fnCalls = parts
+          .filter((p: Record<string, unknown>) => p.functionCall)
+          .map((p: Record<string, unknown>, idx: number) => {
+            const fc = p.functionCall as Record<string, unknown>;
+            return {
+              id: `gem_${idx}_${Date.now()}`,
+              name: String(fc.name || ''),
+              arguments: (fc.args as Record<string, unknown>) || {},
+            };
+          })
+          .filter((c: { name: string }) => c.name.length > 0);
+
+        const meta = data?.usageMetadata;
+        const inTok = typeof meta?.promptTokenCount === 'number' ? meta.promptTokenCount : 0;
+        const outTok = typeof meta?.candidatesTokenCount === 'number' ? meta.candidatesTokenCount : 0;
+
+        if (fnCalls.length > 0) {
+          return {
+            type: 'tool_calls',
+            calls: fnCalls,
+            provider: 'gemini',
+            model: 'gemini-2.5-flash',
+            inputTokens: inTok,
+            outputTokens: outTok,
+          };
+        }
+
+        const text = parts
+          .map((p: Record<string, unknown>) => (typeof p.text === 'string' ? p.text : ''))
+          .join('')
+          .trim();
+        if (!text) return null;
+        return {
+          type: 'final',
+          text: sanitizeModelOutput(text),
+          provider: 'gemini',
+          model: 'gemini-2.5-flash',
+          inputTokens: inTok,
+          outputTokens: outTok,
+        };
+      };
+
+      const agentAttempts: Array<{ name: string; run: () => Promise<AgentStepOut | null> }> = [
+        { name: 'gemini:2.5-flash', run: callGeminiToolAgent },
+        {
+          name: 'groq:llama-3.3-70b',
+          run: () => callOpenAiToolAgent('https://api.groq.com/openai/v1/chat/completions', groqKey, 'groq', 'llama-3.3-70b-versatile'),
+        },
+        {
+          name: 'groq:gpt-oss-120b',
+          run: () => callOpenAiToolAgent('https://api.groq.com/openai/v1/chat/completions', groqKey, 'groq', 'openai/gpt-oss-120b'),
+        },
+        {
+          name: 'openrouter:gemma-4-31b',
+          run: () => callOpenAiToolAgent(
+            'https://openrouter.ai/api/v1/chat/completions',
+            openRouterKey,
+            'openrouter',
+            'google/gemma-4-31b-it:free',
+            { 'HTTP-Referer': 'https://github.com/asmon31148-spec/TRUE-ME-', 'X-Title': 'True Me Study App' },
+          ),
+        },
+      ];
+
+      let agentOut: AgentStepOut | null = null;
+      let agentAttemptCount = 0;
+      for (const a of agentAttempts) {
+        if (isInCooldown(`agent_${a.name}`)) continue;
+        agentAttemptCount++;
+        try {
+          const res = await a.run();
+          if (res) {
+            agentOut = res;
+            break;
+          }
+          markCooldown(`agent_${a.name}`);
+        } catch {
+          markCooldown(`agent_${a.name}`);
+        }
+      }
+
+      if (!agentOut) {
+        return jsonResponse({ error: 'All AI agent providers are currently unavailable.' }, 502);
+      }
+
+      return jsonResponse({
+        ...agentOut,
+        requestId,
+        quota: quotaCheck,
+        telemetry: {
+          provider: agentOut.provider,
+          model: agentOut.model,
+          inputTokens: agentOut.inputTokens,
+          outputTokens: agentOut.outputTokens,
+          cachedTokens: 0,
+          totalTokens: agentOut.inputTokens + agentOut.outputTokens,
+          tokenSource: 'OFFICIAL',
+          latencyMs: Date.now() - started,
+          fallbackUsed: agentAttemptCount > 1,
+          attemptCount: agentAttemptCount,
+        },
+      });
+    }
+
     // Default action: 'chat'
     const started = Date.now();
     const prompt = String(body.prompt || '');

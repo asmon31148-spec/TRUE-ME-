@@ -266,6 +266,39 @@ class AiGatewayClient {
     }
   }
 
+  /// Executes one step of a real tool-calling agent loop via `ai-gateway` (`action: 'agent_step'`).
+  /// Returns `{ type: 'tool_calls', calls: [...] }` or `{ type: 'final', text: '...' }`.
+  Future<Map<String, dynamic>> agentStep({
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+    double temperature = 0.35,
+    int maxTokens = 2500,
+    String? requestId,
+  }) async {
+    if (!isConfigured) {
+      throw StateError('Supabase AI Gateway is not configured.');
+    }
+    final rid = requestId ?? RateLimitGuardian.newRequestId('agent');
+    try {
+      final res = await _dio.post(
+        _gatewayUrl,
+        options: Options(headers: _authHeaders()),
+        data: {
+          'action': 'agent_step',
+          'requestId': rid,
+          'taskType': 'agent_step',
+          'messages': messages,
+          'tools': tools,
+          'temperature': temperature,
+          'maxTokens': maxTokens,
+        },
+      );
+      return Map<String, dynamic>.from(res.data as Map);
+    } on DioException catch (e) {
+      _throwFriendlyDioError(e);
+    }
+  }
+
   Future<List<double>> embed({
     required String text,
     String? requestId,

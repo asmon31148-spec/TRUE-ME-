@@ -1030,12 +1030,9 @@ $question
   }) async {
     final systemPrompt = '''
 You are an expert cognitive mind-map architect.
-Generate a structured, hierarchical concept map for the given topic and study material.
-Organize the branches across 4 distinct cognitive dimensions:
-1. Core Foundations & First Principles
-2. Key Mechanisms & Processes
-3. High-Yield Exam / Practical Applications
-4. Common Traps, Edge Cases & Danger Zones
+Design an adaptive, hierarchical concept map tailored specifically to the student's requested topic and instructions.
+- Do NOT force a fixed cookie-cutter branch count; choose the exact branches (typically 3 to 7) and sub-children that naturally fit the subject matter and any specific angle the student asked for.
+- Make every node summary crisp, accurate, and high-yield.
 
 Return ONLY valid JSON matching this schema:
 {
@@ -1053,7 +1050,6 @@ Return ONLY valid JSON matching this schema:
     }
   ]
 }
-Provide exactly 4 main branches, each with 2 to 3 concise children.
 ''';
     final prompt = (content != null && content.trim().isNotEmpty)
         ? 'Topic: $topic\n\nStudy Material:\n$content'

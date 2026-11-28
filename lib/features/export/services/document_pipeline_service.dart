@@ -13,7 +13,103 @@ class DocumentPipelineService {
   static const int _singlePassCharLimit = 14000;
   static const int _chunkSizeChars = 12000;
   static const int _maxMapChunks = 36; // Up to ~432K chars (~75,000 words)
-  static const int _mapConcurrency = 3;
+  static const int _mapConcurrency = 1; // Sequential to respect free-tier RPM limits
+
+  /// Unit-by-unit deep synthesis for multi-unit / full-semester requests:
+  /// generates each syllabus unit in its own dedicated LLM pass and merges them
+  /// so a 5-unit syllabus becomes a deep 15-25 page guide instead of 4 pages.
+  static Future<StructuredStudyDocument> generateMultiUnitDocument({
+    required AiRouter aiRouter,
+    required String subject,
+    required String topic,
+    required List<String> unitTitles,
+    required String sourceContext,
+    String purpose = 'Exam & Course Study Guide',
+    String depthLevel = 'Course Level',
+    String customInstructions = '',
+    void Function(int done, int total, String unitTitle)? onUnitProgress,
+  }) async {
+    final cappedUnits = unitTitles.where((u) => u.trim().isNotEmpty).take(8).toList();
+    if (cappedUnits.length < 2) {
+      return generateStructuredDocument(
+        aiRouter: aiRouter,
+        subject: subject,
+        topic: topic,
+        sourceContext: sourceContext,
+        purpose: purpose,
+        depthLevel: depthLevel,
+        customInstructions: customInstructions,
+      );
+    }
+
+    final mergedSections = <StudySectionBlock>[];
+    final mergedObjectives = <String>[];
+    final mergedTakeaways = <String>[];
+    final mergedReferences = <String>[];
+
+    for (int i = 0; i < cappedUnits.length; i++) {
+      final unit = cappedUnits[i];
+      onUnitProgress?.call(i + 1, cappedUnits.length, unit);
+      final unitSlice = _extractRelevantSliceForUnit(sourceContext, unit);
+      final unitDoc = await generateStructuredDocument(
+        aiRouter: aiRouter,
+        subject: subject,
+        topic: unit,
+        sourceContext: unitSlice,
+        purpose: purpose,
+        depthLevel: depthLevel,
+        customInstructions: customInstructions,
+      );
+      if (unitDoc.sections.isNotEmpty) {
+        mergedSections.addAll(unitDoc.sections);
+      }
+      mergedObjectives.addAll(unitDoc.learningObjectives);
+      mergedTakeaways.addAll(unitDoc.takeaways);
+      mergedReferences.addAll(unitDoc.sourceReferences);
+      if (i + 1 < cappedUnits.length) {
+        await Future.delayed(const Duration(milliseconds: 350));
+      }
+    }
+
+    return StructuredStudyDocument(
+      title: '$subject — $topic',
+      subject: subject,
+      topic: topic,
+      purpose: purpose,
+      academicLevel: depthLevel,
+      executiveSummary:
+          'Comprehensive unit-by-unit study guide covering ${cappedUnits.length} syllabus units in $subject (${cappedUnits.join(', ')}).',
+      learningObjectives: mergedObjectives.toSet().take(12).toList(),
+      sections: mergedSections,
+      takeaways: mergedTakeaways.toSet().take(12).toList(),
+      sourceReferences: mergedReferences.toSet().toList(),
+    );
+  }
+
+  static String _extractRelevantSliceForUnit(String fullSource, String unitTitle) {
+    if (fullSource.length <= _singlePassCharLimit) return fullSource;
+    final terms = unitTitle
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .where((w) => w.length >= 3)
+        .toSet();
+    final chunks = TextChunker.splitIntoChunks(
+      fullSource,
+      targetChunkChars: 3500,
+      overlapChars: 200,
+    );
+    final scored = chunks.map((c) {
+      final lower = c.content.toLowerCase();
+      int hits = 0;
+      for (final t in terms) {
+        if (lower.contains(t)) hits++;
+      }
+      return (chunk: c, hits: hits);
+    }).toList()
+      ..sort((a, b) => b.hits.compareTo(a.hits));
+    final top = scored.take(4).map((e) => e.chunk.content).join('\n\n---\n\n');
+    return top.isNotEmpty ? top : fullSource.substring(0, _singlePassCharLimit);
+  }
 
   static Future<StructuredStudyDocument> generateStructuredDocument({
     required AiRouter aiRouter,

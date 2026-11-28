@@ -177,19 +177,49 @@ class DocumentGenerationService {
 
     onStageChanged?.call(2, 'Extracting, chunking & analyzing source content...');
     onProgressChanged?.call(0.28, 'Extracting, chunking & analyzing source content...');
-    final structuredDoc = await DocumentPipelineService.generateStructuredDocument(
-      aiRouter: aiRouter,
-      subject: subject,
-      topic: topic,
-      sourceContext: effectiveContext,
-      purpose: purpose,
-      depthLevel: depthLevel,
-      customInstructions: customInstructions,
-      onChunkProgress: (done, total) {
-        final pct = 0.28 + (0.28 * (done / total));
-        onProgressChanged?.call(pct, 'Analyzing segment $done/$total...');
-      },
-    );
+
+    final syllabusUnits = SyllabusService.getSyllabusNodes(targetNbId)
+        .where((n) => n['nodeType'] == 'unit')
+        .map((n) => n['title']?.toString() ?? '')
+        .where((t) => t.trim().isNotEmpty)
+        .toList();
+    final lowerTopic = topic.toLowerCase();
+    final isBroadSemesterScope = syllabusUnits.length >= 2 &&
+        (lowerTopic == subject.toLowerCase() ||
+            lowerTopic.contains('semester') ||
+            lowerTopic.contains('syllabus') ||
+            lowerTopic.contains('all unit') ||
+            lowerTopic.contains('full ') ||
+            lowerTopic.contains('complete '));
+
+    final structuredDoc = isBroadSemesterScope
+        ? await DocumentPipelineService.generateMultiUnitDocument(
+            aiRouter: aiRouter,
+            subject: subject,
+            topic: topic,
+            unitTitles: syllabusUnits,
+            sourceContext: effectiveContext,
+            purpose: purpose,
+            depthLevel: depthLevel,
+            customInstructions: customInstructions,
+            onUnitProgress: (done, total, unitName) {
+              final pct = 0.28 + (0.30 * (done / total));
+              onProgressChanged?.call(pct, 'Synthesizing Unit $done/$total: $unitName...');
+            },
+          )
+        : await DocumentPipelineService.generateStructuredDocument(
+            aiRouter: aiRouter,
+            subject: subject,
+            topic: topic,
+            sourceContext: effectiveContext,
+            purpose: purpose,
+            depthLevel: depthLevel,
+            customInstructions: customInstructions,
+            onChunkProgress: (done, total) {
+              final pct = 0.28 + (0.28 * (done / total));
+              onProgressChanged?.call(pct, 'Analyzing segment $done/$total...');
+            },
+          );
 
     onStageChanged?.call(3, 'Building & validating learning content...');
     onProgressChanged?.call(0.62, 'Building & validating learning content...');
