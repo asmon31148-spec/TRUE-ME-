@@ -19,7 +19,7 @@ class AiGatewayClient {
       : _dio = Dio(
           BaseOptions(
             connectTimeout: const Duration(seconds: 12),
-            receiveTimeout: const Duration(seconds: 48),
+            receiveTimeout: const Duration(seconds: 65),
             sendTimeout: const Duration(seconds: 30),
           ),
         );

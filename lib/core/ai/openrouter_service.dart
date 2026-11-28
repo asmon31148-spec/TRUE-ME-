@@ -7,21 +7,19 @@ class OpenRouterService {
   static const String modelNemotronUltra = 'nvidia/nemotron-3-ultra-550b-a55b:free';
   static const String modelNemotronLightning = 'nvidia/nemotron-3.5-lightning:free';
   static const String modelLiquidSmall = 'liquid/lfm-3-1.7b:free';
-  static const String modelLiquidMedium = 'liquid/lfm-2.5-2.6b:free';
-  static const String modelCohereCode = 'cohere/north-mini-code:free';
+  static const String modelLiquidMedium = 'google/gemma-4-26b-a4b-it:free';
+  static const String modelCohereCode = 'google/gemma-4-31b-it:free';
   static const String modelNemotronOmni = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
   static const String modelNemotronSuperVl = 'nvidia/nemotron-3.5-super-vl:free';
 
   static const List<String> freeModels = [
     modelNemotronLightning,
-    modelLiquidSmall,
-    modelLiquidMedium,
     modelCohereCode,
+    modelLiquidMedium,
+    modelLiquidSmall,
     modelNemotronSuperVl,
     modelNemotronOmni,
     modelNemotronUltra,
-    'dots-studio/dots-3-note-preview:free',
-    'recursive/flint-v1.0:free',
   ];
 
   OpenRouterService({String? apiKey, dynamic dio, AiGatewayClient? gateway})

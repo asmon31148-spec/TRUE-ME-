@@ -16,7 +16,6 @@ class AiRouter {
   final GeminiService _gemini;
   final GroqService _groq;
   final CohereService _cohere;
-  final CloudflareService _cloudflare;
   final OpenRouterService _openRouter;
 
   AiRouter({
@@ -28,8 +27,14 @@ class AiRouter {
   })  : _gemini = gemini ?? GeminiService(),
         _groq = groq ?? GroqService(),
         _cohere = cohere ?? CohereService(),
-        _cloudflare = cloudflare ?? CloudflareService(),
         _openRouter = openRouter ?? OpenRouterService();
+
+  static bool _isTerminalGatewayError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('session expired') ||
+        msg.contains('please sign in') ||
+        msg.contains('daily ai quota reached');
+  }
 
   /// Strips markdown code fences, prose, and trailing syntax from LLM output
   /// to extract a clean JSON object or array string.
@@ -144,6 +149,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         lastError = e;
         RateLimitGuardian.trip('groq_heavy');
       }
@@ -166,6 +172,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         lastError = e;
         RateLimitGuardian.trip('gemini_flash');
       }
@@ -189,6 +196,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         lastError = e;
         RateLimitGuardian.trip('openrouter');
       }
@@ -210,6 +218,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         lastError = e;
         RateLimitGuardian.trip('cohere');
       }
@@ -243,7 +252,7 @@ class AiRouter {
               maxTokens: 1400,
               temperature: 0.4,
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 22));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'groq_speed',
@@ -251,6 +260,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         RateLimitGuardian.trip('groq_speed');
       }
     }
@@ -264,7 +274,7 @@ class AiRouter {
               systemPrompt: systemPrompt,
               model: OpenRouterService.modelNemotronLightning,
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 22));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'openrouter',
@@ -272,6 +282,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         RateLimitGuardian.trip('openrouter');
       }
     }
@@ -292,6 +303,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
         RateLimitGuardian.trip('gemini_flash');
       }
     }
@@ -674,8 +686,8 @@ $question
       systemPrompt: systemPrompt,
       jsonMode: jsonMode,
     ).timeout(
-      const Duration(seconds: 50),
-      onTimeout: () => throw StateError('Generation timed out (50s limit). Please try again.'),
+      const Duration(seconds: 70),
+      onTimeout: () => throw StateError('Generation timed out (70s limit). Please try again.'),
     );
   }
 
@@ -684,6 +696,8 @@ $question
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
+    Object? lastError;
+
     // 1. Groq (Fastest: 1-3s LPU inference)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
@@ -694,8 +708,10 @@ $question
               systemPrompt: systemPrompt,
               jsonMode: jsonMode,
             )
-            .timeout(const Duration(seconds: 18));
+            .timeout(const Duration(seconds: 30));
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
+        lastError = e;
         RateLimitGuardian.trip('groq_speed');
       }
     }
@@ -710,8 +726,10 @@ $question
               systemInstruction: systemPrompt,
               jsonMode: jsonMode,
             )
-            .timeout(const Duration(seconds: 20));
+            .timeout(const Duration(seconds: 30));
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
+        lastError = e;
         RateLimitGuardian.trip('gemini_flash');
       }
     }
@@ -727,6 +745,8 @@ $question
           jsonMode: jsonMode,
         );
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
+        lastError = e;
         RateLimitGuardian.trip('openrouter');
       }
     }
@@ -740,18 +760,13 @@ $question
           systemPrompt: systemPrompt,
         );
       } catch (e) {
+        if (_isTerminalGatewayError(e)) rethrow;
+        lastError = e;
         RateLimitGuardian.trip('cohere');
       }
     }
 
-    // 5. Cloudflare Workers AI
-    if (_cloudflare.isConfigured && !jsonMode) {
-      try {
-        return await _cloudflare.summarizeText(prompt);
-      } catch (_) {}
-    }
-
-    // 6. Absolute final fallback to OpenRouter Liquid LFM
+    // 5. Absolute final fallback to OpenRouter Liquid LFM
     if (_openRouter.isConfigured) {
       return await _openRouter.completeFallback(
         prompt: prompt,
@@ -761,7 +776,11 @@ $question
       );
     }
 
-    throw StateError('All AI providers in fallback chain failed or lack keys');
+    throw StateError(
+      lastError != null
+          ? 'All AI providers in fallback chain failed ($lastError)'
+          : 'All AI providers in fallback chain failed or lack keys',
+    );
   }
 
   // ---------------------------------------------------------------------------

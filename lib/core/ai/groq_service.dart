@@ -22,6 +22,7 @@ class GroqService {
       prompt: prompt,
       systemPrompt: systemPrompt,
       tier: 'realtime',
+      preferredProvider: 'groq',
       taskType: 'groq_speed',
       jsonMode: jsonMode,
       temperature: temperature,
