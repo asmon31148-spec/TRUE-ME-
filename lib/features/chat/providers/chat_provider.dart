@@ -545,7 +545,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         effectiveSubject = intentPlan.resolvedSubject ?? effectiveSubject;
       }
 
-      if (intentPlan.needsClarification && intentPlan.clarificationQuestion != null) {
+      if (!AiGatewayClient.instance.isConfigured &&
+          intentPlan.needsClarification &&
+          intentPlan.clarificationQuestion != null) {
         final clarifyMsg = ChatMessage(
           id: 'msg_${DateTime.now().millisecondsSinceEpoch + 1}',
           isUser: false,
@@ -561,9 +563,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         return clarifyMsg;
       }
 
-      // 1b-compound. Execute multi-feature compound workflows directly
-      // (Mind Map / Quiz / Flashcards -> PDF / DOCX / PPTX)
-      if (intentPlan.isCompound &&
+      // 1b-compound. Offline/test-only compound regex shortcut (live app uses SageAgentService)
+      if (!AiGatewayClient.instance.isConfigured &&
+          intentPlan.isCompound &&
           (intentPlan.intent == SageIntentType.mindmap ||
               intentPlan.intent == SageIntentType.quiz ||
               intentPlan.intent == SageIntentType.flashcards) &&
@@ -700,6 +702,46 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
           if (agentRes != null && agentRes.text.isNotEmpty) {
             rawAnswer = agentRes.text;
+            if (agentRes.createdFormat != null) {
+              final fmt = agentRes.createdFormat!;
+              final topic = agentRes.createdTopic ?? subjectLabel;
+              finalAction = switch (fmt) {
+                'pdf' => SageAction(
+                    type: SageActionType.exportPdf,
+                    label: 'Open PDF: ${agentRes.createdTitle ?? topic}',
+                    topic: topic,
+                    filePath: agentRes.createdFilePath,
+                  ),
+                'docx' => SageAction(
+                    type: SageActionType.exportDocx,
+                    label: 'Open Word: ${agentRes.createdTitle ?? topic}',
+                    topic: topic,
+                    filePath: agentRes.createdFilePath,
+                  ),
+                'pptx' => SageAction(
+                    type: SageActionType.exportPptx,
+                    label: 'Open Slides: ${agentRes.createdTitle ?? topic}',
+                    topic: topic,
+                    filePath: agentRes.createdFilePath,
+                  ),
+                'mindmap' => SageAction(
+                    type: SageActionType.mindmap,
+                    label: 'Open Mind Map: $topic',
+                    topic: topic,
+                  ),
+                'quiz' => SageAction(
+                    type: SageActionType.quiz,
+                    label: 'Start Quiz: $topic',
+                    topic: topic,
+                  ),
+                'flashcards' => SageAction(
+                    type: SageActionType.flashcards,
+                    label: 'Study Flashcards: $topic',
+                    topic: topic,
+                  ),
+                _ => null,
+              };
+            }
             if (agentRes.passages.isNotEmpty) {
               evidenceBundle = EvidenceBundle(
                 query: cleanQuestion,
@@ -875,7 +917,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
       }
 
-      if (!isExportOfPrevious && rawAnswer.isNotEmpty) {
+      if (!isExportOfPrevious && rawAnswer.isNotEmpty && finalAction == null) {
         state = state.copyWith(
           thinkingStatus: 'Verifying claims & citations against sources...',
         );

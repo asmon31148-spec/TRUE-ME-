@@ -1,6 +1,8 @@
 import 'dart:convert';
+import '../../features/export/services/document_generation_service.dart';
 import '../services/offline_cache_service.dart';
 import 'ai_gateway_client.dart';
+import 'ai_router.dart';
 import 'rag_service.dart';
 import 'retrieval_engine.dart';
 import 'syllabus_service.dart';
@@ -9,11 +11,19 @@ class SageAgentResult {
   final String text;
   final List<EvidencePassage> passages;
   final List<String> toolsUsed;
+  final String? createdFilePath;
+  final String? createdTitle;
+  final String? createdFormat; // 'pdf', 'docx', 'pptx', 'mindmap', 'quiz', 'flashcards'
+  final String? createdTopic;
 
   const SageAgentResult({
     required this.text,
     required this.passages,
     required this.toolsUsed,
+    this.createdFilePath,
+    this.createdTitle,
+    this.createdFormat,
+    this.createdTopic,
   });
 }
 
@@ -99,6 +109,34 @@ class SageAgentService {
         },
       },
     },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'create_study_artifact',
+        'description':
+            'Create a custom PDF, Word (docx), Slides (pptx), Mind Map, Quiz, or Flashcards tailored to the student\'s exact instructions and researched sources.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'format': {
+              'type': 'string',
+              'enum': ['pdf', 'docx', 'pptx', 'mindmap', 'quiz', 'flashcards'],
+              'description': 'Output format requested by the student.',
+            },
+            'topic': {
+              'type': 'string',
+              'description': 'Specific topic, unit, or focus title.',
+            },
+            'customInstructions': {
+              'type': 'string',
+              'description':
+                  'Exact structure, style, focus, or formatting rules the student asked for.',
+            },
+          },
+          'required': ['format', 'topic'],
+        },
+      },
+    },
   ];
 
   Future<SageAgentResult?> runTurn({
@@ -153,6 +191,10 @@ How to behave:
     final collectedPassages = <EvidencePassage>[];
     final toolsUsed = <String>[];
     final retrievalEngine = RetrievalEngine(ragService: _ragService);
+    String? createdFilePath;
+    String? createdTitle;
+    String? createdFormat;
+    String? createdTopic;
 
     for (int step = 0; step < 4; step++) {
       final resp = await AiGatewayClient.instance.agentStep(
@@ -169,6 +211,10 @@ How to behave:
           text: text,
           passages: collectedPassages,
           toolsUsed: toolsUsed,
+          createdFilePath: createdFilePath,
+          createdTitle: createdTitle,
+          createdFormat: createdFormat,
+          createdTopic: createdTopic,
         );
       }
 
@@ -201,9 +247,16 @@ How to behave:
           args: args,
           userId: userId,
           notebookId: notebookId ?? '',
+          subjectName: subject ?? 'Study',
           docs: docs,
           retrievalEngine: retrievalEngine,
           collectedPassages: collectedPassages,
+          onCreated: ({filePath, title, format, topic}) {
+            createdFilePath = filePath ?? createdFilePath;
+            createdTitle = title ?? createdTitle;
+            createdFormat = format ?? createdFormat;
+            createdTopic = topic ?? createdTopic;
+          },
           onStatus: onStatus,
         );
 
@@ -231,9 +284,11 @@ How to behave:
     required Map<String, dynamic> args,
     required String userId,
     required String notebookId,
+    required String subjectName,
     required List<Map<String, dynamic>> docs,
     required RetrievalEngine retrievalEngine,
     required List<EvidencePassage> collectedPassages,
+    void Function({String? filePath, String? title, String? format, String? topic})? onCreated,
     void Function(String status)? onStatus,
   }) async {
     switch (name) {
@@ -297,6 +352,43 @@ How to behave:
         final safeStart = offset.clamp(0, text.length);
         final safeEnd = (safeStart + 5000).clamp(0, text.length);
         return '[$fileName | chars $safeStart..$safeEnd of ${text.length}]\n${text.substring(safeStart, safeEnd)}';
+
+      case 'create_study_artifact':
+        final fmt = (args['format']?.toString() ?? 'pdf').toLowerCase().trim();
+        final topic = args['topic']?.toString().trim().isNotEmpty == true
+            ? args['topic'].toString().trim()
+            : subjectName;
+        final instructions = args['customInstructions']?.toString().trim() ?? '';
+        if (fmt == 'pdf' || fmt == 'docx' || fmt == 'pptx') {
+          onStatus?.call('Generating custom ${fmt.toUpperCase()} for "$topic"...');
+          final styleId = fmt == 'pdf'
+              ? OfflineCacheService.getPreferredPdfStyle()
+              : (fmt == 'pptx'
+                  ? OfflineCacheService.getPreferredPptxStyle()
+                  : 'elegant_academic_notes');
+          final srcCtx = collectedPassages.isNotEmpty
+              ? collectedPassages.map((p) => '[${p.provenanceLabel}]\n${p.content}').join('\n\n')
+              : null;
+          final res = await DocumentGenerationService.generateAndSave(
+            aiRouter: AiRouter(),
+            subject: subjectName,
+            topic: topic,
+            format: fmt,
+            styleId: styleId,
+            notebookId: notebookId,
+            sourceContext: srcCtx,
+            customInstructions: instructions,
+          );
+          onCreated?.call(
+            filePath: res.filePath,
+            title: res.title,
+            format: fmt,
+            topic: topic,
+          );
+          return 'Created ${fmt.toUpperCase()} "${res.title}" at ${res.filePath} following instructions: "$instructions".';
+        }
+        onCreated?.call(format: fmt, topic: topic);
+        return 'Prepared $fmt launch button for "$topic" ($instructions).';
 
       default:
         return 'Unknown tool: $name';
