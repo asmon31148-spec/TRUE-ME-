@@ -9,13 +9,11 @@ import '../../../app/theme/colors.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_router.dart';
-import '../../../core/ai/rag_service.dart';
-import '../../../core/ai/smai/memory_event_service.dart';
-import '../../../core/ai/smai/smai_models.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/models/ingestion_models.dart';
 import '../../../core/services/cloud_vault_service.dart';
 import '../../../core/services/drive_service.dart';
+import '../../../core/services/ingestion_job_service.dart';
 import '../../../core/services/mega_vault_service.dart';
 import '../../../core/services/ocr_service.dart';
 import '../../../core/services/offline_cache_service.dart';
@@ -146,7 +144,6 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
       'createdAt': DateTime.now().toIso8601String(),
     });
 
-    IngestionResult? ingestResult;
     if (effectiveStatus != IngestionStatus.needsOcr && content.trim().length >= 20) {
       if (_targetSection.toLowerCase() == 'syllabus') {
         unawaited(
@@ -164,50 +161,16 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
         );
       }
 
-      if (mounted) {
-        setState(() {
-          _statusText = 'Chunking, indexing & verifying "$fileName"...';
-          _progress = 0.35;
-        });
-      }
-
-      ingestResult = await RagService().ingestDocumentWithVerification(
-        userId: OfflineCacheService.getUserId(),
+      IngestionJobService.enqueue(
         notebookId: widget.notebookId,
+        docId: docId,
         fileName: fileName,
+        sectionLabel: _targetSection,
+        fileType: fileType,
+        subjectName: widget.subjectName,
         fullText: content,
         pages: pages,
-        sectionLabel: _targetSection,
-        onStage: (stage) {
-          if (!mounted) return;
-          final stagePct = stage == IngestionStatus.chunking
-              ? 0.38
-              : (stage == IngestionStatus.embedding
-                  ? 0.45
-                  : (stage == IngestionStatus.verifying ? 0.94 : _progress));
-          setState(() {
-            _statusText = '${stage.displayLabel} "$fileName"...';
-            _progress = stagePct;
-          });
-        },
-        onProgress: (done, total) {
-          if (!mounted) return;
-          final pct = total > 0 ? (0.45 + 0.45 * (done / total)) : 0.6;
-          setState(() {
-            _statusText = 'Indexing "$fileName" ($done/$total chunks)...';
-            _progress = pct.clamp(0.45, 0.92);
-          });
-        },
-      );
-
-      await OfflineCacheService.updateDocumentIngestionState(
-        widget.notebookId,
-        docId,
-        ingestionStatus: ingestResult.status.name,
-        qualityReport: qualityReport?.toMap(),
-        chunksCount: ingestResult.chunksCreated,
-        chunksVerified: ingestResult.chunksVerified,
-        ingestionError: ingestResult.errorMessage,
+        qualityReport: qualityReport,
       );
     } else if (effectiveStatus == IngestionStatus.needsOcr) {
       await OfflineCacheService.updateDocumentIngestionState(
@@ -224,39 +187,11 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
 
     widget.onFileAdded?.call();
 
-    unawaited(
-      MemoryEventService.capture(
-        eventType: SmaiEventType.sourceProcessed,
-        idempotencyKey: 'src_$docId',
-        subjectId: widget.notebookId,
-        provenanceRefs: [fileName],
-        payload: {
-          'docId': docId,
-          'fileName': fileName,
-          'section': _targetSection,
-          'fileType': fileType,
-          'ingestionStatus': ingestResult?.status.name ?? effectiveStatus.name,
-          'chunksVerified': ingestResult?.chunksVerified ?? 0,
-        },
-        searchText: '$fileName $_targetSection ${widget.subjectName}',
-      ).catchError((_) => LearningEvent(
-            id: '',
-            userId: '',
-            eventType: SmaiEventType.sourceProcessed,
-            idempotencyKey: 'err',
-            occurredAt: DateTime.now(),
-          )),
-    );
-
     if (mounted) {
       Navigator.pop(context);
-      final statusMsg = ingestResult == null
-          ? (effectiveStatus == IngestionStatus.needsOcr
-              ? 'Added "$fileName" (Needs OCR — no selectable text found)'
-              : 'Added "$fileName" to $_targetSection')
-          : (ingestResult.status == IngestionStatus.searchable
-              ? 'Indexed & verified "$fileName" (${ingestResult.chunksVerified} chunks)'
-              : 'Added "$fileName" (${ingestResult.status.displayLabel}: ${ingestResult.errorMessage ?? ''})');
+      final statusMsg = effectiveStatus == IngestionStatus.needsOcr
+          ? 'Added "$fileName" (Needs OCR — no selectable text found)'
+          : 'Added "$fileName" — indexing in background...';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(statusMsg)),
       );

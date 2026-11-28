@@ -245,9 +245,10 @@ class RagService {
       throw StateError('Query embedding dimension mismatch: expected 768, got ${queryEmbedding.length}');
     }
 
-    // 2. Retrieve top-K most similar chunks from pgvector
+    // 2. Retrieve top-K most similar chunks using hybrid search (pgvector + FTS RRF)
     return await _supabaseService.searchSimilarChunks(
       queryEmbedding: queryEmbedding,
+      queryText: query,
       matchCount: topK,
       userId: userId,
       notebookId: notebookId,

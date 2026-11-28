@@ -102,6 +102,18 @@ class RetrievalEngine {
         .toSet();
   }
 
+  /// LangGraph-style query-rewrite helper: strips conversational filler and
+  /// returns a broader keyword query when the first retrieval pass yields nothing.
+  static String? broadenQuery(String query) {
+    final terms = extractQueryTerms(query).toList();
+    if (terms.isEmpty) return null;
+    final broadened = terms.take(6).join(' ');
+    if (broadened.isEmpty || broadened.toLowerCase() == query.trim().toLowerCase()) {
+      return null;
+    }
+    return broadened;
+  }
+
   /// Hybrid retrieval with strict subject isolation (`notebookId`), relevance
   /// threshold gating, deduplication, and source diversity.
   Future<EvidenceBundle> retrieveEvidence({
@@ -228,6 +240,77 @@ class RetrievalEngine {
       }
     }
 
+    // 2.5 LangGraph-style Query-Rewrite Retry Loop if first pass yielded no hits
+    String? retriedQuery;
+    if (deduped.isEmpty) {
+      final broader = broadenQuery(query);
+      if (broader != null) {
+        retriedQuery = broader;
+        final broaderTerms = extractQueryTerms(broader);
+        if (SupabaseService.instance.isCloudReady) {
+          try {
+            final retryChunks = await _ragService
+                .retrieveContext(
+                  query: broader,
+                  userId: userId,
+                  notebookId: notebookId,
+                  topK: topK + 2,
+                )
+                .timeout(const Duration(milliseconds: 1000),
+                    onTimeout: () => <DocumentChunkModel>[]);
+            for (final c in retryChunks) {
+              if (c.similarity > 0 && c.similarity < minVectorSimilarity) continue;
+              final fName = c.fileName ?? 'Notebook';
+              final key = '$fName::${c.chunkIndex}';
+              deduped[key] = EvidencePassage(
+                fileName: fName,
+                sectionLabel: c.sectionLabel,
+                pageNumber: c.pageNumber,
+                chunkIndex: c.chunkIndex,
+                content: c.content,
+                score: (c.similarity > 0 ? c.similarity : 0.50) * 0.92,
+                retrievalMethod: 'hybrid',
+                relevanceReason: 'Broadened query retry ("$broader")',
+              );
+            }
+          } catch (_) {}
+        }
+        for (final doc in localDocs) {
+          final content = (doc['content'] as String? ?? '').trim();
+          if (content.length < 20) continue;
+          final fName = doc['fileName'] as String? ?? 'Document';
+          final section = doc['section'] as String? ?? 'Notes';
+          final chunks = TextChunker.splitIntoChunks(
+            content,
+            targetChunkChars: 2500,
+            overlapChars: 250,
+          );
+          for (final ch in chunks) {
+            final lower = ch.content.toLowerCase();
+            int matched = 0;
+            for (final term in broaderTerms) {
+              if (lower.contains(term)) matched++;
+            }
+            if (matched == 0) continue;
+            final key = '$fName::${ch.index}';
+            deduped.putIfAbsent(
+              key,
+              () => EvidencePassage(
+                fileName: fName,
+                sectionLabel: section,
+                pageNumber: ch.pageNumber,
+                chunkIndex: ch.index,
+                content: ch.content,
+                score: (matched / broaderTerms.length).clamp(0.15, 0.85),
+                retrievalMethod: 'lexical',
+                relevanceReason: 'Broadened retry ($matched/${broaderTerms.length} terms)',
+              ),
+            );
+          }
+        }
+      }
+    }
+
     // 3. Rank + enforce source diversity (max 2 chunks per single file when others exist)
     final ranked = deduped.values.toList()
       ..sort((a, b) => b.score.compareTo(a.score));
@@ -256,10 +339,15 @@ class RetrievalEngine {
     return EvidenceBundle(
       query: query,
       passages: diverse,
-      decomposedSubQueries: subQueries,
+      decomposedSubQueries: [
+        ...subQueries,
+        if (retriedQuery != null && retriedQuery.isNotEmpty) retriedQuery,
+      ],
       hasSufficientEvidence: sufficient,
       diagnosticNote: sufficient
-          ? 'Retrieved ${diverse.length} verified passage(s) across ${perFileCount.length} source(s).'
+          ? (retriedQuery != null
+              ? 'Retrieved ${diverse.length} passage(s) via broadened query retry ("$retriedQuery").'
+              : 'Retrieved ${diverse.length} verified passage(s) across ${perFileCount.length} source(s).')
           : 'No uploaded passages met the relevance threshold for this query.',
     );
   }

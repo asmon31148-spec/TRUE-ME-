@@ -9,6 +9,7 @@ import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/rag_service.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/models/ingestion_models.dart';
+import '../../../core/services/ingestion_job_service.dart';
 import '../../../core/services/offline_cache_service.dart';
 import '../../../features/export/screens/document_viewer_screen.dart';
 import '../../../features/export/services/generation_job_service.dart';
@@ -46,6 +47,11 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadNotebook();
+    IngestionJobService.addCompletionListener(_onIngestionComplete);
+  }
+
+  void _onIngestionComplete() {
+    if (mounted) _loadNotebook();
   }
 
   void _loadNotebook() {
@@ -55,6 +61,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
 
   @override
   void dispose() {
+    IngestionJobService.removeCompletionListener(_onIngestionComplete);
     _sourceSearchCtrl.dispose();
     _tabController.dispose();
     super.dispose();
@@ -607,6 +614,74 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                 ),
                                 const SizedBox(height: 12),
                               ],
+                              ValueListenableBuilder<List<IngestionJob>>(
+                                valueListenable: IngestionJobService.jobsNotifier,
+                                builder: (ctx, jobs, _) {
+                                  final active = jobs
+                                      .where((j) =>
+                                          j.notebookId == widget.notebookId &&
+                                          (j.status == IngestionJobStage.queued ||
+                                              j.status == IngestionJobStage.running))
+                                      .toList();
+                                  if (active.isEmpty) return const SizedBox.shrink();
+                                  final job = active.first;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: TrueMeCard(
+                                      borderRadius: 16,
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  value: job.progress > 0 ? job.progress : null,
+                                                  color: context.accentColor,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  job.stageLabel,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: context.textPrimary,
+                                                  ),
+                                                ),
+                                              ),
+                                              Text(
+                                                '${(job.progress * 100).round()}%',
+                                                style: AppTypography.smallLabel.copyWith(
+                                                  color: context.accentColor,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(6),
+                                            child: LinearProgressIndicator(
+                                              value: job.progress,
+                                              minHeight: 5,
+                                              backgroundColor: context.borderColor.withValues(alpha: 0.4),
+                                              color: context.accentColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                               _buildSectionCard('Syllabus', _filterFiles(syllabusFiles), pastel),
                               const SizedBox(height: 12),
                               _buildSectionCard('Notes', _filterFiles(notesFiles), pastel),

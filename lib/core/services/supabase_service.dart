@@ -840,15 +840,40 @@ class SupabaseService {
     return (rows as List).length;
   }
 
-  /// Performs vector similarity search via PostgreSQL RPC `match_document_chunks`.
+  /// Performs hybrid search (pgvector + PostgreSQL full-text RRF) via
+  /// `match_document_chunks_hybrid`, falling back to vector-only `match_document_chunks`.
   Future<List<DocumentChunkModel>> searchSimilarChunks({
     required List<double> queryEmbedding,
+    String? queryText,
     int matchCount = 5,
     String? userId,
     String? notebookId,
   }) async {
     final client = _clientOrNull;
     if (client == null) return [];
+
+    final trimmedQuery = queryText?.trim() ?? '';
+    if (trimmedQuery.isNotEmpty) {
+      try {
+        final hybridResponse = await client.rpc(
+          'match_document_chunks_hybrid',
+          params: {
+            'query_embedding': queryEmbedding,
+            'query_text': trimmedQuery,
+            'match_count': matchCount,
+            'filter_user_id': userId,
+            'filter_notebook_id': notebookId,
+          },
+        );
+        final rawHybrid = hybridResponse as List<dynamic>? ?? [];
+        return rawHybrid
+            .map((item) => DocumentChunkModel.fromMap(Map<String, dynamic>.from(item as Map)))
+            .toList();
+      } catch (e) {
+        debugPrint('Hybrid RPC unavailable, falling back to vector search: $e');
+      }
+    }
+
     final response = await client.rpc(
       'match_document_chunks',
       params: {
