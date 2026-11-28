@@ -431,9 +431,9 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
 
     return Column(
       children: [
-        // Unified Sleek Session Switcher & New Chat Bar
+        // Slim, airy Session Switcher & New Chat Bar
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
           child: Row(
             children: [
               Expanded(
@@ -443,11 +443,11 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                     _showSessionsSheet(context, chatState);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                     decoration: BoxDecoration(
                       color: context.milkyFill,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: context.borderColor.withValues(alpha: 0.7)),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: context.borderColor.withValues(alpha: 0.55)),
                     ),
                     child: Row(
                       children: [
@@ -455,7 +455,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                           hasMentorMemory
                               ? Icons.psychology_rounded
                               : Icons.forum_outlined,
-                          size: 15,
+                          size: 14,
                           color: context.accentColor,
                         ),
                         const SizedBox(width: 7),
@@ -474,9 +474,9 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                         if (chatState.sessions.length > 1) ...[
                           const SizedBox(width: 5),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: context.accentColor.withValues(alpha: 0.14),
+                              color: context.accentColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -510,17 +510,17 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                               subjectLabel: subjectTitle,
                             );
                       },
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(18),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     gradient: chatState.messages.isEmpty
                         ? null
                         : AppColors.indigoButtonGradient,
                     color: chatState.messages.isEmpty ? context.milkyFill : null,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(18),
                     border: chatState.messages.isEmpty
-                        ? Border.all(color: context.borderColor.withValues(alpha: 0.7))
+                        ? Border.all(color: context.borderColor.withValues(alpha: 0.55))
                         : null,
                   ),
                   child: Row(
@@ -535,7 +535,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        'New Chat',
+                        'New',
                         style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
@@ -692,14 +692,14 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                   children: [
                     ListView.builder(
                       controller: _scrollCtrl,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                       itemCount: chatState.messages.length + (chatState.isThinking ? 1 : 0),
                       itemBuilder: (context, idx) {
                         if (idx == chatState.messages.length) {
                           return Align(
                             alignment: Alignment.centerLeft,
                             child: Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.only(bottom: 16),
                               child: AiThinkingIndicator(
                                 label: chatState.thinkingStatus ?? 'Sage is thinking...',
                               ),
@@ -716,12 +716,13 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                 : context.textSecondary);
 
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.only(bottom: 22),
                           child: Align(
                             alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.88,
+                                maxWidth: MediaQuery.of(context).size.width *
+                                    (msg.isUser ? 0.80 : 0.94),
                               ),
                               child: Column(
                                 crossAxisAlignment:
@@ -729,18 +730,19 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                 children: [
                                   msg.isUser
                                       ? Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 17, vertical: 13),
                                           decoration: BoxDecoration(
                                             gradient: AppColors.indigoButtonGradient,
                                             borderRadius: const BorderRadius.only(
-                                              topLeft: Radius.circular(20),
-                                              topRight: Radius.circular(20),
-                                              bottomLeft: Radius.circular(20),
+                                              topLeft: Radius.circular(22),
+                                              topRight: Radius.circular(22),
+                                              bottomLeft: Radius.circular(22),
                                               bottomRight: Radius.circular(6),
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: AppColors.accent.withValues(alpha: 0.22),
+                                                color: AppColors.accent.withValues(alpha: 0.18),
                                                 blurRadius: 12,
                                                 offset: const Offset(0, 4),
                                               ),
@@ -750,15 +752,15 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                             msg.text,
                                             style: const TextStyle(
                                               fontSize: 15,
-                                              height: 1.44,
+                                              height: 1.48,
                                               color: Colors.white,
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                         )
                                       : TrueMeCard(
-                                          borderRadius: 20,
-                                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                                          borderRadius: 22,
+                                          padding: const EdgeInsets.fromLTRB(18, 15, 18, 16),
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
@@ -779,7 +781,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                                       color: context.accentColor,
                                                     ),
                                                   ),
-                                                  const SizedBox(width: 7),
+                                                  const SizedBox(width: 8),
                                                   Text(
                                                     hasSubject ? 'Subject Mentor' : 'Sage',
                                                     style: TextStyle(
@@ -794,7 +796,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                                       padding: const EdgeInsets.symmetric(
                                                           horizontal: 8, vertical: 3),
                                                       decoration: BoxDecoration(
-                                                        color: trustColor.withValues(alpha: 0.12),
+                                                        color: trustColor.withValues(alpha: 0.10),
                                                         borderRadius: BorderRadius.circular(10),
                                                       ),
                                                       child: Row(
@@ -821,7 +823,7 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                                     ),
                                                 ],
                                               ),
-                                              const SizedBox(height: 10),
+                                              const SizedBox(height: 12),
                                               FormattedMessageBody(
                                                 text: msg.text,
                                                 textColor: context.textPrimary,
@@ -829,33 +831,12 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                                               if (msg.verification?.gapDisclosure != null &&
                                                   msg.verification!.gapDisclosure!.isNotEmpty) ...[
                                                 const SizedBox(height: 10),
-                                                Container(
-                                                  width: double.infinity,
-                                                  padding: const EdgeInsets.symmetric(
-                                                      horizontal: 10, vertical: 7),
-                                                  decoration: BoxDecoration(
-                                                    color: context.bgColor.withValues(alpha: 0.7),
-                                                    borderRadius: BorderRadius.circular(10),
-                                                    border: Border.all(
-                                                        color: context.borderColor
-                                                            .withValues(alpha: 0.7)),
-                                                  ),
-                                                  child: Row(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Icon(Icons.info_outline_rounded,
-                                                          size: 13.5, color: context.textSecondary),
-                                                      const SizedBox(width: 6),
-                                                      Expanded(
-                                                        child: Text(
-                                                          msg.verification!.gapDisclosure!,
-                                                          style: AppTypography.smallLabel.copyWith(
-                                                            color: context.textSecondary,
-                                                            fontSize: 11,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
+                                                Text(
+                                                  msg.verification!.gapDisclosure!,
+                                                  style: AppTypography.smallLabel.copyWith(
+                                                    color: context.textSecondary,
+                                                    fontSize: 11,
+                                                    fontStyle: FontStyle.italic,
                                                   ),
                                                 ),
                                               ],
@@ -1029,48 +1010,11 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                 ),
         ),
 
-        // Quick Action Strips when actively chatting (Subject AI only; hidden in main Sage AI)
-        if (chatState.messages.isNotEmpty && widget.showQuickActions && hasSubject)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: 6, bottom: 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  _quickActionTrigger(
-                    context,
-                    Icons.picture_as_pdf_outlined,
-                    'Make PDF',
-                    () => _openScopeAndStyleExport('pdf', subjectTitle),
-                  ),
-                  _quickActionTrigger(
-                    context,
-                    Icons.description_outlined,
-                    'Word',
-                    () => _openScopeAndStyleExport('docx', subjectTitle),
-                  ),
-                  _quickActionTrigger(
-                    context,
-                    Icons.slideshow_outlined,
-                    'Slides',
-                    () => _openScopeAndStyleExport('pptx', subjectTitle),
-                  ),
-                  _quickCommandChip(context, Icons.quiz_outlined, 'Quiz', 'Quiz me on $subjectTitle'),
-                  _quickCommandChip(context, Icons.style_outlined, 'Flashcards', 'Create flashcards for $subjectTitle'),
-                  _quickCommandChip(
-                      context, Icons.account_tree_outlined, 'Mind Map', 'Create a mind map for $subjectTitle'),
-                ],
-              ),
-            ),
-          ),
-
-        // Borderless Pill Composer Bar matching Reference Img 3 Center
+        // Clean Borderless Pill Composer Bar (quick actions tucked into the + Tools sheet)
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: isDark ? AppColors.darkSurface : Colors.white.withValues(alpha: 0.96),
               borderRadius: BorderRadius.circular(30),
@@ -1080,11 +1024,23 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.auto_awesome_rounded, size: 20, color: context.accentColor),
-                  tooltip: 'Add study material in Library',
+                  icon: Icon(
+                    (widget.showQuickActions && hasSubject)
+                        ? Icons.add_circle_outline_rounded
+                        : Icons.auto_awesome_rounded,
+                    size: 21,
+                    color: context.accentColor,
+                  ),
+                  tooltip: (widget.showQuickActions && hasSubject)
+                      ? 'Study & export tools'
+                      : 'Add study material in Library',
                   onPressed: () {
                     HapticFeedback.lightImpact();
-                    context.push('/library');
+                    if (widget.showQuickActions && hasSubject) {
+                      _showChatToolsSheet(context, subjectTitle);
+                    } else {
+                      context.push('/library');
+                    }
                   },
                 ),
                 Expanded(
@@ -1137,14 +1093,107 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
     );
   }
 
-  Widget _quickCommandChip(BuildContext context, IconData icon, String label, String prompt) {
+  void _showChatToolsSheet(BuildContext context, String subjectTitle) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.borderColor,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Quick Study & Export Tools',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _quickActionTrigger(
+                      sheetCtx,
+                      Icons.picture_as_pdf_outlined,
+                      'Make PDF',
+                      () {
+                        Navigator.pop(sheetCtx);
+                        _openScopeAndStyleExport('pdf', subjectTitle);
+                      },
+                    ),
+                    _quickActionTrigger(
+                      sheetCtx,
+                      Icons.description_outlined,
+                      'Word',
+                      () {
+                        Navigator.pop(sheetCtx);
+                        _openScopeAndStyleExport('docx', subjectTitle);
+                      },
+                    ),
+                    _quickActionTrigger(
+                      sheetCtx,
+                      Icons.slideshow_outlined,
+                      'Slides',
+                      () {
+                        Navigator.pop(sheetCtx);
+                        _openScopeAndStyleExport('pptx', subjectTitle);
+                      },
+                    ),
+                    _quickCommandChip(sheetCtx, Icons.quiz_outlined, 'Quiz', 'Quiz me on $subjectTitle',
+                        onBeforeSend: () => Navigator.pop(sheetCtx)),
+                    _quickCommandChip(
+                        sheetCtx, Icons.style_outlined, 'Flashcards', 'Create flashcards for $subjectTitle',
+                        onBeforeSend: () => Navigator.pop(sheetCtx)),
+                    _quickCommandChip(
+                        sheetCtx, Icons.account_tree_outlined, 'Mind Map', 'Create a mind map for $subjectTitle',
+                        onBeforeSend: () => Navigator.pop(sheetCtx)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _quickCommandChip(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String prompt, {
+    VoidCallback? onBeforeSend,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.only(right: 4),
       child: InkWell(
-        onTap: () => _sendMessage(prompt),
+        onTap: () {
+          onBeforeSend?.call();
+          _sendMessage(prompt);
+        },
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
           decoration: BoxDecoration(
             color: context.surfaceColor,
             borderRadius: BorderRadius.circular(18),
@@ -1153,12 +1202,12 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: context.accentColor),
-              const SizedBox(width: 5),
+              Icon(icon, size: 15, color: context.accentColor),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: context.textPrimary,
                 ),
