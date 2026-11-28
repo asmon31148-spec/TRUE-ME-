@@ -207,54 +207,22 @@ class PdfProcessor {
   static Future<PdfExtractionBundle> extractWithQualityReport(
     File pdfFile, {
     Future<String> Function(Uint8List pagePngBytes, int pageNumber)? ocrPageProvider,
+    void Function(int donePages, int totalPages)? onPageProgress,
     int maxOcrPages = 10,
   }) async {
     final path = pdfFile.path;
-    final pages = await Isolate.run(() async {
-      final bytes = await File(path).readAsBytes();
-      final List<ExtractedPage> extracted = [];
-      try {
-        final PdfDocument document = PdfDocument(inputBytes: bytes);
-        try {
-          final PdfTextExtractor extractor = PdfTextExtractor(document);
-          final int pageCount = document.pages.count;
-          int totalChars = 0;
-
-          for (int i = 0; i < pageCount; i++) {
-            String text = '';
-            try {
-              text = extractor.extractText(startPageIndex: i, endPageIndex: i).trim();
-            } catch (_) {
-              text = '';
-            }
-            final readable = ExtractedPage.assessReadability(text);
-            if (readable && totalChars < maxExtractedChars) {
-              totalChars += text.length;
-            }
-            extracted.add(
-              ExtractedPage(
-                pageNumber: i + 1,
-                text: readable && totalChars <= maxExtractedChars ? text : '',
-                isReadable: readable,
-              ),
-            );
-          }
-          if (extracted.isNotEmpty) return extracted;
-        } finally {
-          document.dispose();
-        }
-      } catch (_) {}
-
-      final fallback = _fallbackExtractPdfStrings(bytes);
-      final readable = ExtractedPage.assessReadability(fallback);
-      return [
-        ExtractedPage(
-          pageNumber: 1,
-          text: readable ? fallback : '',
-          isReadable: readable,
-        ),
-      ];
-    });
+    final receivePort = ReceivePort();
+    await Isolate.spawn(_extractPagesIsolate, [receivePort.sendPort, path]);
+    late final List<ExtractedPage> pages;
+    await for (final msg in receivePort) {
+      if (msg is List && msg.length == 2 && msg[0] is int && msg[1] is int) {
+        onPageProgress?.call(msg[0] as int, msg[1] as int);
+      } else if (msg is List<ExtractedPage>) {
+        pages = msg;
+        receivePort.close();
+        break;
+      }
+    }
 
     if (ocrPageProvider != null) {
       final unreadableIndices = <int>[];
@@ -285,5 +253,61 @@ class PdfProcessor {
     }
 
     return buildQualityBundle(pages);
+  }
+
+  static Future<void> _extractPagesIsolate(List<dynamic> args) async {
+    final sendPort = args[0] as SendPort;
+    final path = args[1] as String;
+    final bytes = await File(path).readAsBytes();
+    final List<ExtractedPage> extracted = [];
+    try {
+      final PdfDocument document = PdfDocument(inputBytes: bytes);
+      try {
+        final PdfTextExtractor extractor = PdfTextExtractor(document);
+        final int pageCount = document.pages.count;
+        int totalChars = 0;
+        final step = (pageCount / 20).ceil().clamp(1, 25);
+
+        for (int i = 0; i < pageCount; i++) {
+          String text = '';
+          try {
+            text = extractor.extractText(startPageIndex: i, endPageIndex: i).trim();
+          } catch (_) {
+            text = '';
+          }
+          final readable = ExtractedPage.assessReadability(text);
+          if (readable && totalChars < maxExtractedChars) {
+            totalChars += text.length;
+          }
+          extracted.add(
+            ExtractedPage(
+              pageNumber: i + 1,
+              text: readable && totalChars <= maxExtractedChars ? text : '',
+              isReadable: readable,
+            ),
+          );
+          if ((i + 1) % step == 0 || i == pageCount - 1) {
+            sendPort.send([i + 1, pageCount]);
+          }
+        }
+        if (extracted.isNotEmpty) {
+          sendPort.send(extracted);
+          return;
+        }
+      } finally {
+        document.dispose();
+      }
+    } catch (_) {}
+
+    final fallback = _fallbackExtractPdfStrings(bytes);
+    final readable = ExtractedPage.assessReadability(fallback);
+    sendPort.send([1, 1]);
+    sendPort.send([
+      ExtractedPage(
+        pageNumber: 1,
+        text: readable ? fallback : '',
+        isReadable: readable,
+      ),
+    ]);
   }
 }

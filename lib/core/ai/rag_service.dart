@@ -68,19 +68,30 @@ class RagService {
       }
 
       onStage?.call(IngestionStatus.embedding);
-      // Generate all embeddings in bounded concurrent batches BEFORE deleting old chunks
-      // so a mid-flight embedding error never leaves the cloud index wiped.
-      const batchSize = 4;
+      // Generate embeddings in true batch calls (up to 40 chunks per HTTP call)
+      // to avoid 502/429 bursts. If cloud embeddings fail, fall back gracefully
+      // to partial local keyword/BM25 indexing so the book remains searchable.
+      const batchSize = 40;
       final preparedRows = List<Map<String, dynamic>?>.filled(chunks.length, null);
       int completedCount = 0;
 
-      for (int start = 0; start < chunks.length; start += batchSize) {
-        final end = (start + batchSize).clamp(0, chunks.length);
-        await Future.wait(
-          List.generate(end - start, (offset) async {
+      try {
+        for (int start = 0; start < chunks.length; start += batchSize) {
+          final end = (start + batchSize).clamp(0, chunks.length);
+          final batchChunks = chunks.sublist(start, end);
+          final embeddings = await _geminiService.generateBatchEmbeddings(
+            batchChunks.map((c) => c.content).toList(),
+          );
+          if (embeddings.length != batchChunks.length) {
+            throw IngestionException(
+              stage: 'embedding',
+              message: 'Batch embedding count mismatch: expected ${batchChunks.length}, got ${embeddings.length}',
+            );
+          }
+          for (int offset = 0; offset < batchChunks.length; offset++) {
             final idx = start + offset;
-            final chunk = chunks[idx];
-            final embedding = await _geminiService.generateEmbedding(chunk.content);
+            final chunk = batchChunks[offset];
+            final embedding = embeddings[offset];
             if (embedding.length != 768) {
               throw IngestionException(
                 stage: 'embedding',
@@ -97,9 +108,19 @@ class RagService {
               if (chunk.pageNumber != null) 'page_number': chunk.pageNumber,
               if (chunk.sectionLabel != null) 'section_label': chunk.sectionLabel,
             };
-            completedCount++;
-            onProgress?.call(completedCount, chunks.length);
-          }),
+          }
+          completedCount = end;
+          onProgress?.call(completedCount, chunks.length);
+        }
+      } catch (embedErr) {
+        onStage?.call(IngestionStatus.partial);
+        return IngestionResult(
+          status: IngestionStatus.partial,
+          chunksCreated: chunks.length,
+          chunksVerified: 0,
+          errorMessage:
+              'Saved locally (${chunks.length} chunks searchable via keyword/BM25). Cloud vector sync skipped: $embedErr',
+          completedAt: DateTime.now(),
         );
       }
 

@@ -130,10 +130,8 @@ async function callGeminiChat(params: {
 }): Promise<ProviderCallResult | null> {
   if (!params.apiKey) return null;
   const models = [
-    'gemini-3.5-flash',
-    'gemini-3.8-flash',
-    'gemini-flash-latest',
     'gemini-2.5-flash',
+    'gemini-flash-latest',
     'gemini-2.0-flash',
   ];
   for (const model of models) {
@@ -548,26 +546,66 @@ Deno.serve(async (req) => {
     const requestId = String(body.requestId || crypto.randomUUID());
     const taskType = String(body.taskType || action);
 
-    // Enforce server-side daily quota atomically via Postgres RPC
-    const { data: quotaCheck, error: quotaErr } = await supabase.rpc('check_and_record_ai_usage', {
-      p_request_id: requestId,
-      p_provider: String(body.preferredProvider || 'gateway'),
-      p_task_type: taskType,
-      p_status: 'success',
-    });
-
-    if (quotaErr) {
-      return jsonResponse({ error: 'Unable to verify AI quota' }, 500);
-    }
-    if (quotaCheck && quotaCheck.allowed === false) {
-      return jsonResponse(
+    // Background RAG indexing (batch_embed, embed, rerank) does NOT consume
+    // the student's daily chat/study quota so uploading books never locks out AI.
+    if (action === 'batch_embed') {
+      const started = Date.now();
+      const rawTexts: string[] = Array.isArray(body.texts)
+        ? body.texts.slice(0, 50).map((t: unknown) => String(t || '').trim()).filter((t: string) => t.length > 0)
+        : [];
+      if (rawTexts.length === 0) {
+        return jsonResponse({ error: 'Invalid batch embedding input' }, 400);
+      }
+      if (!geminiKey) {
+        return jsonResponse({ error: 'Embedding service unavailable' }, 503);
+      }
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${geminiKey}`,
         {
-          error: 'Daily AI quota reached',
-          used_today: quotaCheck.used_today,
-          daily_limit: quotaCheck.daily_limit,
-        },
-        429
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requests: rawTexts.map((text) => ({
+              model: 'models/gemini-embedding-001',
+              content: { parts: [{ text: text.slice(0, MAX_PROMPT_CHARS) }] },
+              outputDimensionality: 768,
+            })),
+          }),
+        }
       );
+      if (!resp.ok) {
+        return jsonResponse({ error: 'Batch embedding generation failed' }, 502);
+      }
+      const data = await resp.json();
+      const rawList = Array.isArray(data?.embeddings) ? data.embeddings : [];
+      const embeddings = rawList.map((item: { values?: number[] }) => {
+        const vals = Array.isArray(item?.values) ? item.values.slice(0, 768) : [];
+        if (vals.length !== 768) return [];
+        const norm = Math.sqrt(vals.reduce((sum, v) => sum + v * v, 0));
+        return norm > 0 ? vals.map((v) => v / norm) : vals;
+      });
+      if (embeddings.length !== rawTexts.length || embeddings.some((e: number[]) => e.length !== 768)) {
+        return jsonResponse({ error: 'Unexpected batch embedding dimensions' }, 502);
+      }
+      const inTok = rawTexts.reduce((sum, t) => sum + estimateTokens(t), 0);
+      return jsonResponse({
+        embeddings,
+        dimensions: 768,
+        requestId,
+        telemetry: {
+          provider: 'gemini',
+          model: 'gemini-embedding-001',
+          inputTokens: inTok,
+          outputTokens: 0,
+          cachedTokens: 0,
+          totalTokens: inTok,
+          tokenSource: 'ESTIMATED',
+          latencyMs: Date.now() - started,
+          fallbackUsed: false,
+          attemptCount: 1,
+          rateLimits: extractRateLimitHeaders(resp.headers),
+        },
+      });
     }
 
     if (action === 'embed') {
@@ -606,7 +644,6 @@ Deno.serve(async (req) => {
         embedding,
         dimensions: 768,
         requestId,
-        quota: quotaCheck,
         telemetry: {
           provider: 'gemini',
           model: 'gemini-embedding-001',
@@ -632,7 +669,7 @@ Deno.serve(async (req) => {
       const topN = Math.min(Math.max(Number(body.topN || 4), 1), documents.length || 1);
 
       if (!query || documents.length === 0) {
-        return jsonResponse({ documents: [], requestId, quota: quotaCheck });
+        return jsonResponse({ documents: [], requestId });
       }
 
       if (cohereKey) {
@@ -665,7 +702,6 @@ Deno.serve(async (req) => {
                 documents: reranked,
                 provider: 'cohere',
                 requestId,
-                quota: quotaCheck,
                 telemetry: {
                   provider: 'cohere',
                   model: 'rerank-v3.5',
@@ -686,7 +722,29 @@ Deno.serve(async (req) => {
           // Graceful fallback to original vector order
         }
       }
-      return jsonResponse({ documents: documents.slice(0, topN), provider: 'fallback', requestId, quota: quotaCheck });
+      return jsonResponse({ documents: documents.slice(0, topN), provider: 'fallback', requestId });
+    }
+
+    // Enforce server-side daily quota atomically via Postgres RPC for chat & transcription
+    const { data: quotaCheck, error: quotaErr } = await supabase.rpc('check_and_record_ai_usage', {
+      p_request_id: requestId,
+      p_provider: String(body.preferredProvider || 'gateway'),
+      p_task_type: taskType,
+      p_status: 'success',
+    });
+
+    if (quotaErr) {
+      return jsonResponse({ error: 'Unable to verify AI quota' }, 500);
+    }
+    if (quotaCheck && quotaCheck.allowed === false) {
+      return jsonResponse(
+        {
+          error: 'Daily AI quota reached',
+          used_today: quotaCheck.used_today,
+          daily_limit: quotaCheck.daily_limit,
+        },
+        429
+      );
     }
 
     if (action === 'transcribe') {

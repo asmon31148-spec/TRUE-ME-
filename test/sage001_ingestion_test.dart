@@ -21,6 +21,14 @@ class _FakeGeminiService extends GeminiService {
     }
     return List<double>.filled(768, 0.01);
   }
+
+  @override
+  Future<List<List<double>>> generateBatchEmbeddings(List<String> texts) async {
+    if (shouldFail) {
+      throw StateError('Simulated embedding failure');
+    }
+    return List.generate(texts.length, (_) => List<double>.filled(768, 0.01));
+  }
 }
 
 class _FakeSupabaseService extends SupabaseService {
@@ -219,7 +227,7 @@ void main() {
         fileName: 'fungi_notes.pdf',
         pages: pages,
       );
-      expect(failRes.status, IngestionStatus.failed);
+      expect(failRes.status, IngestionStatus.partial);
       expect(fakeSupa.deleteCalls, 2); // delete was NOT called!
       expect(fakeSupa.storedChunks.length, 2); // old chunks preserved!
     });
@@ -303,7 +311,9 @@ void main() {
         expect(chunk.sectionLabel, 'Notes');
       } finally {
         await Hive.close();
-        if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+        try {
+          if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+        } catch (_) {}
       }
     });
   });

@@ -298,7 +298,35 @@ class _AddFilesSheetState extends State<AddFilesSheet> {
 
       if (ext == 'pdf') {
         try {
-          final bundle = await PdfProcessor.extractWithQualityReport(file);
+          _ocrService ??= OcrService();
+          final bundle = await PdfProcessor.extractWithQualityReport(
+            file,
+            onPageProgress: (done, total) {
+              if (!mounted || total <= 0) return;
+              final pct = 0.08 + 0.25 * (done / total);
+              setState(() {
+                _progress = pct.clamp(0.08, 0.34);
+                _statusText = 'Reading pages ($done/$total)...';
+              });
+            },
+            ocrPageProvider: (pngBytes, pageNumber) async {
+              if (mounted) {
+                setState(() {
+                  _statusText = 'Running on-device OCR (page $pageNumber)...';
+                });
+              }
+              final tempDir = await Directory.systemTemp.createTemp('trueme_ocr_');
+              final tempImg = File('${tempDir.path}/page_$pageNumber.png');
+              try {
+                await tempImg.writeAsBytes(pngBytes, flush: true);
+                return await _ocrService!.recognizeTextFromImage(tempImg);
+              } finally {
+                try {
+                  await tempDir.delete(recursive: true);
+                } catch (_) {}
+              }
+            },
+          );
           pages = bundle.pages;
           qualityReport = bundle.report;
           extracted = bundle.combinedText;

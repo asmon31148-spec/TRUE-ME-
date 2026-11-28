@@ -218,6 +218,48 @@ class AiGatewayClient {
     }
   }
 
+  Future<List<List<double>>> embedBatch({
+    required List<String> texts,
+    String? requestId,
+  }) async {
+    if (texts.isEmpty) return const [];
+    if (!isConfigured) {
+      throw StateError('Supabase AI Gateway is not configured.');
+    }
+    final rid = requestId ?? RateLimitGuardian.newRequestId('batch_embed');
+    try {
+      final res = await _dio.post(
+        _gatewayUrl,
+        options: Options(headers: _authHeaders()),
+        data: {
+          'action': 'batch_embed',
+          'requestId': rid,
+          'taskType': 'embedding',
+          'texts': texts,
+        },
+      );
+      final map = Map<String, dynamic>.from(res.data as Map);
+      final rawList = map['embeddings'] as List<dynamic>? ?? const [];
+      final vectors = rawList
+          .map((item) => (item as List<dynamic>).map((v) => (v as num).toDouble()).toList())
+          .toList();
+      if (vectors.length != texts.length || vectors.any((v) => v.length != 768)) {
+        throw StateError('Invalid batch embedding response.');
+      }
+      return vectors;
+    } on DioException catch (e) {
+      // If deployed edge function is older and returns 400 for batch_embed, fall back to embed
+      if (e.response?.statusCode == 400) {
+        final out = <List<double>>[];
+        for (final t in texts) {
+          out.add(await embed(text: t));
+        }
+        return out;
+      }
+      _throwFriendlyDioError(e);
+    }
+  }
+
   Future<List<String>> rerank({
     required String query,
     required List<String> documents,

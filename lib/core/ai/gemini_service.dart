@@ -34,12 +34,16 @@ class GeminiService {
     return _gateway.embed(text: text);
   }
 
-  /// Batch generate embeddings for multiple chunks.
+  /// Batch generate embeddings for multiple chunks using `batch_embed` (up to 40 per call).
   Future<List<List<double>>> generateBatchEmbeddings(List<String> texts) async {
+    if (texts.isEmpty) return const [];
+    const batchSize = 40;
     final List<List<double>> embeddings = [];
-    for (final text in texts) {
-      final vec = await generateEmbedding(text);
-      embeddings.add(vec);
+    for (int i = 0; i < texts.length; i += batchSize) {
+      final end = (i + batchSize).clamp(0, texts.length);
+      final batch = texts.sublist(i, end);
+      final vecs = await _gateway.embedBatch(texts: batch);
+      embeddings.addAll(vecs);
     }
     return embeddings;
   }
