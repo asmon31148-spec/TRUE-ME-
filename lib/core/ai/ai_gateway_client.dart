@@ -173,6 +173,99 @@ class AiGatewayClient {
     }
   }
 
+  /// Streams SSE token deltas from `ai-gateway` (`stream: true`), falling back
+  /// seamlessly to full-text emission if the upstream returns JSON.
+  Stream<String> chatStream({
+    required String prompt,
+    String? systemPrompt,
+    required String tier,
+    required String taskType,
+    String? preferredProvider,
+    double? temperature,
+    int? maxTokens,
+    String? modelHint,
+    String? requestId,
+  }) async* {
+    if (!isConfigured) {
+      throw StateError('Supabase AI Gateway is not configured.');
+    }
+    final rid = requestId ?? RateLimitGuardian.newRequestId(taskType);
+    try {
+      final res = await _dio.post<ResponseBody>(
+        _gatewayUrl,
+        options: Options(
+          headers: {
+            ..._authHeaders(),
+            'Accept': 'text/event-stream',
+          },
+          responseType: ResponseType.stream,
+        ),
+        data: {
+          'action': 'chat',
+          'stream': true,
+          'requestId': rid,
+          'taskType': taskType,
+          'tier': tier,
+          if (preferredProvider != null) 'preferredProvider': preferredProvider,
+          'prompt': prompt,
+          if (systemPrompt != null && systemPrompt.isNotEmpty) 'systemPrompt': systemPrompt,
+          'jsonMode': false,
+          if (temperature != null) 'temperature': temperature,
+          if (maxTokens != null) 'maxTokens': maxTokens,
+          if (modelHint != null) 'modelHint': modelHint,
+        },
+      );
+
+      final contentType = res.headers.value('content-type') ?? '';
+      final stream = res.data?.stream;
+      if (stream == null) {
+        throw StateError('Empty AI stream response.');
+      }
+
+      if (!contentType.contains('text/event-stream')) {
+        final fullBytes = await stream.fold<List<int>>([], (acc, chunk) => acc..addAll(chunk));
+        final decoded = jsonDecode(utf8.decode(fullBytes)) as Map<String, dynamic>;
+        final text = decoded['text']?.toString() ?? '';
+        if (text.isEmpty) throw StateError('AI gateway returned an empty response.');
+        yield text;
+        return;
+      }
+
+      var emittedAny = false;
+      await for (final line in utf8.decoder.bind(stream.cast<List<int>>()).transform(const LineSplitter())) {
+        final trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        final payload = trimmed.substring(5).trim();
+        if (payload == '[DONE]') break;
+        try {
+          final parsed = jsonDecode(payload) as Map<String, dynamic>;
+          final delta = parsed['delta']?.toString() ?? '';
+          if (delta.isNotEmpty) {
+            emittedAny = true;
+            yield delta;
+          }
+        } catch (_) {}
+      }
+
+      if (!emittedAny) {
+        final fallbackText = await chat(
+          prompt: prompt,
+          systemPrompt: systemPrompt,
+          tier: tier,
+          taskType: taskType,
+          preferredProvider: preferredProvider,
+          temperature: temperature,
+          maxTokens: maxTokens,
+          modelHint: modelHint,
+          requestId: rid,
+        );
+        yield fallbackText;
+      }
+    } on DioException catch (e) {
+      _throwFriendlyDioError(e);
+    }
+  }
+
   Future<List<double>> embed({
     required String text,
     String? requestId,

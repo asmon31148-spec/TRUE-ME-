@@ -159,6 +159,7 @@ class ChatState {
   final List<ChatMessage> messages;
   final bool isThinking;
   final String? thinkingStatus;
+  final String? streamingText;
   final String? activeCitation;
   final String? error;
   final String activeSessionId;
@@ -168,6 +169,7 @@ class ChatState {
     this.messages = const [],
     this.isThinking = false,
     this.thinkingStatus,
+    this.streamingText,
     this.activeCitation,
     this.error,
     this.activeSessionId = 'default',
@@ -178,6 +180,8 @@ class ChatState {
     List<ChatMessage>? messages,
     bool? isThinking,
     String? thinkingStatus,
+    String? streamingText,
+    bool clearStreamingText = false,
     String? activeCitation,
     String? error,
     String? activeSessionId,
@@ -187,6 +191,7 @@ class ChatState {
       messages: messages ?? this.messages,
       isThinking: isThinking ?? this.isThinking,
       thinkingStatus: thinkingStatus ?? this.thinkingStatus,
+      streamingText: clearStreamingText ? null : (streamingText ?? this.streamingText),
       activeCitation: activeCitation ?? this.activeCitation,
       error: error,
       activeSessionId: activeSessionId ?? this.activeSessionId,
@@ -740,16 +745,37 @@ class ChatNotifier extends StateNotifier<ChatState> {
               thinkingStatus: isDeepResearch
                   ? 'Researching deep explanation with Sage...'
                   : 'Thinking with Sage...',
+              clearStreamingText: true,
             );
-            rawAnswer = isDeepResearch
-                ? await _aiRouter.executeHeavyReasoning(
-                    prompt: cleanQuestion,
-                    systemPrompt: builtCtx.systemPrompt,
-                  )
-                : await _aiRouter.executeRealtimeChat(
-                    prompt: cleanQuestion,
-                    systemPrompt: builtCtx.systemPrompt,
-                  );
+            final buffer = StringBuffer();
+            var lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
+            await for (final delta in _aiRouter.streamChat(
+              prompt: cleanQuestion,
+              systemPrompt: builtCtx.systemPrompt,
+              tier: isDeepResearch ? 'heavy' : 'realtime',
+              taskType: isDeepResearch ? 'heavy_reasoning' : 'realtime_chat',
+              maxTokens: isDeepResearch ? null : 1400,
+              temperature: isDeepResearch ? 0.3 : 0.4,
+            )) {
+              buffer.write(delta);
+              final now = DateTime.now();
+              if (now.difference(lastEmit).inMilliseconds >= 60) {
+                lastEmit = now;
+                state = state.copyWith(streamingText: buffer.toString());
+              }
+            }
+            rawAnswer = buffer.toString();
+            if (rawAnswer.trim().isEmpty) {
+              rawAnswer = isDeepResearch
+                  ? await _aiRouter.executeHeavyReasoning(
+                      prompt: cleanQuestion,
+                      systemPrompt: builtCtx.systemPrompt,
+                    )
+                  : await _aiRouter.executeRealtimeChat(
+                      prompt: cleanQuestion,
+                      systemPrompt: builtCtx.systemPrompt,
+                    );
+            }
           } else {
             state = state.copyWith(
               thinkingStatus:
@@ -826,6 +852,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       state = state.copyWith(
         messages: updatedMsgs,
         isThinking: false,
+        clearStreamingText: true,
       );
       await _persist();
 

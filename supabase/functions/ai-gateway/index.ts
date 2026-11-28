@@ -839,6 +839,7 @@ Deno.serve(async (req) => {
     const prompt = String(body.prompt || '');
     const systemPrompt = body.systemPrompt ? String(body.systemPrompt) : undefined;
     const jsonMode = Boolean(body.jsonMode);
+    const streamMode = Boolean(body.stream) && !jsonMode;
     const tier = String(body.tier || 'balanced');
     const preferredProvider = body.preferredProvider ? String(body.preferredProvider) : '';
     const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
@@ -847,6 +848,112 @@ Deno.serve(async (req) => {
 
     if (!prompt.trim() || prompt.length > MAX_PROMPT_CHARS) {
       return jsonResponse({ error: 'Prompt must be between 1 and 80000 characters' }, 400);
+    }
+
+    if (streamMode) {
+      const sseHeaders = {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+      };
+      const messages = [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        { role: 'user', content: prompt },
+      ];
+      // Try fast Groq SSE stream first, then OpenRouter SSE, then non-streaming fallback
+      const streamCandidates: Array<{ url: string; key: string; model: string; extraHeaders?: Record<string, string> }> = [
+        ...(groqKey
+          ? [{
+              url: 'https://api.groq.com/openai/v1/chat/completions',
+              key: groqKey,
+              model: tier === 'heavy' ? 'openai/gpt-oss-120b' : 'llama-3.1-8b-instant',
+            }]
+          : []),
+        ...(openRouterKey
+          ? [{
+              url: 'https://openrouter.ai/api/v1/chat/completions',
+              key: openRouterKey,
+              model: 'nvidia/nemotron-3.5-lightning:free',
+              extraHeaders: {
+                'HTTP-Referer': 'https://github.com/asmon31148-spec/TRUE-ME-',
+                'X-Title': 'True Me Study App',
+              },
+            }]
+          : []),
+      ];
+
+      for (const cand of streamCandidates) {
+        try {
+          const upstream = await fetch(cand.url, {
+            method: 'POST',
+            signal: AbortSignal.timeout(20_000),
+            headers: {
+              Authorization: `Bearer ${cand.key}`,
+              'Content-Type': 'application/json',
+              ...(cand.extraHeaders || {}),
+            },
+            body: JSON.stringify({
+              model: cand.model,
+              messages,
+              temperature: temperature ?? 0.3,
+              ...(maxTokens ? { max_tokens: maxTokens } : {}),
+              stream: true,
+            }),
+          });
+          if (!upstream.ok || !upstream.body) continue;
+
+          const reader = upstream.body.getReader();
+          const decoder = new TextDecoder();
+          const encoder = new TextEncoder();
+          const sseStream = new ReadableStream({
+            async start(controller) {
+              let buf = '';
+              let insideThink = false;
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  buf += decoder.decode(value, { stream: true });
+                  const lines = buf.split('\n');
+                  buf = lines.pop() ?? '';
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data:')) continue;
+                    const payload = trimmed.slice(5).trim();
+                    if (payload === '[DONE]') continue;
+                    try {
+                      const parsed = JSON.parse(payload);
+                      let delta = parsed?.choices?.[0]?.delta?.content;
+                      if (typeof delta !== 'string' || !delta) continue;
+                      if (delta.includes('<think>')) insideThink = true;
+                      if (insideThink) {
+                        if (delta.includes('</think>')) {
+                          delta = delta.split('</think>').pop() ?? '';
+                          insideThink = false;
+                        } else {
+                          continue;
+                        }
+                      }
+                      if (delta) {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
+                      }
+                    } catch {
+                      // ignore malformed SSE chunk
+                    }
+                  }
+                }
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              } finally {
+                controller.close();
+              }
+            },
+          });
+          return new Response(sseStream, { status: 200, headers: sseHeaders });
+        } catch {
+          // fall through to next stream candidate or standard fallback
+        }
+      }
     }
 
     let result: ProviderCallResult | null = null;

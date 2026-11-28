@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../ai/rag_service.dart';
 import '../ai/smai/memory_event_service.dart';
 import '../ai/smai/smai_models.dart';
@@ -64,17 +65,67 @@ class IngestionJob {
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
+
+  Map<String, dynamic> toHiveMap() => {
+        'jobId': jobId,
+        'notebookId': notebookId,
+        'docId': docId,
+        'fileName': fileName,
+        'sectionLabel': sectionLabel,
+        'fileType': fileType,
+        'subjectName': subjectName,
+        'status': status.name,
+        'progress': progress,
+        'stageLabel': stageLabel,
+        'errorMessage': errorMessage,
+      };
+
+  static IngestionJob? fromHiveMap(Map<String, dynamic> m) {
+    final notebookId = m['notebookId']?.toString() ?? '';
+    final docId = m['docId']?.toString() ?? '';
+    if (notebookId.isEmpty || docId.isEmpty) return null;
+
+    final docs = OfflineCacheService.getNotebookDocuments(notebookId);
+    final doc = docs.where((d) => d['id']?.toString() == docId).firstOrNull;
+    final fullText = doc?['content']?.toString() ?? '';
+    if (fullText.trim().length < 20) return null;
+
+    final rawStatus = m['status']?.toString() ?? 'queued';
+    final status = IngestionJobStage.values.firstWhere(
+      (s) => s.name == rawStatus,
+      orElse: () => IngestionJobStage.queued,
+    );
+
+    return IngestionJob(
+      jobId: m['jobId']?.toString() ?? 'ing_$docId',
+      notebookId: notebookId,
+      docId: docId,
+      fileName: m['fileName']?.toString() ?? doc?['fileName']?.toString() ?? 'Document',
+      sectionLabel: m['sectionLabel']?.toString() ?? doc?['section']?.toString() ?? 'Notes',
+      fileType: m['fileType']?.toString() ?? doc?['fileType']?.toString() ?? 'pdf',
+      subjectName: m['subjectName']?.toString() ?? 'Subject',
+      fullText: fullText,
+      status: status == IngestionJobStage.running ? IngestionJobStage.queued : status,
+      progress: (m['progress'] as num?)?.toDouble() ?? 0.10,
+      stageLabel: m['stageLabel']?.toString() ?? 'Resuming background indexing...',
+      errorMessage: m['errorMessage']?.toString(),
+    );
+  }
 }
 
-/// Non-blocking background ingestion queue for uploaded sources (chunk -> batch_embed -> verify).
-/// Allows AddFilesSheet to return immediately while indexing continues with live progress.
+/// Hive-persisted non-blocking background ingestion queue (chunk -> batch_embed -> verify).
+/// Survives modal dismissal and app restarts; supports retry and batch re-indexing.
 class IngestionJobService {
   IngestionJobService._();
+
+  static const String _boxName = 'ingestion_jobs_box';
+  static const String _jobsKey = 'jobs';
 
   static final ValueNotifier<List<IngestionJob>> jobsNotifier =
       ValueNotifier<List<IngestionJob>>([]);
   static final List<VoidCallback> _completionListeners = [];
   static bool _isPumping = false;
+  static bool _restored = false;
 
   static void addCompletionListener(VoidCallback listener) {
     if (!_completionListeners.contains(listener)) {
@@ -94,6 +145,52 @@ class IngestionJobService {
     }
   }
 
+  static Future<void> _persist() async {
+    try {
+      final box = Hive.isBoxOpen(_boxName)
+          ? Hive.box(_boxName)
+          : await Hive.openBox(_boxName);
+      final activeOrRecent = jobsNotifier.value
+          .where((j) => j.status != IngestionJobStage.done)
+          .take(25)
+          .map((j) => j.toHiveMap())
+          .toList();
+      await box.put(_jobsKey, activeOrRecent);
+    } catch (_) {
+      // Safe no-op in tests where Hive is not initialized
+    }
+  }
+
+  static Future<void> restoreAndResume() async {
+    if (_restored) return;
+    _restored = true;
+    try {
+      final box = Hive.isBoxOpen(_boxName)
+          ? Hive.box(_boxName)
+          : await Hive.openBox(_boxName);
+      final raw = box.get(_jobsKey) as List? ?? [];
+      final restored = <IngestionJob>[];
+      for (final item in raw) {
+        if (item is Map) {
+          final job = IngestionJob.fromHiveMap(Map<String, dynamic>.from(item));
+          if (job != null && job.status != IngestionJobStage.done) {
+            restored.add(job);
+          }
+        }
+      }
+      if (restored.isNotEmpty) {
+        final merged = List<IngestionJob>.from(jobsNotifier.value);
+        for (final r in restored) {
+          if (!merged.any((m) => m.docId == r.docId)) {
+            merged.add(r);
+          }
+        }
+        jobsNotifier.value = merged;
+        unawaited(_pumpQueue());
+      }
+    } catch (_) {}
+  }
+
   static void _upsertJob(IngestionJob job) {
     final list = List<IngestionJob>.from(jobsNotifier.value);
     final idx = list.indexWhere((j) => j.jobId == job.jobId);
@@ -103,10 +200,10 @@ class IngestionJobService {
       list.insert(0, job);
     }
     jobsNotifier.value = list;
+    unawaited(_persist());
   }
 
   /// Queues a document for background chunking, embedding, and verification.
-  /// Returns immediately so the upload UI never blocks.
   static IngestionJob enqueue({
     required String notebookId,
     required String docId,
@@ -133,6 +230,48 @@ class IngestionJobService {
     _upsertJob(job);
     unawaited(_pumpQueue());
     return job;
+  }
+
+  static void retryJob(String jobId) {
+    final idx = jobsNotifier.value.indexWhere((j) => j.jobId == jobId);
+    if (idx < 0) return;
+    final job = jobsNotifier.value[idx];
+    _upsertJob(job.copyWith(
+      status: IngestionJobStage.queued,
+      progress: 0.10,
+      stageLabel: 'Retrying "${job.fileName}"...',
+      errorMessage: null,
+    ));
+    unawaited(_pumpQueue());
+  }
+
+  static int enqueuePendingDocsForNotebook(String notebookId, String subjectName) {
+    final docs = OfflineCacheService.getNotebookDocuments(notebookId);
+    int count = 0;
+    for (final doc in docs) {
+      final status = (doc['ingestionStatus']?.toString() ?? '').toLowerCase();
+      final needsSync = status == 'partial' || status == 'failed';
+      final content = doc['content']?.toString() ?? '';
+      final docId = doc['id']?.toString() ?? '';
+      if (!needsSync || content.trim().length < 20 || docId.isEmpty) continue;
+      final alreadyActive = jobsNotifier.value.any(
+        (j) =>
+            j.docId == docId &&
+            (j.status == IngestionJobStage.queued || j.status == IngestionJobStage.running),
+      );
+      if (alreadyActive) continue;
+      enqueue(
+        notebookId: notebookId,
+        docId: docId,
+        fileName: doc['fileName']?.toString() ?? 'Document',
+        sectionLabel: doc['section']?.toString() ?? 'Notes',
+        fileType: doc['fileType']?.toString() ?? 'pdf',
+        subjectName: subjectName,
+        fullText: content,
+      );
+      count++;
+    }
+    return count;
   }
 
   static Future<void> _pumpQueue() async {

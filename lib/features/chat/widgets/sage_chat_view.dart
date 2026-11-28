@@ -696,6 +696,57 @@ class _SageChatViewState extends ConsumerState<SageChatView> with SingleTickerPr
                       itemCount: chatState.messages.length + (chatState.isThinking ? 1 : 0),
                       itemBuilder: (context, idx) {
                         if (idx == chatState.messages.length) {
+                          final liveText = chatState.streamingText;
+                          if (liveText != null && liveText.isNotEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 22),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: MediaQuery.of(context).size.width * 0.94,
+                                  ),
+                                  child: TrueMeCard(
+                                    borderRadius: 22,
+                                    padding: const EdgeInsets.fromLTRB(18, 15, 18, 16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.auto_awesome_rounded,
+                                                size: 15, color: context.accentColor),
+                                            const SizedBox(width: 7),
+                                            Text(
+                                              hasSubject ? 'Subject Mentor' : 'Sage',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: context.textSecondary,
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              'Streaming...',
+                                              style: AppTypography.smallLabel.copyWith(
+                                                color: context.accentColor,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        FormattedMessageBody(
+                                          text: liveText,
+                                          textColor: context.textPrimary,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
                           return Align(
                             alignment: Alignment.centerLeft,
                             child: Padding(

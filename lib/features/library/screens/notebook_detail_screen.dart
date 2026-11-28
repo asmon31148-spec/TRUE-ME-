@@ -7,6 +7,7 @@ import '../../../app/theme/theme_provider.dart';
 import '../../../app/theme/typography.dart';
 import '../../../core/ai/ai_providers.dart';
 import '../../../core/ai/rag_service.dart';
+import '../../../core/ai/study_loop_service.dart';
 import '../../../core/ai/syllabus_service.dart';
 import '../../../core/models/ingestion_models.dart';
 import '../../../core/services/ingestion_job_service.dart';
@@ -41,6 +42,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
   String? _exportingFormat; // 'pdf', 'docx', 'pptx'
   String _artifactFilter = 'all'; // 'all', 'pdf', 'docx', 'pptx'
   bool _showAllArtifacts = false;
+  WeakestTopicRecommendation? _weakestTopic;
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     _tabController = TabController(length: 3, vsync: this);
     _loadNotebook();
     IngestionJobService.addCompletionListener(_onIngestionComplete);
+    IngestionJobService.restoreAndResume();
   }
 
   void _onIngestionComplete() {
@@ -57,6 +60,14 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
   void _loadNotebook() {
     final nb = OfflineCacheService.getCachedNotebook(widget.notebookId);
     setState(() => _notebook = nb);
+    StudyLoopService.findWeakestTopic(
+      userId: OfflineCacheService.getUserId(),
+      subjectId: widget.notebookId,
+    ).then((rec) {
+      if (mounted && rec != null) {
+        setState(() => _weakestTopic = rec);
+      }
+    }).catchError((_) {});
   }
 
   @override
@@ -623,58 +634,143 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                           (j.status == IngestionJobStage.queued ||
                                               j.status == IngestionJobStage.running))
                                       .toList();
-                                  if (active.isEmpty) return const SizedBox.shrink();
-                                  final job = active.first;
+                                  final failedJobs = jobs
+                                      .where((j) =>
+                                          j.notebookId == widget.notebookId &&
+                                          j.status == IngestionJobStage.failed)
+                                      .toList();
+                                  final pendingCount = OfflineCacheService.getNotebookDocuments(widget.notebookId).where((d) {
+                                    final st = (d['ingestionStatus']?.toString() ?? '').toLowerCase();
+                                    return st == 'partial' || st == 'failed';
+                                  }).length;
+
+                                  if (active.isEmpty && failedJobs.isEmpty && pendingCount == 0) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  if (active.isNotEmpty) {
+                                    final job = active.first;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      child: TrueMeCard(
+                                        borderRadius: 16,
+                                        padding: const EdgeInsets.all(12),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    value: job.progress > 0 ? job.progress : null,
+                                                    color: context.accentColor,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    job.stageLabel,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: context.textPrimary,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '${(job.progress * 100).round()}%',
+                                                  style: AppTypography.smallLabel.copyWith(
+                                                    color: context.accentColor,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: LinearProgressIndicator(
+                                                value: job.progress,
+                                                minHeight: 5,
+                                                backgroundColor:
+                                                    context.borderColor.withValues(alpha: 0.4),
+                                                color: context.accentColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  if (failedJobs.isNotEmpty) {
+                                    final fJob = failedJobs.first;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      child: TrueMeCard(
+                                        borderRadius: 16,
+                                        padding: const EdgeInsets.all(12),
+                                        borderColor: AppColors.error.withValues(alpha: 0.45),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.error_outline_rounded,
+                                                color: AppColors.error, size: 18),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                'Indexing failed: ${fJob.fileName}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 13, fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                            TrueMeTonalPill(
+                                              label: 'Retry',
+                                              onTap: () =>
+                                                  IngestionJobService.retryJob(fJob.jobId),
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 6),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }
+
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: TrueMeCard(
                                       borderRadius: 16,
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 10),
+                                      child: Row(
                                         children: [
-                                          Row(
-                                            children: [
-                                              SizedBox(
-                                                width: 16,
-                                                height: 16,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  value: job.progress > 0 ? job.progress : null,
-                                                  color: context.accentColor,
-                                                ),
+                                          Icon(Icons.cloud_sync_outlined,
+                                              size: 18, color: context.accentColor),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              '$pendingCount source(s) need cloud vector sync',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: context.textPrimary,
                                               ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Text(
-                                                  job.stageLabel,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: context.textPrimary,
-                                                  ),
-                                                ),
-                                              ),
-                                              Text(
-                                                '${(job.progress * 100).round()}%',
-                                                style: AppTypography.smallLabel.copyWith(
-                                                  color: context.accentColor,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(6),
-                                            child: LinearProgressIndicator(
-                                              value: job.progress,
-                                              minHeight: 5,
-                                              backgroundColor: context.borderColor.withValues(alpha: 0.4),
-                                              color: context.accentColor,
                                             ),
+                                          ),
+                                          TrueMeTonalPill(
+                                            label: 'Sync ($pendingCount)',
+                                            onTap: () => IngestionJobService
+                                                .enqueuePendingDocsForNotebook(
+                                                    widget.notebookId, title),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 6),
                                           ),
                                         ],
                                       ),
@@ -805,6 +901,64 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                             );
                           },
                         ),
+                        if (_weakestTopic != null) ...[
+                          TrueMeCard(
+                            borderRadius: 18,
+                            padding: const EdgeInsets.all(14),
+                            borderColor: context.accentColor.withValues(alpha: 0.35),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.trending_up_rounded,
+                                        size: 18, color: context.accentColor),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Revise Weakest Topic: ${_weakestTopic!.topic}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: context.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Mastery ${(_weakestTopic!.masteryScore * 100).round()}% · ${_weakestTopic!.mistakeCount} recorded mistake(s)',
+                                  style: AppTypography.smallLabel
+                                      .copyWith(color: context.textSecondary),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    TrueMeTonalPill(
+                                      label: 'Quick Quiz',
+                                      icon: Icons.quiz_outlined,
+                                      onTap: () => context.push(
+                                        '/quiz?notebookId=${widget.notebookId}&subject=${Uri.encodeComponent(title)}',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    TrueMeTonalPill(
+                                      label: 'Ask Sage',
+                                      icon: Icons.auto_awesome_rounded,
+                                      onTap: () => context.push(
+                                        '/chat?notebookId=${widget.notebookId}&scope=${Uri.encodeComponent(title)}&prompt=${Uri.encodeComponent('Help me master ${_weakestTopic!.topic} in $title with high-yield exam points and common traps.')}',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
                         TrueMeSectionHeader(title: 'Active Learning'),
                         const SizedBox(height: 12),
                         GridView.count(

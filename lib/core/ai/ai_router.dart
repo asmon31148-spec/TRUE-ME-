@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import '../utils/rate_limiter.dart';
+import 'ai_gateway_client.dart';
 import 'cloudflare_service.dart';
 import 'cognitive/app_capabilities_manifest.dart';
 import 'cognitive/student_cognitive_profile.dart';
@@ -17,6 +18,7 @@ class AiRouter {
   final GroqService _groq;
   final CohereService _cohere;
   final OpenRouterService _openRouter;
+  final bool _hasCustomServices;
 
   AiRouter({
     GeminiService? gemini,
@@ -27,7 +29,14 @@ class AiRouter {
   })  : _gemini = gemini ?? GeminiService(),
         _groq = groq ?? GroqService(),
         _cohere = cohere ?? CohereService(),
-        _openRouter = openRouter ?? OpenRouterService();
+        _openRouter = openRouter ?? OpenRouterService(),
+        _hasCustomServices = gemini != null ||
+            groq != null ||
+            cohere != null ||
+            openRouter != null;
+
+  bool get _useSingleGateway =>
+      !_hasCustomServices && AiGatewayClient.instance.isConfigured;
 
   static bool _isTerminalGatewayError(Object error) {
     final msg = error.toString().toLowerCase();
@@ -129,6 +138,18 @@ class AiRouter {
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance
+          .chat(
+            prompt: prompt,
+            systemPrompt: systemPrompt,
+            tier: 'heavy',
+            taskType: 'heavy_reasoning',
+            jsonMode: jsonMode,
+          )
+          .timeout(const Duration(seconds: 65));
+    }
+
     final requestId = RateLimitGuardian.newRequestId('heavy');
     Object? lastError;
 
@@ -234,12 +255,50 @@ class AiRouter {
   // ---------------------------------------------------------------------------
   // TIER 2: REAL-TIME CONVERSATION & MOTHER AI SAGE (Sub-Second Latency)
   // ---------------------------------------------------------------------------
+  /// Streams token deltas for responsive chat UIs, falling back seamlessly to
+  /// standard completion when custom mock services are injected in tests.
+  Stream<String> streamChat({
+    required String prompt,
+    String? systemPrompt,
+    String tier = 'realtime',
+    String taskType = 'realtime_chat',
+    int? maxTokens,
+    double? temperature,
+  }) async* {
+    if (_useSingleGateway) {
+      yield* AiGatewayClient.instance.chatStream(
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        tier: tier,
+        taskType: taskType,
+        maxTokens: maxTokens,
+        temperature: temperature,
+      );
+      return;
+    }
+    final full = tier == 'heavy'
+        ? await executeHeavyReasoning(prompt: prompt, systemPrompt: systemPrompt)
+        : await executeRealtimeChat(prompt: prompt, systemPrompt: systemPrompt);
+    yield full;
+  }
+
   /// Low-latency (<400ms time-to-first-token) interactive voice tutor & chat.
   /// Priority: Groq OSS 20B/120B (800 tok/s) -> OpenRouter Nemotron Lightning -> Gemini Flash -> OpenRouter Liquid LFM
   Future<String> executeRealtimeChat({
     required String prompt,
     String? systemPrompt,
   }) async {
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance.chat(
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        tier: 'realtime',
+        taskType: 'realtime_chat',
+        maxTokens: 1400,
+        temperature: 0.4,
+      );
+    }
+
     final requestId = RateLimitGuardian.newRequestId('chat');
 
     // 1. Groq OSS 20B (Extreme speed 500-800 tokens/sec on LPUs)
@@ -352,6 +411,18 @@ Return ONLY valid JSON matching this schema:
 
     final prompt = 'Content to process:\n$content';
 
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance.chat(
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        tier: 'balanced',
+        taskType: 'flashcards',
+        jsonMode: true,
+        maxTokens: 1200,
+        temperature: 0.3,
+      );
+    }
+
     // 1. Groq (High daily quota: 14,400 requests/day)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
@@ -452,6 +523,18 @@ Return ONLY valid JSON matching this schema:
 
     final prompt = 'Study material:\n$content';
 
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance.chat(
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        tier: 'balanced',
+        taskType: 'quiz',
+        jsonMode: true,
+        maxTokens: 1300,
+        temperature: 0.2,
+      );
+    }
+
     // 1. Groq
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
@@ -513,6 +596,15 @@ Return ONLY valid JSON matching this schema:
     required String prompt,
     String? systemPrompt,
   }) async {
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance.chat(
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        tier: 'realtime',
+        taskType: 'micro_task',
+      );
+    }
+
     // 1. OpenRouter Liquid LFM 1.7B:free
     if (_openRouter.isConfigured && await RateLimitGuardian.isAvailable('openrouter')) {
       try {
@@ -627,6 +719,16 @@ Student Question:
 $question
 ''';
 
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance.chat(
+        prompt: userPrompt,
+        systemPrompt: systemPrompt,
+        tier: 'balanced',
+        taskType: 'chat_with_notes',
+        maxTokens: 1500,
+      );
+    }
+
     // RAG synthesis priority: Groq 8B (blazing fast sub-second) -> Groq 70B -> Gemini Flash -> OpenRouter Lightning
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_speed')) {
       try {
@@ -696,6 +798,16 @@ $question
     String? systemPrompt,
     bool jsonMode = false,
   }) async {
+    if (_useSingleGateway) {
+      return AiGatewayClient.instance.chat(
+        prompt: prompt,
+        systemPrompt: systemPrompt,
+        tier: 'balanced',
+        taskType: 'balanced',
+        jsonMode: jsonMode,
+      );
+    }
+
     Object? lastError;
 
     // 1. Groq (Fastest: 1-3s LPU inference)
