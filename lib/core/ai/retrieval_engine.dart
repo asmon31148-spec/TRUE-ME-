@@ -138,7 +138,7 @@ class RetrievalEngine {
     final queryTerms = extractQueryTerms(query);
     final Map<String, EvidencePassage> deduped = {};
 
-    // 1. Vector semantic retrieval (Supabase pgvector) with tight 1.2s timeout
+    // 1. Hybrid semantic + keyword retrieval (Supabase pgvector + FTS RRF) with 3.5s timeout
     // Skip cloud RPC completely when offline/unauthenticated (0ms delay!)
     if (SupabaseService.instance.isCloudReady || overrideLocalDocs == null) {
       try {
@@ -150,7 +150,7 @@ class RetrievalEngine {
                 notebookId: notebookId,
                 topK: topK + 2,
               )
-              .timeout(const Duration(milliseconds: 1200),
+              .timeout(const Duration(milliseconds: 3500),
                   onTimeout: () => <DocumentChunkModel>[]);
 
           for (final c in vectorChunks) {
@@ -256,7 +256,7 @@ class RetrievalEngine {
                   notebookId: notebookId,
                   topK: topK + 2,
                 )
-                .timeout(const Duration(milliseconds: 1000),
+                .timeout(const Duration(milliseconds: 2500),
                     onTimeout: () => <DocumentChunkModel>[]);
             for (final c in retryChunks) {
               if (c.similarity > 0 && c.similarity < minVectorSimilarity) continue;

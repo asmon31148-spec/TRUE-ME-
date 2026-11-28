@@ -1070,20 +1070,24 @@ Deno.serve(async (req) => {
     } else if (taskType === 'chat_with_notes' && !jsonMode) {
       attempts.push(
         {
-          name: 'cohere:command-r-plus',
-          run: () => callCohereChat({ apiKey: cohereKey, prompt, systemPrompt, temperature }),
-        },
-        {
           name: 'gemini:2.5-flash',
           run: () => callGeminiChat({ apiKey: geminiKey, prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'groq:gpt-oss-120b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+        },
+        {
+          name: 'groq:llama-3.3-70b',
+          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
           name: 'openrouter:nemotron-lightning',
           run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'nvidia/nemotron-3.5-lightning:free', prompt, systemPrompt, jsonMode, maxTokens }),
         },
         {
-          name: 'groq:llama-3.3-70b',
-          run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.3-70b-versatile', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+          name: 'cohere:command-r-plus',
+          run: () => callCohereChat({ apiKey: cohereKey, prompt, systemPrompt, temperature }),
         }
       );
     } else {

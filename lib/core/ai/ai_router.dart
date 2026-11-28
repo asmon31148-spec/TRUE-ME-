@@ -146,6 +146,7 @@ class AiRouter {
             tier: 'heavy',
             taskType: 'heavy_reasoning',
             jsonMode: jsonMode,
+            maxTokens: 4096,
           )
           .timeout(const Duration(seconds: 65));
     }
@@ -637,6 +638,115 @@ Return ONLY valid JSON matching this schema:
   // ---------------------------------------------------------------------------
   // RAG KNOWLEDGE BASE CHAT (Cohere Rerank v3.5 Precision + Fast Synthesis)
   // ---------------------------------------------------------------------------
+  /// Builds the grounded prompt & system instruction for RAG chat so both
+  /// streaming and non-streaming paths share the exact same pedagogy.
+  ({String userPrompt, String systemPrompt}) buildChatWithNotesPrompts({
+    required String question,
+    required List<String> retrievedChunks,
+    String studentName = 'Student',
+    String? subjectScope,
+    String? subjectProgressSummary,
+    String? mentorMemory,
+    List<String> recentTurns = const [],
+    String? systemPromptOverride,
+  }) {
+    final contextText = retrievedChunks.join('\n---\n');
+    final cognitive = StudentCognitiveProfile.buildLive(subjectScope: subjectScope);
+    final scopeLine = (subjectScope != null && subjectScope.isNotEmpty)
+        ? 'You are scoped to the subject "$subjectScope". Prioritize topics, weaknesses, and progress in "$subjectScope".'
+        : '';
+    final progressLine = (subjectProgressSummary != null && subjectProgressSummary.isNotEmpty)
+        ? '\nDetailed Progress in $subjectScope:\n$subjectProgressSummary'
+        : '';
+    final memoryLine = (mentorMemory != null && mentorMemory.trim().isNotEmpty)
+        ? '\n\nLONG-TERM SUBJECT MENTOR MEMORY (Across All Sessions):\n${mentorMemory.trim()}\nUse this memory seamlessly like a dedicated mentor who remembers the student\'s prior questions, weak spots, and goals in this subject.'
+        : '';
+    final historyLine = recentTurns.isNotEmpty
+        ? '\n\nCURRENT CONVERSATION TURNS:\n${recentTurns.join('\n')}'
+        : '';
+    final systemPrompt = systemPromptOverride ?? '''
+You are Sage, the omniscient cognitive study companion and mentor for $studentName in the True Me app.
+$scopeLine$progressLine$memoryLine$historyLine
+
+${cognitive.toSageContextString()}
+
+${AppCapabilitiesManifest.manifestPrompt}
+
+Answer the student's question grounded firmly on the provided lecture notes and document excerpts.
+Always cite the source or document when referencing specific concepts.
+Formatting rules for mobile readability:
+- Use clean ## section headings and high-yield bullet points (- ).
+- CRITICAL: NEVER output markdown pipe tables (| col |). Mobile screens are narrow; tables look crowded and broken.
+- When summarizing multiple topics or concepts, format each concept clearly:
+  ### [Concept or Topic Title]
+  - **Core Idea**: [Clear explanation adapted to student's cognitive tier]
+  - **Source**: [Source file or lecture]
+If the notes do not contain the answer, state so honestly, then provide the general academic explanation.
+Whenever it benefits the student, proactively recommend an interactive next action and append the tag on the last line:
+[ACTION: export_pdf|export_docx|export_pptx|quiz|flashcards|mindmap|explainer|voice_tutor|schedule | <short topic>]
+''';
+
+    final userPrompt = '''
+Retrieved Note Excerpts:
+$contextText
+
+Student Question:
+$question
+''';
+    return (userPrompt: userPrompt, systemPrompt: systemPrompt);
+  }
+
+  /// Streams grounded RAG chat tokens via SSE when supported.
+  Stream<String> streamChatWithNotes({
+    required String question,
+    required List<String> retrievedChunks,
+    String studentName = 'Student',
+    String? subjectScope,
+    String? subjectProgressSummary,
+    String? mentorMemory,
+    List<String> recentTurns = const [],
+    String? systemPromptOverride,
+  }) async* {
+    if (retrievedChunks.isEmpty) {
+      yield* streamChat(
+        prompt: question,
+        systemPrompt: 'You are Sage, the personal AI mentor for $studentName in the True Me app.',
+      );
+      return;
+    }
+    if (_useSingleGateway) {
+      final prompts = buildChatWithNotesPrompts(
+        question: question,
+        retrievedChunks: retrievedChunks,
+        studentName: studentName,
+        subjectScope: subjectScope,
+        subjectProgressSummary: subjectProgressSummary,
+        mentorMemory: mentorMemory,
+        recentTurns: recentTurns,
+        systemPromptOverride: systemPromptOverride,
+      );
+      yield* streamChat(
+        prompt: prompts.userPrompt,
+        systemPrompt: prompts.systemPrompt,
+        tier: 'balanced',
+        taskType: 'chat_with_notes',
+        maxTokens: 3000,
+        temperature: 0.3,
+      );
+      return;
+    }
+    yield await chatWithNotes(
+      question: question,
+      retrievedChunks: retrievedChunks,
+      studentName: studentName,
+      subjectScope: subjectScope,
+      subjectProgressSummary: subjectProgressSummary,
+      mentorMemory: mentorMemory,
+      recentTurns: recentTurns,
+      systemPromptOverride: systemPromptOverride,
+    );
+  }
+
   /// Grounded RAG Chat with precision reranking & sub-second inference
   Future<String> chatWithNotes({
     required String question,
@@ -725,7 +835,7 @@ $question
         systemPrompt: systemPrompt,
         tier: 'balanced',
         taskType: 'chat_with_notes',
-        maxTokens: 1500,
+        maxTokens: 3000,
       );
     }
 

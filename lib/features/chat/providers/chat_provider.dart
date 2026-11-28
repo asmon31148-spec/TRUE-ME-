@@ -780,13 +780,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
             state = state.copyWith(
               thinkingStatus:
                   'Found ${evidenceBundle.passages.length} source passage(s) · Synthesizing grounded answer...',
+              clearStreamingText: true,
             );
             final enrichedSummary = [
               if (progressSummary != null && progressSummary.isNotEmpty) progressSummary,
               if (builtCtx.syllabusSummary != null && builtCtx.syllabusSummary!.isNotEmpty)
                 builtCtx.syllabusSummary!,
             ].join('\n');
-            rawAnswer = await _aiRouter.chatWithNotes(
+            final buffer = StringBuffer();
+            var lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
+            await for (final delta in _aiRouter.streamChatWithNotes(
               question: cleanQuestion,
               retrievedChunks: retrievedExcerpts,
               studentName: name,
@@ -795,7 +798,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
               mentorMemory: mentorMemory,
               recentTurns: recentTurns,
               systemPromptOverride: builtCtx.systemPrompt,
-            );
+            )) {
+              buffer.write(delta);
+              final now = DateTime.now();
+              if (now.difference(lastEmit).inMilliseconds >= 60) {
+                lastEmit = now;
+                state = state.copyWith(streamingText: buffer.toString());
+              }
+            }
+            rawAnswer = buffer.toString();
+            if (rawAnswer.trim().isEmpty) {
+              rawAnswer = await _aiRouter.chatWithNotes(
+                question: cleanQuestion,
+                retrievedChunks: retrievedExcerpts,
+                studentName: name,
+                subjectScope: effectiveSubject.isNotEmpty ? effectiveSubject : null,
+                subjectProgressSummary: enrichedSummary.isNotEmpty ? enrichedSummary : null,
+                mentorMemory: mentorMemory,
+                recentTurns: recentTurns,
+                systemPromptOverride: builtCtx.systemPrompt,
+              );
+            }
           }
         } catch (aiError) {
           rawAnswer =
