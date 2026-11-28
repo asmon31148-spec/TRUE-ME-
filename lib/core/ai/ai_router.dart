@@ -114,8 +114,8 @@ class AiRouter {
       systemPrompt: systemPrompt,
       jsonMode: jsonMode,
     ).timeout(
-      const Duration(seconds: 50),
-      onTimeout: () => throw StateError('Generation timed out (50s limit). Please try again.'),
+      const Duration(seconds: 75),
+      onTimeout: () => throw StateError('Generation timed out (75s limit). Please try again.'),
     );
   }
 
@@ -125,8 +125,9 @@ class AiRouter {
     bool jsonMode = false,
   }) async {
     final requestId = RateLimitGuardian.newRequestId('heavy');
+    Object? lastError;
 
-    // 1. Groq OSS 120B (Ultra-fast LPU inference: typically 1.5 - 4s)
+    // 1. Groq OSS 120B (Ultra-fast LPU inference: typically 1.5 - 4s, gateway fallback up to 35s)
     if (_groq.isConfigured && await RateLimitGuardian.isAvailable('groq_heavy')) {
       try {
         final out = await _groq
@@ -135,7 +136,7 @@ class AiRouter {
               systemPrompt: systemPrompt,
               jsonMode: jsonMode,
             )
-            .timeout(const Duration(seconds: 20));
+            .timeout(const Duration(seconds: 35));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'groq_heavy',
@@ -143,6 +144,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        lastError = e;
         RateLimitGuardian.trip('groq_heavy');
       }
     }
@@ -156,7 +158,7 @@ class AiRouter {
               systemInstruction: systemPrompt,
               jsonMode: jsonMode,
             )
-            .timeout(const Duration(seconds: 22));
+            .timeout(const Duration(seconds: 35));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'gemini_flash',
@@ -164,6 +166,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        lastError = e;
         RateLimitGuardian.trip('gemini_flash');
       }
     }
@@ -178,7 +181,7 @@ class AiRouter {
               model: OpenRouterService.modelNemotronLightning,
               jsonMode: jsonMode,
             )
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 28));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'openrouter',
@@ -186,6 +189,7 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        lastError = e;
         RateLimitGuardian.trip('openrouter');
       }
     }
@@ -198,7 +202,7 @@ class AiRouter {
               prompt: prompt,
               systemPrompt: systemPrompt,
             )
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 25));
         await RateLimitGuardian.recordRequestOnce(
           requestId: requestId,
           providerKey: 'cohere',
@@ -206,11 +210,16 @@ class AiRouter {
         );
         return out;
       } catch (e) {
+        lastError = e;
         RateLimitGuardian.trip('cohere');
       }
     }
 
-    throw StateError('All AI models are currently busy or unreachable.');
+    throw StateError(
+      lastError != null
+          ? 'All AI models are currently busy or unreachable ($lastError).'
+          : 'All AI models are currently busy or unreachable.',
+    );
   }
 
   // ---------------------------------------------------------------------------

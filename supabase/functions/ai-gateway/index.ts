@@ -102,6 +102,7 @@ async function callGroqChat(params: {
   ];
   const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${params.apiKey}`,
       'Content-Type': 'application/json',
@@ -160,6 +161,7 @@ async function callGeminiChat(params: {
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${params.apiKey}`,
       {
         method: 'POST',
+        signal: AbortSignal.timeout(16_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(params.systemPrompt
@@ -224,6 +226,7 @@ async function callOpenRouterChat(params: {
   const doFetch = (withJsonFormat: boolean) =>
     fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
+      signal: AbortSignal.timeout(16_000),
       headers: {
         Authorization: `Bearer ${params.apiKey}`,
         'HTTP-Referer': 'https://github.com/asmon31148-spec/TRUE-ME-',
@@ -289,6 +292,7 @@ async function callCohereChat(params: {
   ];
   const resp = await fetch('https://api.cohere.com/v2/chat', {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${params.apiKey}`,
       'Content-Type': 'application/json',
@@ -860,6 +864,11 @@ Deno.serve(async (req) => {
         name: 'cohere:command-r-plus',
         run: () => callCohereChat({ apiKey: cohereKey, model: modelHint, prompt, systemPrompt, temperature }),
       });
+    } else if (preferredProvider === 'groq') {
+      attempts.push({
+        name: 'groq:gpt-oss-120b',
+        run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'openai/gpt-oss-120b', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
+      });
     } else if (preferredProvider === 'openrouter') {
       attempts.push({
         name: `openrouter:${modelHint || 'nemotron-lightning'}`,
@@ -935,16 +944,16 @@ Deno.serve(async (req) => {
     } else if (taskType === 'cloudflare_summarize' || taskType === 'summarize' || taskType === 'url_summarize') {
       attempts.push(
         {
-          name: 'openrouter:dots-3-note',
-          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'dots-studio/dots-3-note-preview:free', prompt, systemPrompt, jsonMode, maxTokens }),
+          name: 'openrouter:gemma-4-26b',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'google/gemma-4-26b-a4b-it:free', prompt, systemPrompt, jsonMode, maxTokens }),
         },
         {
           name: 'groq:llama-3.1-8b-instant',
           run: () => callGroqChat({ apiKey: groqKey, providerName: 'groq', model: 'llama-3.1-8b-instant', prompt, systemPrompt, jsonMode, temperature, maxTokens }),
         },
         {
-          name: 'openrouter:liquid-2.5',
-          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'liquid/lfm-2.5-2.6b:free', prompt, systemPrompt, jsonMode, maxTokens }),
+          name: 'openrouter:liquid-lfm-3',
+          run: () => callOpenRouterChat({ apiKey: openRouterKey, model: 'liquid/lfm-3-1.7b:free', prompt, systemPrompt, jsonMode, maxTokens }),
         },
         {
           name: 'gemini:2.5-flash',

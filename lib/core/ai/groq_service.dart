@@ -41,6 +41,7 @@ class GroqService {
       prompt: prompt,
       systemPrompt: systemPrompt,
       tier: 'heavy',
+      preferredProvider: 'groq',
       taskType: 'groq_heavy',
       jsonMode: jsonMode,
       temperature: temperature,
