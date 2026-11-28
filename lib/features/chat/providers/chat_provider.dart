@@ -487,6 +487,52 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  static bool _isCasualGreetingOrSmallTalk(String input) {
+    final normalized = input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (normalized.isEmpty) return false;
+    const exactPhrases = {
+      'hi',
+      'hii',
+      'hiii',
+      'hello',
+      'helo',
+      'hey',
+      'heyy',
+      'yo',
+      'sup',
+      'hola',
+      'namaste',
+      'good morning',
+      'good afternoon',
+      'good evening',
+      'good night',
+      'how are you',
+      'how r u',
+      'whats up',
+      'what is up',
+      'thanks',
+      'thank you',
+      'thx',
+      'ty',
+      'ok',
+      'okay',
+      'cool',
+      'nice',
+      'great',
+      'bye',
+      'goodbye',
+      'see ya',
+      'who are you',
+    };
+    if (exactPhrases.contains(normalized)) return true;
+    return RegExp(r'^(hi+|hey+|hello+)\s+(there|sage|bro|buddy|friend)$')
+        .hasMatch(normalized);
+  }
+
   Future<ChatMessage?> sendMessage({
     required String question,
     required String userId,
@@ -624,40 +670,52 @@ class ChatNotifier extends StateNotifier<ChatState> {
         return compoundMsg;
       }
 
+      final isCasualChat = _isCasualGreetingOrSmallTalk(cleanQuestion);
+
       // 1c. SAGE-002 Hybrid Retrieval & Evidence Engine (strictly scoped to targetNbId)
-      if (targetNbId != null && targetNbId.isNotEmpty) {
-        state = state.copyWith(
-          thinkingStatus:
-              'Searching ${effectiveSubject.isNotEmpty ? effectiveSubject : 'subject'} notes & syllabus...',
+      EvidenceBundle evidenceBundle;
+      if (isCasualChat) {
+        evidenceBundle = EvidenceBundle(
+          query: cleanQuestion,
+          passages: const [],
+          hasSufficientEvidence: false,
+          diagnosticNote: 'Casual greeting — skipped source search.',
         );
-      }
-      final retrievalEngine = RetrievalEngine(ragService: _ragService);
-      EvidenceBundle evidenceBundle = await retrievalEngine.retrieveEvidence(
-        query: cleanQuestion,
-        userId: userId,
-        notebookId: targetNbId,
-        sectionFilter: intentPlan.sourcePriority == SourcePriority.syllabusFirst
-            ? 'Syllabus'
-            : (intentPlan.sourcePriority == SourcePriority.pyqFirst
-                ? 'Previous papers'
-                : null),
-        topK: 5,
-      );
-      if (!evidenceBundle.hasSufficientEvidence &&
-          intentPlan.sourcePriority != SourcePriority.balanced &&
-          targetNbId != null &&
-          targetNbId.isNotEmpty) {
+      } else {
+        if (targetNbId != null && targetNbId.isNotEmpty) {
+          state = state.copyWith(
+            thinkingStatus:
+                'Searching ${effectiveSubject.isNotEmpty ? effectiveSubject : 'subject'} notes & syllabus...',
+          );
+        }
+        final retrievalEngine = RetrievalEngine(ragService: _ragService);
         evidenceBundle = await retrievalEngine.retrieveEvidence(
           query: cleanQuestion,
           userId: userId,
           notebookId: targetNbId,
+          sectionFilter: intentPlan.sourcePriority == SourcePriority.syllabusFirst
+              ? 'Syllabus'
+              : (intentPlan.sourcePriority == SourcePriority.pyqFirst
+                  ? 'Previous papers'
+                  : null),
           topK: 5,
         );
-      }
+        if (!evidenceBundle.hasSufficientEvidence &&
+            intentPlan.sourcePriority != SourcePriority.balanced &&
+            targetNbId != null &&
+            targetNbId.isNotEmpty) {
+          evidenceBundle = await retrievalEngine.retrieveEvidence(
+            query: cleanQuestion,
+            userId: userId,
+            notebookId: targetNbId,
+            topK: 5,
+          );
+        }
 
-      if (evidenceBundle.hasSufficientEvidence) {
-        retrievedExcerpts = evidenceBundle.formattedExcerpts;
-        citationSource = evidenceBundle.primaryCitation;
+        if (evidenceBundle.hasSufficientEvidence) {
+          retrievedExcerpts = evidenceBundle.formattedExcerpts;
+          citationSource = evidenceBundle.primaryCitation;
+        }
       }
 
       // 2. Check if user directly asked for an export/study action
@@ -681,7 +739,48 @@ class ChatNotifier extends StateNotifier<ChatState> {
       String rawAnswer;
       SageAction? finalAction;
 
-      if (isExportOfPrevious && directIntent != null) {
+      if (isCasualChat) {
+        try {
+          final friendlyPrompt =
+              'You are Sage, a warm, friendly, natural study buddy for $name'
+              '${effectiveSubject.isNotEmpty ? " in $effectiveSubject" : ""}. '
+              'The student just sent a casual greeting or short social message. '
+              'Reply warmly and naturally in 1-2 short sentences like a helpful friend. '
+              'Do NOT use markdown headings, bullet lists, textbook lectures, or [ACTION: ...] tags.';
+          state = state.copyWith(
+            thinkingStatus: 'Replying...',
+            clearStreamingText: true,
+          );
+          final buffer = StringBuffer();
+          var lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
+          await for (final delta in _aiRouter.streamChat(
+            prompt: cleanQuestion,
+            systemPrompt: friendlyPrompt,
+            tier: 'realtime',
+            taskType: 'realtime_chat',
+            maxTokens: 160,
+            temperature: 0.6,
+          )) {
+            buffer.write(delta);
+            final now = DateTime.now();
+            if (now.difference(lastEmit).inMilliseconds >= 60) {
+              lastEmit = now;
+              state = state.copyWith(streamingText: buffer.toString());
+            }
+          }
+          rawAnswer = buffer.toString().trim();
+          if (rawAnswer.isEmpty) {
+            rawAnswer = await _aiRouter.executeRealtimeChat(
+              prompt: cleanQuestion,
+              systemPrompt: friendlyPrompt,
+            );
+          }
+        } catch (_) {
+          rawAnswer = effectiveSubject.isNotEmpty
+              ? 'Hey $name! Ready whenever you want to dive into $effectiveSubject — what would you like to work on?'
+              : 'Hey $name! Good to see you — what are we studying today?';
+        }
+      } else if (isExportOfPrevious && directIntent != null) {
         finalAction = await _executeAction(
           type: directIntent,
           topic: subjectLabel,
@@ -852,7 +951,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
 
       // SAGE-005 Answer Verification & Uncertainty Disclosure
-      final verification = isExportOfPrevious
+      final verification = (isExportOfPrevious || isCasualChat)
           ? null
           : AnswerVerifier.verify(
               query: cleanQuestion,
